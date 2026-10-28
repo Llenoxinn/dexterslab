@@ -555,7 +555,9 @@ body {
 
 .result-title {
   font-size: clamp(2.5rem, 6vw, 5.5rem);
-  text-shadow: 0 0.09em 0 var(--color-lavender);
+  text-shadow:
+    0 0.09em 0 var(--color-lavender),
+    0 0.16em 0 var(--color-ink-deep);
 }
 
 .result-line {
@@ -567,7 +569,7 @@ body {
 /* The prompt reads like Notion's command chip: an outlined line with pixel keycaps. */
 .lab-hint {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   padding: 7px 12px;
   border: 1px solid var(--line-on-ink);
   font-size: 0.875rem;
@@ -624,7 +626,9 @@ kbd {
   width: 0.5em;
   height: 0.11em;
   margin-left: 0.12em;
-  box-shadow: 0 0.09em 0 var(--color-lavender);
+  box-shadow:
+    0 0.09em 0 var(--color-lavender),
+    0 0.16em 0 var(--color-ink-deep);
 }
 
 @keyframes caret-blink {
@@ -653,8 +657,8 @@ kbd {
   }
 }
 
-/* Cursors blink five times, then stay solid (WCAG 2.2.2: nothing blinks past five seconds).
-   Without motion the text is simply there, with a solid cursor. */
+/* Cursors keep blinking like a real terminal (Dexter's call). Under reduced motion the text
+   is simply there, with a solid cursor. */
 @media (prefers-reduced-motion: no-preference) {
   /* Idle: once the title has decoded, its cursor appears and the start prompt types itself out. */
   .js .hero-copy .caret {
@@ -666,7 +670,7 @@ kbd {
   .hero-copy.is-typed .caret--title {
     animation:
       caret-show 0s forwards,
-      caret-blink 1s steps(1, end) 5;
+      caret-blink 1s steps(1, end) infinite;
   }
   .hero-copy.is-typed .lab-hint > span:not(.caret) {
     animation: type-in 1s steps(48, end) 0.2s forwards;
@@ -674,7 +678,7 @@ kbd {
   .hero-copy.is-typed .lab-hint .caret {
     animation:
       caret-show 0s 1.2s forwards,
-      caret-blink 1s steps(1, end) 1.2s 5;
+      caret-blink 1s steps(1, end) 1.2s infinite;
   }
 
   /* Crash or pause: the prompt types out again each time the panel appears. */
@@ -690,7 +694,7 @@ kbd {
   .hero-main:is([data-phase="over"], [data-phase="paused"]) .hero-result .lab-hint .caret {
     animation:
       caret-show 0s 0.75s forwards,
-      caret-blink 1s steps(1, end) 0.75s 5;
+      caret-blink 1s steps(1, end) 0.75s infinite;
   }
 
   /* The boot screen lasts at most 2.5s, so its cursor can blink the whole time. */
@@ -720,7 +724,10 @@ kbd {
 .hero-title {
   max-width: 15ch;
   font-size: clamp(2.5rem, 6.6vw, 6.5rem);
-  text-shadow: 0 0.09em 0 var(--color-lavender);
+  /* Three-layer pixel extrude: paper face, lavender side, deep-ink shadow. */
+  text-shadow:
+    0 0.09em 0 var(--color-lavender),
+    0 0.16em 0 var(--color-ink-deep);
 }
 
 .title-chevron {
@@ -729,7 +736,7 @@ kbd {
   height: auto;
   margin-right: 0.16em;
   vertical-align: 0.02em;
-  filter: drop-shadow(0 0.09em 0 var(--color-lavender));
+  filter: drop-shadow(0 0.09em 0 var(--color-lavender)) drop-shadow(0 0.07em 0 var(--color-ink-deep));
 }
 
 .hero-title .word {
