@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { BoltIcon, EnvelopeIcon } from "@/components/icons";
+import { BoltIcon, ChevronIcon, EnvelopeIcon } from "@/components/icons";
 import {
   COIL,
   DEXTER_DUCK_A,
@@ -563,6 +563,8 @@ export function LabGame() {
                 <Fragment key={word}>
                   {i > 0 && " "}
                   <span className="word">
+                    {/* A prompt chevron leads the first word, like the game logo it is. */}
+                    {i === 0 && <ChevronIcon className="title-chevron" />}
                     {[...word].map((char, j) => (
                       <span key={j} className="char">
                         {char}
@@ -582,8 +584,10 @@ export function LabGame() {
               {contactLink}
             </div>
             <p className="lab-hint">
-              <span className="hint-keys">Press Space to start. Space or ↑ jumps, ↓ ducks.</span>
-              <span className="hint-touch">Tap the bench to start, then tap to jump.</span>
+              <span className="hint-keys">
+                Press <kbd>Space</kbd> to start, <kbd>↑</kbd> to jump, <kbd>↓</kbd> to duck
+              </span>
+              <span className="hint-touch">Tap the bench to start, then tap to jump</span>
               <span className="caret" aria-hidden="true" />
             </p>
           </div>
@@ -601,8 +605,10 @@ export function LabGame() {
             {contactLink}
           </div>
           <p className="lab-hint">
-            <span className="hint-keys">{phase === "paused" ? "Press Space to resume." : "Press Space to try again."}</span>
-            <span className="hint-touch">Tap the bench to {phase === "paused" ? "resume" : "try again"}.</span>
+            <span className="hint-keys">
+              Press <kbd>Space</kbd> to {phase === "paused" ? "resume" : "try again"}
+            </span>
+            <span className="hint-touch">Tap the bench to {phase === "paused" ? "resume" : "try again"}</span>
             <span className="caret" aria-hidden="true" />
           </p>
         </div>

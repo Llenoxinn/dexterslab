@@ -284,6 +284,9 @@ export const STEAM = [
   "LLLLLLLLLLLLLLLL",
 ];
 
+// The prompt chevron in front of the game title, like a terminal or a game logo.
+export const CHEVRON = ["##.....", "###....", ".###...", "..###..", ".###...", "###....", "##....."];
+
 export const ARROW_UP = [
   "...##...",
   "..####..",

@@ -38,27 +38,35 @@ export default function Home() {
 
         <div data-sheet className="sheet rails">
           <PixelEdge />
-          {/* A circuit: the wire drops through the node, turns along the bus, and powers each link. */}
+          {/* The wire drops into the frame's corner badge; the frame draws itself, the links power on,
+              and Dexter, standing on the frame, names whichever link you point at. */}
           <section id="contact" data-contact className="wrap contact" aria-labelledby="contact-title">
             <span data-wire className="wire" aria-hidden="true" />
-            <div className="contact-head">
-              <div className="title-row">
-                <span className="node" aria-hidden="true">
-                  <BoltIcon />
-                </span>
-                <h2 id="contact-title" className="display section-title">
-                  Keep in touch
-                </h2>
-              </div>
-              <p className="contact-intro">{site.openTo}</p>
-            </div>
-            <div className="patch">
-              <span data-bus className="bus" aria-hidden="true" />
-              <SocialLinks />
-              <span className="waver" aria-hidden="true">
-                <PixelSprite rows={DEXTER_WAVE_A} palette={ON_PAPER} className="wave-a" />
-                <PixelSprite rows={DEXTER_WAVE_B} palette={ON_PAPER} className="wave-b" />
+            <div className="contact-frame">
+              <span data-frame className="frame-line" aria-hidden="true" />
+              <span className="frame-badge" aria-hidden="true">
+                <BoltIcon />
               </span>
+              <div className="contact-copy">
+                <h2 id="contact-title" className="section-title">
+                  Keep in touch.
+                </h2>
+                <p className="contact-intro">{site.openTo}</p>
+                <SocialLinks />
+              </div>
+              <div className="contact-dexter" aria-hidden="true">
+                <p className="say">
+                  <span className="say-default">Say hi!</span>
+                  <span className="say-email">Email me.</span>
+                  <span className="say-github">My GitHub.</span>
+                  <span className="say-linkedin">My LinkedIn.</span>
+                  <span className="say-facebook">My Facebook.</span>
+                </p>
+                <span className="waver">
+                  <PixelSprite rows={DEXTER_WAVE_A} palette={ON_PAPER} className="wave-a" />
+                  <PixelSprite rows={DEXTER_WAVE_B} palette={ON_PAPER} className="wave-b" />
+                </span>
+              </div>
             </div>
           </section>
         </div>

@@ -8,6 +8,7 @@
   --color-lavender: #cbcbef;
   --color-neon: #6666fd;
   --font-display: var(--font-pixel), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-chakra), ui-sans-serif, system-ui, sans-serif;
 }
 
@@ -142,7 +143,7 @@ body {
   font-size: 2rem;
   font-weight: 700;
   line-height: 1;
-  text-shadow: 0.08em 0.08em 0 var(--color-neon);
+  text-shadow: 0 0.1em 0 var(--color-lavender);
 }
 
 .boot-meter {
@@ -306,6 +307,40 @@ body {
   border-bottom: 1px solid var(--line-on-ink);
   background: var(--color-ink);
   color: var(--color-paper);
+}
+
+/* Like Notion's /dev nav: once the paper sheet reaches it, the header turns light. */
+.site-header {
+  transition:
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease;
+}
+
+.site-header.is-light {
+  border-bottom-color: var(--color-lavender);
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+.site-header.is-light .btn-solid {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+.site-header.is-light .icon-btn {
+  border-color: rgb(19 19 186 / 0.35);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .site-header.is-light .btn-solid:hover {
+    background: var(--color-ink-deep);
+  }
+  .site-header.is-light .icon-btn:hover {
+    border-color: var(--color-ink);
+    background: rgb(19 19 186 / 0.08);
+  }
 }
 
 .header-inner {
@@ -520,8 +555,7 @@ body {
 
 .result-title {
   font-size: clamp(2.5rem, 6vw, 5.5rem);
-  text-shadow: 0.055em 0.055em 0 var(--color-neon);
-  transition: text-shadow 300ms var(--ease-out);
+  text-shadow: 0 0.09em 0 var(--color-lavender);
 }
 
 .result-line {
@@ -530,10 +564,31 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* The prompt reads like Notion's command chip: an outlined line with pixel keycaps. */
 .lab-hint {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  border: 1px solid var(--line-on-ink);
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--color-lavender);
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.7em;
+  margin: 0 3px;
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: 0 2px 0 var(--color-lavender);
 }
 
 .hint-keys {
@@ -569,7 +624,7 @@ body {
   width: 0.5em;
   height: 0.11em;
   margin-left: 0.12em;
-  box-shadow: 0.055em 0.055em 0 var(--color-neon);
+  box-shadow: 0 0.09em 0 var(--color-lavender);
 }
 
 @keyframes caret-blink {
@@ -661,12 +716,20 @@ body {
   gap: 28px;
 }
 
-/* A game title card: pixel letters with a hard neon drop, like a cartridge logo. */
+/* The game's logo: paper pixel letters on a lavender extrude, led by a prompt chevron. */
 .hero-title {
-  max-width: 14ch;
+  max-width: 15ch;
   font-size: clamp(2.5rem, 6.6vw, 6.5rem);
-  text-shadow: 0.055em 0.055em 0 var(--color-neon);
-  transition: text-shadow 300ms var(--ease-out);
+  text-shadow: 0 0.09em 0 var(--color-lavender);
+}
+
+.title-chevron {
+  display: inline-block;
+  width: 0.45em;
+  height: auto;
+  margin-right: 0.16em;
+  vertical-align: 0.02em;
+  filter: drop-shadow(0 0.09em 0 var(--color-lavender));
 }
 
 .hero-title .word {
@@ -730,88 +793,161 @@ body {
 }
 
 .contact {
-  --contact-pad: clamp(88px, 11vw, 150px);
-  --contact-pad-b: clamp(72px, 9vw, 120px);
-  --tile: 96px;
+  --contact-pad: clamp(72px, 9vw, 120px);
+  --tile: 88px;
   position: relative;
-  display: grid;
-  gap: clamp(40px, 5vw, 56px);
-  padding-block: var(--contact-pad) var(--contact-pad-b);
+  padding-block: var(--contact-pad) clamp(64px, 8vw, 104px);
 }
 
-/* The circuit: a dashed wire from the top of the sheet, through the node, down to the bus. */
+/* The wire drops from the top of the sheet into the frame's corner badge. */
 .wire {
   position: absolute;
   top: -32px;
-  bottom: calc(var(--contact-pad-b) + var(--tile) / 2 - 1px);
-  left: calc(var(--gutter) + 15px);
+  left: calc(var(--gutter) - 1px);
+  height: calc(var(--contact-pad) + 32px - 20px);
   border-left: 2px dashed var(--color-ink);
   transform-origin: top;
 }
 
-.title-row {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.node {
+/* A Notion-style dashed frame. It draws itself from the badge when the section powers on. */
+.contact-frame {
   position: relative;
   display: grid;
-  flex: none;
+  gap: 24px;
+  padding: clamp(44px, 6vw, 72px) clamp(24px, 5vw, 64px) 0;
+}
+
+@media (min-width: 900px) {
+  .contact-frame {
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    column-gap: 48px;
+  }
+}
+
+.frame-line {
+  position: absolute;
+  inset: 0;
+  border: 2px dashed rgb(19 19 186 / 0.45);
+  pointer-events: none;
+}
+
+.frame-badge {
+  position: absolute;
+  top: -20px;
+  left: -20px;
+  z-index: 1;
+  display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  background: var(--color-paper);
-  color: var(--color-lavender);
-  transition: color 200ms ease;
-}
-
-.node svg {
-  width: 22px;
-  height: 22px;
-}
-
-.contact.is-live .node {
+  width: 40px;
+  height: 40px;
+  background: var(--color-lavender);
   color: var(--color-ink);
+  transition:
+    background-color 200ms ease,
+    color 200ms ease;
 }
 
+.frame-badge svg {
+  width: 20px;
+  height: 20px;
+}
+
+.contact.is-live .frame-badge {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+.contact-copy {
+  padding-bottom: clamp(44px, 6vw, 72px);
+}
+
+/* Notion /dev's headline voice: Inter Bold, tight tracking, no ornament. */
 .section-title {
-  font-size: clamp(2.5rem, 6vw, 5rem);
-  text-shadow: 0.05em 0.05em 0 var(--color-lavender);
+  font-family: var(--font-heading);
+  font-size: clamp(2.5rem, 5.5vw, 4.5rem);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -0.034em;
+  text-wrap: balance;
 }
 
 .contact-intro {
   max-width: 36ch;
-  margin: 16px 0 0 52px;
+  margin-top: 16px;
   font-size: 1.125rem;
   text-wrap: pretty;
 }
 
-/* The bus: links sit on it like components on a trace; Dexter stands at the far end. */
-.patch {
-  position: relative;
-  display: flex;
-  align-items: center;
-  min-height: var(--tile);
-  padding-left: 52px;
-  padding-right: clamp(0px, 12vw, 160px);
+.contact-copy .socials {
+  margin-top: clamp(28px, 4vw, 40px);
 }
 
-.bus {
+/* Dexter stands on the frame's bottom edge and names the link you point at. */
+.contact-dexter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  justify-self: end;
+}
+
+.say {
+  position: relative;
+  padding: 10px 16px;
+  border: 2px solid var(--color-ink);
+  background: #fff;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* A stepped pixel tail under the bubble. */
+.say::before,
+.say::after {
+  content: "";
   position: absolute;
-  top: calc(50% - 1px);
-  left: 15px;
-  right: 0;
-  border-top: 2px dashed var(--color-ink);
-  transform-origin: left;
+  left: 50%;
+  background: var(--color-ink);
+  translate: -50% 0;
+}
+
+.say::before {
+  bottom: -8px;
+  width: 12px;
+  height: 6px;
+}
+
+.say::after {
+  bottom: -14px;
+  width: 6px;
+  height: 6px;
+}
+
+.say > span {
+  display: none;
+}
+
+.say > .say-default {
+  display: inline-block;
+}
+
+.contact:has(.social:is(:hover, :focus-visible)) .say > .say-default {
+  display: none;
+}
+
+.contact:has(.social[data-tip="Email"]:is(:hover, :focus-visible)) .say-email,
+.contact:has(.social[data-tip="GitHub"]:is(:hover, :focus-visible)) .say-github,
+.contact:has(.social[data-tip="LinkedIn"]:is(:hover, :focus-visible)) .say-linkedin,
+.contact:has(.social[data-tip="Facebook"]:is(:hover, :focus-visible)) .say-facebook {
+  display: inline-block;
 }
 
 .waver {
-  position: absolute;
-  right: 0;
-  bottom: calc(50% + 1px);
-  width: clamp(96px, 9vw, 128px);
+  position: relative;
+  width: clamp(104px, 10vw, 144px);
 }
 
 .waver svg {
@@ -857,29 +993,19 @@ body {
   animation: frame-b 0.6s 0.6s 5;
 }
 
-/* Phones: smaller tiles (still above the 44px touch minimum) so Dexter fits at the end of the bus. */
+/* Phones: smaller tiles (still above the 44px touch minimum), Dexter below them. */
 @media (max-width: 640px) {
   .contact {
     --tile: clamp(48px, 13.5vw, 56px);
   }
-  .patch {
-    padding: 0 64px 0 40px;
-  }
-  .patch .socials {
+  .contact-copy .socials {
     gap: 8px;
   }
-  .waver {
-    width: 56px;
-  }
-}
-
-/* Very narrow screens: the links need the whole row. */
-@media (max-width: 359px) {
-  .patch {
-    padding-right: 0;
+  .contact-copy {
+    padding-bottom: 0;
   }
   .waver {
-    display: none;
+    width: 88px;
   }
 }
 
@@ -917,40 +1043,11 @@ body {
   transform: scale(0.96);
 }
 
-/* Tooltip: the link's name, on hover or keyboard focus. */
-.social::after {
-  content: attr(data-tip);
-  position: absolute;
-  top: calc(100% + 10px);
-  left: 50%;
-  padding: 4px 8px;
-  border-radius: 3px;
-  background: var(--color-ink);
-  color: var(--color-paper);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  white-space: nowrap;
-  opacity: 0;
-  translate: -50% 4px;
-  pointer-events: none;
-  transition:
-    opacity 150ms var(--ease-out),
-    translate 150ms var(--ease-out);
-}
-
-.social:focus-visible::after {
-  opacity: 1;
-  translate: -50% 0;
-}
-
+/* Dexter's speech bubble names the link on hover or focus, so the tiles need no tooltip. */
 @media (hover: hover) and (pointer: fine) {
   .social:hover {
     background: var(--color-ink);
     color: var(--color-paper);
-  }
-  .social:hover::after {
-    opacity: 1;
-    translate: -50% 0;
   }
 }
 
@@ -1056,20 +1153,6 @@ body {
   animation-delay: 0.7s;
 }
 
-/* The name returns at full width: big pixel letters in neon with a deep-ink pixel drop. */
-.footer-giant {
-  padding-top: clamp(8px, 1.5vw, 16px);
-  font-family: var(--font-display);
-  font-size: clamp(2.5rem, 15vw, 13.5rem);
-  font-weight: 700;
-  line-height: 0.9;
-  color: var(--color-neon);
-  text-align: center;
-  text-shadow: 0.035em 0.035em 0 var(--color-ink-deep);
-  white-space: nowrap;
-  overflow: hidden;
-}
-
 .footer-bottom {
   display: flex;
   flex-wrap: wrap;
@@ -1097,8 +1180,21 @@ body {
   }
 }
 
+/* Reduced motion: panels cross-fade without sliding; the circuit simply shows as powered. */
 @media (prefers-reduced-motion: reduce) {
-  .node {
-    color: var(--color-ink);
+  .hero-copy,
+  .hero-result {
+    translate: none !important;
+  }
+  .frame-badge {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+}
+
+/* Dexter's bubble re-types each time it changes. */
+@media (prefers-reduced-motion: no-preference) {
+  .say > span {
+    animation: type-in 280ms steps(12, end);
   }
 }

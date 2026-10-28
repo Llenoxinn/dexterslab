@@ -25,7 +25,7 @@ export function SiteFooter({ home = false }: { home?: boolean }) {
         </a>
       </div>
 
-      {/* The lab bench stands on the name, which closes the page at full width. */}
+      {/* The lab bench: decorative pixel equipment. Bubbles rise twice when it scrolls into view. */}
       <div className="wrap">
         <div data-bench className="bench" aria-hidden="true">
           <TeslaIcon className="bench-item" />
@@ -38,9 +38,6 @@ export function SiteFooter({ home = false }: { home?: boolean }) {
           </span>
           <TubesIcon className="bench-item" />
         </div>
-        <p className="footer-giant" aria-hidden="true">
-          {site.wordmark}
-        </p>
       </div>
 
       <div className="wrap footer-bottom">

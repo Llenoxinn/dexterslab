@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Chakra_Petch, Pixelify_Sans } from "next/font/google";
+import { Chakra_Petch, Inter, Pixelify_Sans } from "next/font/google";
 import Script from "next/script";
 import "lenis/dist/lenis.css";
 import "./globals.css";
 
 const display = Pixelify_Sans({ weight: ["700"], subsets: ["latin"], variable: "--font-pixel", display: "swap" });
+// Section headlines match Notion /dev's headline voice (NotionInter is Notion's own cut of Inter).
+const heading = Inter({ weight: ["700"], subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const sans = Chakra_Petch({
   weight: ["400", "500", "600", "700"],
   subsets: ["latin"],
@@ -33,7 +35,7 @@ export const viewport: Viewport = { themeColor: "#1313ba" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${display.variable} ${heading.variable} ${sans.variable}`} suppressHydrationWarning>
       <body>
         {/* Lets CSS hide intro elements before paint (without JS everything stays visible),
             and skips the boot screen after the first visit in a session. */}
