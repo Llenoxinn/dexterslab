@@ -9,7 +9,8 @@ const GLYPHS = "#%&*+=<>/?!01{}[]ABCDEFGHJKLMNPQRSTUVWXYZ";
 
 // The title decodes: each letter appears as scrambled lab glyphs, then resolves into the
 // real letter, left to right. Widths are locked while scrambling, so nothing reflows.
-function decode(chars: HTMLElement[]) {
+// `onDone` fires once every letter has resolved.
+function decode(chars: HTMLElement[], onDone: () => void) {
   const finals = chars.map((c) => c.textContent ?? "");
   for (const c of chars) c.style.width = `${c.getBoundingClientRect().width}px`;
   const start = performance.now();
@@ -34,6 +35,7 @@ function decode(chars: HTMLElement[]) {
       c.textContent = GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
     });
     if (!done) timer = window.setTimeout(step, 55);
+    else onDone();
   };
   step();
   return () => {
@@ -68,7 +70,8 @@ export function PageMotion() {
     const intro = () => {
       if (cancelled) return;
       for (const el of $$("[data-intro]")) el.style.visibility = "visible";
-      cleanups.push(decode(chars));
+      // Once decoded, the terminal cursor appears and the start prompt types itself out.
+      cleanups.push(decode(chars, () => $(".hero-copy")?.classList.add("is-typed")));
       animate(lede, { opacity: [0, 1], y: [12, 0] }, { duration: 0.6, ease: EASE_OUT, delay: 0.45 });
       animate(scene, { opacity: [0, 1], y: [24, 0] }, { duration: 0.8, ease: EASE_OUT, delay: 0.6 });
     };

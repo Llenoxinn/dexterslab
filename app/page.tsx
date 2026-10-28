@@ -24,7 +24,8 @@ export default function Home() {
       <BootScreen />
       <SiteHeader home />
 
-      <main>
+      {/* The anchor sits on <main>, not the sticky hero: a stuck element always measures as "already at the top". */}
+      <main id="lab">
         <div className="hero on-ink">
           <div className="hero-frame" aria-hidden="true">
             <span className="corner corner--tl" />
@@ -63,7 +64,7 @@ export default function Home() {
         </div>
       </main>
 
-      <SiteFooter />
+      <SiteFooter home />
       <PageMotion />
     </>
   );

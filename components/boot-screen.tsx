@@ -20,7 +20,7 @@ export function BootScreen() {
     if (!el || getComputedStyle(el).display === "none") return;
     const segments = [...el.querySelectorAll<HTMLElement>(".boot-seg")];
     const percent = el.querySelector<HTMLElement>(".boot-pct");
-    const status = el.querySelector<HTMLElement>(".boot-status");
+    const status = el.querySelector<HTMLElement>(".boot-status span");
 
     let ready = false;
     const loaded = new Promise<void>((resolve) => {
@@ -90,7 +90,10 @@ export function BootScreen() {
           </span>
           <span className="boot-pct">000%</span>
         </div>
-        <p className="boot-status">Booting the lab…</p>
+        <p className="boot-status">
+          <span>Booting the lab…</span>
+          <span className="caret" />
+        </p>
       </div>
     </div>
   );

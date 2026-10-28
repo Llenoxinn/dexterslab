@@ -247,6 +247,10 @@ body {
   height: auto;
 }
 
+.btn-icon--sm {
+  width: 12px;
+}
+
 .btn-solid {
   border-color: var(--color-paper);
   background: var(--color-paper);
@@ -532,6 +536,10 @@ body {
   color: var(--color-lavender);
 }
 
+.hint-keys {
+  display: inline-block;
+}
+
 .hint-touch {
   display: none;
 }
@@ -541,7 +549,98 @@ body {
     display: none;
   }
   .hint-touch {
-    display: inline;
+    display: inline-block;
+  }
+}
+
+/* ---------- Terminal cursor ---------- */
+
+/* A pixel underscore, like a terminal waiting for input. */
+.caret {
+  display: inline-block;
+  width: 0.6em;
+  height: 0.14em;
+  margin-left: 0.15em;
+  background: currentColor;
+  vertical-align: baseline;
+}
+
+.caret--title {
+  width: 0.5em;
+  height: 0.11em;
+  margin-left: 0.12em;
+  box-shadow: 0.055em 0.055em 0 var(--color-neon);
+}
+
+@keyframes caret-blink {
+  0%,
+  49.9% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes caret-show {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes type-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* Cursors blink five times, then stay solid (WCAG 2.2.2: nothing blinks past five seconds).
+   Without motion the text is simply there, with a solid cursor. */
+@media (prefers-reduced-motion: no-preference) {
+  /* Idle: once the title has decoded, its cursor appears and the start prompt types itself out. */
+  .js .hero-copy .caret {
+    opacity: 0;
+  }
+  .js .hero-copy .lab-hint > span:not(.caret) {
+    clip-path: inset(0 100% 0 0);
+  }
+  .hero-copy.is-typed .caret--title {
+    animation:
+      caret-show 0s forwards,
+      caret-blink 1s steps(1, end) 5;
+  }
+  .hero-copy.is-typed .lab-hint > span:not(.caret) {
+    animation: type-in 1s steps(48, end) 0.2s forwards;
+  }
+  .hero-copy.is-typed .lab-hint .caret {
+    animation:
+      caret-show 0s 1.2s forwards,
+      caret-blink 1s steps(1, end) 1.2s 5;
+  }
+
+  /* Crash or pause: the prompt types out again each time the panel appears. */
+  .hero-result .lab-hint > span:not(.caret) {
+    clip-path: inset(0 100% 0 0);
+  }
+  .hero-result .lab-hint .caret {
+    opacity: 0;
+  }
+  .hero-main:is([data-phase="over"], [data-phase="paused"]) .hero-result .lab-hint > span:not(.caret) {
+    animation: type-in 0.6s steps(26, end) 0.15s forwards;
+  }
+  .hero-main:is([data-phase="over"], [data-phase="paused"]) .hero-result .lab-hint .caret {
+    animation:
+      caret-show 0s 0.75s forwards,
+      caret-blink 1s steps(1, end) 0.75s 5;
+  }
+
+  /* The boot screen lasts at most 2.5s, so its cursor can blink the whole time. */
+  .boot .caret {
+    animation: caret-blink 0.6s steps(1, end) infinite;
   }
 }
 
@@ -758,12 +857,26 @@ body {
   animation: frame-b 0.6s 0.6s 5;
 }
 
+/* Phones: smaller tiles (still above the 44px touch minimum) so Dexter fits at the end of the bus. */
 @media (max-width: 640px) {
   .contact {
-    --tile: 64px;
+    --tile: clamp(48px, 13.5vw, 56px);
   }
   .patch {
-    padding: 0 0 0 40px;
+    padding: 0 64px 0 40px;
+  }
+  .patch .socials {
+    gap: 8px;
+  }
+  .waver {
+    width: 56px;
+  }
+}
+
+/* Very narrow screens: the links need the whole row. */
+@media (max-width: 359px) {
+  .patch {
+    padding-right: 0;
   }
   .waver {
     display: none;
@@ -860,13 +973,13 @@ body {
   padding-block: clamp(40px, 6vw, 72px) 0;
 }
 
-.footer-brand p {
-  margin-top: 10px;
+.footer-credit {
   font-weight: 500;
 }
 
-.footer-brand p + p {
+.footer-credit p + p {
   margin-top: 2px;
+  color: var(--color-lavender);
 }
 
 /* A pixel lab bench along the bottom of the footer: equipment grouped at one end. */
@@ -943,12 +1056,26 @@ body {
   animation-delay: 0.7s;
 }
 
+/* The name returns at full width: big pixel letters in neon with a deep-ink pixel drop. */
+.footer-giant {
+  padding-top: clamp(8px, 1.5vw, 16px);
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 15vw, 13.5rem);
+  font-weight: 700;
+  line-height: 0.9;
+  color: var(--color-neon);
+  text-align: center;
+  text-shadow: 0.035em 0.035em 0 var(--color-ink-deep);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
 .footer-bottom {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px 24px;
-  padding-block: 18px 24px;
+  padding-block: 20px 24px;
   font-size: 0.875rem;
   font-weight: 500;
   font-variant-numeric: tabular-nums;

@@ -1,6 +1,6 @@
 import type { SVGProps } from "react";
 import { pixelPath } from "@/lib/pixel";
-import { BEAKER, BOLT, ENVELOPE, FLASK, MAGNIFIER, TESLA, TUBES } from "@/lib/pixel-art";
+import { ARROW_UP, BEAKER, BOLT, ENVELOPE, FLASK, MAGNIFIER, TESLA, TUBES } from "@/lib/pixel-art";
 
 type IconProps = SVGProps<SVGSVGElement>;
 
@@ -30,6 +30,7 @@ export const TeslaIcon = pixelIcon(TESLA);
 export const BoltIcon = pixelIcon(BOLT);
 export const EnvelopeIcon = pixelIcon(ENVELOPE);
 export const MagnifierIcon = pixelIcon(MAGNIFIER);
+export const ArrowUpIcon = pixelIcon(ARROW_UP);
 
 // Brand marks stay official (not pixelated), per their usage guidelines.
 function brandMark(viewBox: string, d: string) {

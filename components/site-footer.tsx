@@ -1,4 +1,4 @@
-import { BeakerIcon, FlaskIcon, TeslaIcon, TubesIcon } from "@/components/icons";
+import { ArrowUpIcon, BeakerIcon, FlaskIcon, TeslaIcon, TubesIcon } from "@/components/icons";
 import { site } from "@/lib/site";
 
 // Rendered at build time, so "Updated" is always the real deploy date.
@@ -10,21 +10,22 @@ const builtLabel = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Asia/Manila",
 }).format(built);
 
-export function SiteFooter() {
+// `home` keeps "Back to the lab" a same-page anchor, so smooth scrolling handles it.
+export function SiteFooter({ home = false }: { home?: boolean }) {
   return (
     <footer className="site-footer on-ink rails">
       <div className="wrap footer-top">
-        <div className="footer-brand">
-          <a className="brand" href="/">
-            <FlaskIcon className="brand-mark" />
-            <span className="wordmark">{site.wordmark}</span>
-          </a>
+        <div className="footer-credit">
           <p>Built and broken by {site.name}.</p>
           <p>{site.school}</p>
         </div>
+        <a className="btn btn-ghost" href={home ? "#lab" : "/"}>
+          <ArrowUpIcon className="btn-icon btn-icon--sm" />
+          Back to the lab
+        </a>
       </div>
 
-      {/* The lab bench: decorative pixel equipment. Bubbles rise twice when it scrolls into view. */}
+      {/* The lab bench stands on the name, which closes the page at full width. */}
       <div className="wrap">
         <div data-bench className="bench" aria-hidden="true">
           <TeslaIcon className="bench-item" />
@@ -37,6 +38,9 @@ export function SiteFooter() {
           </span>
           <TubesIcon className="bench-item" />
         </div>
+        <p className="footer-giant" aria-hidden="true">
+          {site.wordmark}
+        </p>
       </div>
 
       <div className="wrap footer-bottom">

@@ -559,7 +559,7 @@ export function LabGame() {
           <h1 data-intro className="display hero-title">
             <span className="sr-only">{TITLE}</span>
             <span aria-hidden="true">
-              {TITLE.split(" ").map((word, i) => (
+              {TITLE.split(" ").map((word, i, words) => (
                 <Fragment key={word}>
                   {i > 0 && " "}
                   <span className="word">
@@ -568,6 +568,8 @@ export function LabGame() {
                         {char}
                       </span>
                     ))}
+                    {/* The terminal cursor rides on the last word, so it never wraps alone. */}
+                    {i === words.length - 1 && <span className="caret caret--title" />}
                   </span>
                 </Fragment>
               ))}
@@ -582,6 +584,7 @@ export function LabGame() {
             <p className="lab-hint">
               <span className="hint-keys">Press Space to start. Space or ↑ jumps, ↓ ducks.</span>
               <span className="hint-touch">Tap the bench to start, then tap to jump.</span>
+              <span className="caret" aria-hidden="true" />
             </p>
           </div>
         </div>
@@ -600,6 +603,7 @@ export function LabGame() {
           <p className="lab-hint">
             <span className="hint-keys">{phase === "paused" ? "Press Space to resume." : "Press Space to try again."}</span>
             <span className="hint-touch">Tap the bench to {phase === "paused" ? "resume" : "try again"}.</span>
+            <span className="caret" aria-hidden="true" />
           </p>
         </div>
       </div>
