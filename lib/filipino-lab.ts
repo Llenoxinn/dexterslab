@@ -197,32 +197,25 @@ export function createFilipinoLab(root: THREE.Group, wood: THREE.Material) {
     rail.rotation.y = rotY;
     set.add(rail);
   };
-  panel(14, 0, -3.97, 0);
-  panel(18, -6.97, 5, Math.PI / 2);
-  panel(18, 6.97, 5, Math.PI / 2);
+  panel(19.7, 2.85, -3.97, 0);
+  // The room is a cutaway: only the left wall exists, and it stops at the open front edge.
+  panel(13.5, -6.97, 2.45, Math.PI / 2);
 
   // Bamboo posts at the back corners, with nodes every half metre.
   const bambooMat = new THREE.MeshStandardMaterial({ color: 0xc9a65a, roughness: 0.45 });
   const nodeMat = new THREE.MeshStandardMaterial({ color: 0x8c6a2e, roughness: 0.5 });
-  for (const x of [-6.75, 6.75]) {
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.14, 9, 18), bambooMat);
-    pole.position.set(x, 4.5, -3.78);
+  for (const x of [-6.75, 12.75]) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.14, 7, 18), bambooMat);
+    pole.position.set(x, 3.5, -3.78);
     pole.castShadow = true;
     set.add(pole);
     // Nodes are one instanced draw call per pole.
-    const nodeYs = Array.from({ length: 16 }, (_, i) => 0.5 + i * 0.55);
+    const nodeYs = Array.from({ length: 12 }, (_, i) => 0.5 + i * 0.55);
     const nodes = new THREE.InstancedMesh(new THREE.TorusGeometry(0.135, 0.018, 6, 20), nodeMat, nodeYs.length);
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0));
     nodeYs.forEach((y, i) => nodes.setMatrixAt(i, m.compose(new THREE.Vector3(x, y, -3.78), q, new THREE.Vector3(1, 1, 1))));
     set.add(nodes);
-  }
-
-  // Molave ceiling beams catch the lamplight at the top of the frame.
-  for (const z of [-3.2, -0.8, 1.6]) {
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(14.2, 0.32, 0.28), wood);
-    beam.position.set(0, 6.6, z);
-    set.add(beam);
   }
 
   // Banig mat on the floor in front of the desk.
@@ -235,53 +228,9 @@ export function createFilipinoLab(root: THREE.Group, wood: THREE.Material) {
   mat.receiveShadow = true;
   set.add(mat);
 
-  // Capiz-shell lamps: clusters of pearly discs around a warm bulb.
-  const capizMat = new THREE.MeshStandardMaterial({
-    color: 0xfff3dc,
-    emissive: 0xffb466,
-    emissiveIntensity: 0.55,
-    roughness: 0.3,
-    transparent: true,
-    opacity: 0.88,
-    side: THREE.DoubleSide,
-  });
-  const shell = new THREE.CircleGeometry(0.075, 14);
+  // No ceiling in the cutaway, so the hanging capiz lamps are gone; the sun lights the room.
   const lamps: THREE.Group[] = [];
   const lampLights: THREE.PointLight[] = [];
-  for (const [x, y, z] of [
-    [1.0, 4.45, -2.2],
-    [5.9, 4.6, -1.6],
-    [-3.6, 4.7, 1.2],
-  ] as const) {
-    const lamp = new THREE.Group();
-    lamp.position.set(x, y, z);
-    set.add(lamp);
-    const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 3, 5), wood);
-    cord.position.y = 1.6;
-    lamp.add(cord);
-    // Shells hang in rings that widen towards the bottom, like a capiz chandelier (one instanced draw call).
-    const discs: THREE.Matrix4[] = [];
-    const helper = new THREE.Object3D();
-    for (let ring = 0; ring < 5; ring++) {
-      const radius = 0.16 + ring * 0.05;
-      const n = 10 + ring * 3;
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2 + ring * 0.3;
-        helper.position.set(Math.cos(a) * radius, -ring * 0.1, Math.sin(a) * radius);
-        helper.lookAt(Math.cos(a) * radius * 3, -ring * 0.1, Math.sin(a) * radius * 3);
-        helper.updateMatrix();
-        discs.push(helper.matrix.clone());
-      }
-    }
-    const shells = new THREE.InstancedMesh(shell, capizMat, discs.length);
-    discs.forEach((matrix, i) => shells.setMatrixAt(i, matrix));
-    lamp.add(shells);
-    const light = new THREE.PointLight(0xffb067, 9, 8, 1.6);
-    light.position.y = -0.2;
-    lamp.add(light);
-    lampLights.push(light);
-    lamps.push(lamp);
-  }
 
   return {
     set,

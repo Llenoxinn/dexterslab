@@ -3,8 +3,13 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { createFilipinoLab, narraTexture, sawaliTexture, signTexture } from "@/lib/filipino-lab";
 import { createChristmasDecor } from "@/lib/christmas-lab";
+import { addLabProps } from "@/lib/lab-props";
 
 export type FocusStation = "terminal" | "core" | "tank" | "bench" | "rack";
 export type StationId = "overview" | FocusStation | "free";
@@ -23,16 +28,27 @@ const LAVENDER = 0xcbcbef;
 const PAPER = 0xf6f6fc;
 
 const DEG = Math.PI / 180;
-const LIMITS = { thetaMin: -60 * DEG, thetaMax: 60 * DEG, phiMin: 52 * DEG, phiMax: 88 * DEG, radiusMin: 2.6 };
-/** The camera lives inside the room: it never leaves these bounds, so the walls always fill the frame. */
-const ROOM = { x: 6.5, zFront: 12.5, yMin: 0.6, yMax: 9 };
+/** Load-in length: the last props land a little under three seconds after the first frame. */
+const ASSEMBLE_SECONDS = 3.1;
+const LIMITS = { thetaMin: -60 * DEG, thetaMax: 60 * DEG, phiMin: 38 * DEG, phiMax: 88 * DEG, radiusMin: 2.6 };
+/** The lab is a diorama seen from outside; these bounds only keep the camera above the table and out of the back wall. */
+const ROOM = { x: 40, zFront: 40, yMin: 0.6, yMax: 40 };
+/** Cutaway room: floor slab from the back wall (z = -4.3) to an open front edge. */
+const ROOM_DEPTH = 13.5;
+const ROOM_CENTER_Z = -4.3 + ROOM_DEPTH / 2;
+/** The floor runs from the left wall (x = -7.3) out past the right of the original lab, to x = 13. */
+const ROOM_WIDTH = 20.3;
+const ROOM_CENTER_X = -7.3 + ROOM_WIDTH / 2;
+const WALL_H = 7;
+
+/** Clay render: one matte white for everything, DOS blue for the lab hardware, a pale table to sit on. */
+const CLAY = 0xf3f3f5;
+const ACCENT = 0x2323d2;
+const BACKDROP = 0xeef0f6;
 
 type Preset = { target: [number, number, number]; theta: number; phi: number; radius: number };
 
-const OVERVIEW: Preset = { target: [0.6, 1.9, -1.2], theta: 6 * DEG, phi: 76 * DEG, radius: 13 };
-
-/** Where the camera starts on load, before it pulls back to the overview. */
-const INTRO: Preset = { target: [0.7, 1.75, -3.3], theta: -16 * DEG, phi: 84 * DEG, radius: 4.2 };
+const OVERVIEW: Preset = { target: [2.6, 1.5, 2.4], theta: 8 * DEG, phi: 58 * DEG, radius: 33 };
 
 const PRESETS: Record<FocusStation, Preset> = {
   terminal: { target: [0.75, 1.75, -3.3], theta: 14 * DEG, phi: 80 * DEG, radius: 4.6 },
@@ -100,6 +116,10 @@ type LabBuild = {
   markers: Map<FocusStation, THREE.Mesh>;
   tick: (t: number) => void;
   activate: (object: THREE.Object3D, instant?: boolean) => boolean;
+  /** Materials that keep DOS blue in the clay render. */
+  accents: Set<THREE.Material>;
+  /** Materials that keep their own look (the CRT screen and the painted sign). */
+  keep: Set<THREE.Material>;
 };
 
 function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
@@ -207,18 +227,15 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
     return g;
   };
 
-  // ---------- Shell: a full room. The floor and walls run past every edge of the frame. ----------
-  const floor = put(root, new THREE.PlaneGeometry(14, 18), M.floor, 0, 0, 5);
-  floor.rotation.x = -Math.PI / 2;
-  floor.castShadow = false;
-  put(root, box(14.6, 12, 0.3), M.wall, 0, 6, -4.15).castShadow = false;
-  for (const side of [-1, 1]) {
-    put(root, box(0.3, 12, 18), M.sideWall, side * 7.15, 6, 5).castShadow = false;
-    put(root, box(0.06, 0.2, 18), M.deep, side * 6.97, 0.1, 5, false);
-    put(root, box(0.05, 0.1, 18), M.mid, side * 6.975, 4.6, 5, false);
-  }
-  put(root, box(14, 0.2, 0.06), M.deep, 0, 0.1, -3.97, false);
-  put(root, box(14, 0.1, 0.05), M.mid, 0, 4.6, -3.975, false);
+  // ---------- Shell: a cutaway diorama. A floor slab, the back wall and the left wall; the
+  // front and right stay open so the camera looks in from outside, like a model on a table. ----------
+  put(root, box(ROOM_WIDTH, 0.4, ROOM_DEPTH), M.floor, ROOM_CENTER_X, -0.2, ROOM_CENTER_Z).castShadow = false;
+  put(root, box(ROOM_WIDTH, WALL_H, 0.3), M.wall, ROOM_CENTER_X, WALL_H / 2, -4.15).castShadow = false;
+  put(root, box(0.3, WALL_H, ROOM_DEPTH), M.sideWall, -7.15, WALL_H / 2, ROOM_CENTER_Z).castShadow = false;
+  put(root, box(0.06, 0.2, ROOM_DEPTH), M.deep, -6.97, 0.1, ROOM_CENTER_Z, false);
+  put(root, box(0.05, 0.1, ROOM_DEPTH), M.mid, -6.975, 4.6, ROOM_CENTER_Z, false);
+  put(root, box(ROOM_WIDTH - 0.6, 0.2, 0.06), M.deep, ROOM_CENTER_X, 0.1, -3.97, false);
+  put(root, box(ROOM_WIDTH - 0.6, 0.1, 0.05), M.mid, ROOM_CENTER_X, 4.6, -3.975, false);
 
 
   // ---------- Terminal: desk, CRT, shelf, oscilloscope ----------
@@ -283,10 +300,9 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
 
   // ---------- Back-wall blueprint board + gas cylinders ----------
   // A hand-painted "Maligayang Pasko!" board where the blueprint used to hang.
-  // It hangs on two ropes from the ceiling beam, in front of the parol garland.
-  put(root, box(1.72, 0.9, 0.08), M.deep, 3.1, 4.55, -2.5);
-  const board = put(root, new THREE.PlaneGeometry(1.6, 0.8), M.blueprint, 3.1, 4.55, -2.455, false);
-  for (const rx of [2.45, 3.75]) put(root, cyl(0.012, 0.012, 1.7, 5), M.lav, rx, 5.85, -2.5, false);
+  // Mounted on the back wall (the cutaway room has no ceiling to hang it from).
+  put(root, box(1.72, 0.9, 0.08), M.deep, 3.1, 4.55, -3.95);
+  const board = put(root, new THREE.PlaneGeometry(1.6, 0.8), M.blueprint, 3.1, 4.55, -3.905, false);
   board.receiveShadow = false;
   for (const [x, z, mat] of [
     [6.35, -3.4, M.paper],
@@ -363,10 +379,12 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
   put(tank, cyl(0.95, 0.85, 0.4), M.deep, 0, 3.22, 0);
   put(tank, cyl(0.3, 0.3, 0.1), M.paper, 0, 3.47, 0);
   tube(tank, M.steel, 0.09, [
+    // Up out of the tank, back along the ceiling line, and up the back wall (the room is open on top).
     [-0.35, 3.3, -0.45],
-    [-0.5, 4.2, -0.6],
-    [-0.5, 8, -0.6],
-    [-0.5, 12.5, -0.6],
+    [-0.45, 4.2, -1.1],
+    [-0.5, 4.5, -2.6],
+    [-0.5, 4.7, -3.9],
+    [-0.5, 6.9, -3.95],
   ]);
   const helix = group(tank, 0, 1.75, 0);
   for (let i = 0; i < 12; i++) {
@@ -478,6 +496,8 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
 
   return {
     stations: [terminal, core, tank, bench, rack],
+    accents: new Set<THREE.Material>([M.ink, M.neon, M.liquid, M.tankFluid, M.holo, M.glow]),
+    keep: new Set<THREE.Material>([M.screen, M.blueprint, M.led]),
     markers,
     activate: christmas.activate,
     tick: (t: number) => {
@@ -554,6 +574,95 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
   };
 }
 
+/**
+ * Re-skins the whole lab as a matte clay model: every surface becomes one white, the lab hardware
+ * turns DOS blue, glass stays glass, and the practical lights switch off (the sun does the lighting).
+ */
+function applyClay(root: THREE.Object3D, lab: Pick<LabBuild, "accents" | "keep">) {
+  const clay = new THREE.MeshStandardMaterial({ color: CLAY, roughness: 0.92, metalness: 0 });
+  const accent = new THREE.MeshStandardMaterial({ color: ACCENT, roughness: 0.6, metalness: 0, emissive: ACCENT, emissiveIntensity: 0.15 });
+  const glass = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.15, transparent: true, opacity: 0.3, depthWrite: false });
+  const accentGlass = new THREE.MeshStandardMaterial({
+    color: ACCENT,
+    roughness: 0.3,
+    transparent: true,
+    opacity: 0.32,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const replaced = new Set<THREE.Material>();
+  const swap = (m: THREE.Material) => {
+    if (lab.keep.has(m)) return m;
+    replaced.add(m);
+    const seeThrough = m.transparent && m.opacity < 0.95;
+    if (lab.accents.has(m) || m.userData.accent) return seeThrough ? accentGlass : accent;
+    return seeThrough ? glass : clay;
+  };
+  root.traverse((o) => {
+    if (o instanceof THREE.Light) o.visible = false;
+    if (!(o instanceof THREE.Mesh)) return;
+    o.material = Array.isArray(o.material) ? o.material.map(swap) : swap(o.material);
+  });
+  for (const m of replaced) m.dispose();
+}
+
+/**
+ * Window light: slatted blinds that only the sun can see (layer 1) throw striped shadows across
+ * the floor, and a faint shaft of haze runs from the window down to where the stripes land.
+ */
+function addSunlight(scene: THREE.Scene, sunDir: THREE.Vector3): THREE.Texture[] {
+  const windowAt = new THREE.Vector3(-2.25, 3.05, -3.62);
+  const w = 2.6;
+  const h = 2.4;
+
+  const blinds = new THREE.Group();
+  blinds.position.copy(windowAt);
+  const slatMat = new THREE.MeshBasicMaterial({ colorWrite: false });
+  const slat = new THREE.BoxGeometry(w, 0.13, 0.04);
+  for (let i = 0; i < 9; i++) {
+    const m = new THREE.Mesh(slat, slatMat);
+    m.position.y = -h / 2 + 0.12 + i * 0.27;
+    m.rotation.x = -0.35;
+    blinds.add(m);
+  }
+  const mullion = new THREE.Mesh(new THREE.BoxGeometry(0.1, h, 0.04), slatMat);
+  blinds.add(mullion);
+  blinds.traverse((o) => {
+    o.layers.set(1);
+    if (o instanceof THREE.Mesh) o.castShadow = true;
+  });
+  scene.add(blinds);
+
+  // The shaft: two crossed planes along the sun ray, brightest mid-way and soft at every edge.
+  const len = windowAt.y / sunDir.y;
+  const shaftMat = new THREE.ShaderMaterial({
+    uniforms: { uHalf: { value: new THREE.Vector3(w / 2, h / 2, len / 2) } },
+    vertexShader: "varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: `
+      uniform vec3 uHalf; varying vec3 vP;
+      void main() {
+        vec3 q = abs(vP) / uHalf;
+        float edge = (1.0 - smoothstep(0.45, 1.0, q.x)) * (1.0 - smoothstep(0.45, 1.0, q.y));
+        float along = 1.0 - smoothstep(0.2, 1.0, q.z);
+        gl_FragColor = vec4(1.0, 0.985, 0.95, 0.2 * edge * along);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const shaft = new THREE.Group();
+  shaft.name = "sun-shaft";
+  shaft.position.copy(windowAt).addScaledVector(sunDir, -len / 2);
+  shaft.lookAt(shaft.position.clone().add(sunDir));
+  const across = new THREE.PlaneGeometry(w, len);
+  across.rotateX(Math.PI / 2);
+  const down = new THREE.PlaneGeometry(len, h);
+  down.rotateY(Math.PI / 2);
+  shaft.add(new THREE.Mesh(across, shaftMat), new THREE.Mesh(down, shaftMat));
+  scene.add(shaft);
+  return [];
+}
+
 type RigApi = {
   sync: (station: StationId, zoomed: boolean) => void;
   zoomBy: (factor: number) => void;
@@ -597,52 +706,187 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     delete host.dataset.webgl;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.setClearColor(0x000000, 0);
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
+    renderer.toneMapping = THREE.NeutralToneMapping;
+    renderer.toneMappingExposure = 1;
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.shadowMap.autoUpdate = false;
     renderer.domElement.style.imageRendering = "auto";
-    host.dataset.renderStyle = "smooth";
+    host.dataset.renderStyle = "clay";
     host.appendChild(renderer.domElement);
 
-    // Cinematic night: a low warm ambience, cool moonlight through the capiz window, lamplight doing the rest.
-    scene.background = new THREE.Color(0x140c09);
-    scene.fog = new THREE.Fog(0x140c09, 16, 36);
-    scene.add(new THREE.HemisphereLight(0xffd9b0, 0x2a160c, 0.42));
-    const moon = new THREE.DirectionalLight(0x8fa6ff, 1.1);
-    moon.position.set(-4, 7, -12);
-    scene.add(moon);
-    const key = new THREE.DirectionalLight(0xffc98f, 0.95);
-    key.position.set(6, 12, 9);
+    // Daylight on a white model: a soft sky fill, and one low sun through the window doing the drawing.
+    scene.background = new THREE.Color(BACKDROP);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xc9ccd8, 1.35));
+    const SUN_DIR = new THREE.Vector3(-6, 8, -9).normalize();
+    const SUN_AT = new THREE.Vector3(ROOM_CENTER_X, 0, ROOM_CENTER_Z);
+    const key = new THREE.DirectionalLight(0xfff4e6, 2.6);
+    key.position.copy(SUN_AT).addScaledVector(SUN_DIR, 26);
+    key.target.position.copy(SUN_AT);
     key.castShadow = true;
-    key.shadow.mapSize.set(1024, 1024);
-    key.shadow.camera.left = -12;
-    key.shadow.camera.right = 12;
-    key.shadow.camera.top = 12;
-    key.shadow.camera.bottom = -12;
-    key.shadow.camera.far = 50;
-    key.shadow.bias = -0.0006;
-    key.shadow.normalBias = 0.03;
-    const tankGlow = new THREE.PointLight(0x3fe0d0, 14, 7);
-    tankGlow.position.set(4.6, 1.9, 0.3);
-    const coreGlow = new THREE.PointLight(0xffc787, 14, 7);
-    coreGlow.position.set(-2.4, 1.5, 0.8);
-    const crtGlow = new THREE.PointLight(PAPER, 3, 3.5);
-    crtGlow.position.set(0.9, 1.8, -2.5);
-    const lampGlow = new THREE.PointLight(0xffb36b, 6, 7);
-    lampGlow.position.set(1.0, 4.1, -2.2);
-    scene.add(key, tankGlow, coreGlow, crtGlow, lampGlow);
+    key.shadow.mapSize.set(2048, 2048); // ~60 texels per metre over the larger floor
+    key.shadow.camera.left = -17;
+    key.shadow.camera.right = 17;
+    key.shadow.camera.top = 17;
+    key.shadow.camera.bottom = -17;
+    key.shadow.camera.near = 4;
+    key.shadow.camera.far = 60;
+    key.shadow.bias = -0.0004;
+    key.shadow.normalBias = 0.025;
+    key.shadow.radius = 3;
+    // Layer 1 holds shadow-only geometry (the window blinds): the sun sees it, the camera does not.
+    key.shadow.camera.layers.enable(1);
+    scene.add(key, key.target);
+    // A shadowless fill from the viewer's side keeps the inside of the walls white, not grey.
+    const fill = new THREE.DirectionalLight(0xf2f4ff, 0.9);
+    fill.position.set(10, 6, 14);
+    scene.add(fill);
 
     const textures: THREE.Texture[] = [];
     const root = new THREE.Group();
     scene.add(root);
     const lab = buildLab(root, textures);
+    addLabProps(root);
+    applyClay(root, lab);
+    textures.push(...addSunlight(scene, SUN_DIR));
+
+    // Ambient occlusion is what makes white clay read as solid: soft darkening wherever things meet.
+    const composer = new EffectComposer(
+      renderer,
+      new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }),
+    );
+    composer.addPass(new RenderPass(scene, camera));
+    const gtao = new GTAOPass(scene, camera, 1, 1);
+    gtao.blendIntensity = 0.9;
+    gtao.updateGtaoMaterial({ radius: 0.7, distanceExponent: 1.4, thickness: 1.2, scale: 1.1, samples: 8 });
+    // Glass and the light shaft would otherwise cast AO onto whatever sits behind them.
+    const gtaoVis = gtao as unknown as { _overrideVisibility: () => void; _visibilityCache: THREE.Object3D[] };
+    const hideBase = gtaoVis._overrideVisibility.bind(gtao);
+    gtaoVis._overrideVisibility = () => {
+      hideBase();
+      scene.traverse((o) => {
+        if (o instanceof THREE.Mesh && o.visible && (o.material as THREE.Material).transparent) {
+          o.visible = false;
+          gtaoVis._visibilityCache.push(o);
+        }
+      });
+    };
+    composer.addPass(gtao);
+    composer.addPass(new OutputPass());
+
+    // ---------- Scroll: the diorama comes apart into floating pieces as the page moves on ----------
+    type Piece = {
+      obj: THREE.Object3D;
+      dir: THREE.Vector3;
+      spin: THREE.Vector3;
+      /** Share of the page's scroll speed the piece rises at once it is debris (parallax). */
+      drift: number;
+      /** Load-in: seconds before the piece starts flying into place. */
+      delay: number;
+      /** Turns world-space vectors into the parent's local space. */
+      toLocal: THREE.Quaternion;
+      scale: number;
+      pos: THREE.Vector3;
+      rot: THREE.Euler;
+    };
+    const pieces: Piece[] = [];
+    const shell: Array<{ mesh: THREE.Mesh; mat: THREE.Material }> = [];
+    const sunShaft = scene.getObjectByName("sun-shaft");
+    {
+      const rand = (() => { let seed = 11; return () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646; })();
+      const center = new THREE.Vector3(ROOM_CENTER_X, 0.5, ROOM_CENTER_Z);
+      const world = new THREE.Vector3();
+      // Toward the overview camera: pieces never fly into the lens.
+      const toCamera = new THREE.Vector3(
+        Math.sin(OVERVIEW.phi) * Math.sin(OVERVIEW.theta),
+        Math.cos(OVERVIEW.phi),
+        Math.sin(OVERVIEW.phi) * Math.cos(OVERVIEW.theta),
+      );
+      root.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return;
+        if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+        const size = (o.geometry.boundingSphere?.radius ?? 0) * o.getWorldScale(world).x;
+        o.getWorldPosition(world);
+        let dir: THREE.Vector3;
+        let spin: THREE.Vector3;
+        if (size > 3) {
+          // The floor and walls fall away slowly and tilt open, like a model being taken apart.
+          dir = new THREE.Vector3((world.x - center.x) * 0.25, -2.5 - rand() * 1.5, -1.5 - rand());
+          spin = new THREE.Vector3(rand() - 0.5, rand() - 0.5, rand() - 0.5).multiplyScalar(0.35);
+        } else {
+          dir = world.clone().sub(center);
+          dir.y = Math.abs(dir.y) + 2 + rand() * 4;
+          dir.x += (rand() - 0.5) * 6;
+          dir.z += (rand() - 0.5) * 6;
+          dir.normalize();
+          const facing = dir.dot(toCamera);
+          if (facing > 0) dir.addScaledVector(toCamera, -facing * 1.4).normalize();
+          dir.multiplyScalar(4 + rand() * 10);
+          spin = new THREE.Vector3(rand() - 0.5, rand() - 0.5, rand() - 0.5).multiplyScalar(4);
+        }
+        const toLocal = new THREE.Quaternion();
+        o.parent?.getWorldQuaternion(toLocal);
+        toLocal.invert();
+        const scale = 1 / (o.parent?.getWorldScale(new THREE.Vector3()).x || 1);
+        dir.applyQuaternion(toLocal).multiplyScalar(scale);
+        const drift = size > 3 ? 0 : 0.08 + rand() * 0.55;
+        if (size > 3) {
+          // Floor and walls dissolve as the room shatters; only the small pieces travel down the page.
+          const m = (o.material as THREE.Material).clone();
+          o.material = m;
+          shell.push({ mesh: o, mat: m });
+        }
+        // Build order on load: floor and walls, then furniture from the ground up, small props last.
+        const delay = size > 3 ? rand() * 0.25 : 0.45 + clamp(world.y / 4, 0, 1) * 0.8 + rand() * 0.6;
+        pieces.push({ obj: o, dir, spin, drift, delay, toLocal, scale, pos: new THREE.Vector3(), rot: new THREE.Euler() });
+      });
+    }
+    const camUp = new THREE.Vector3();
+    const local = new THREE.Vector3();
+    let burstGoal = 0;
+    let burst = 0;
+    let exploded = false;
+    // Past the top of the page the canvas moves into a fixed overlay, so the debris can drift down
+    // through the next sections. The camera pans with the page so the room still scrolls away with it.
+    const debris = document.createElement("div");
+    debris.className = "lab-debris";
+    debris.setAttribute("aria-hidden", "true");
+    const backdrop = scene.background;
+    let debrisOn = false;
+    let debrisOpacity = 1;
+    let panPx = 0;
+    let restTop = 0;
+    const placeDebris = () => {
+      debris.style.width = `${width}px`;
+      debris.style.height = `${height}px`;
+    };
+    const setDebris = (on: boolean) => {
+      if (on === debrisOn) return;
+      debrisOn = on;
+      if (on) {
+        // Pin the overlay exactly where the hero canvas is on screen right now (the hero is sticky).
+        restTop = host.getBoundingClientRect().top;
+        debris.style.top = `${restTop}px`;
+        placeDebris();
+        document.body.appendChild(debris);
+        debris.appendChild(renderer.domElement);
+        scene.background = null;
+      } else {
+        host.insertBefore(renderer.domElement, host.firstChild);
+        debris.remove();
+        scene.background = backdrop;
+      }
+    };
+    const readScroll = () => {
+      const span = Math.max(1, host.clientHeight * 0.55);
+      burstGoal = isCalm() ? 0 : clamp(window.scrollY / span, 0, 1);
+      wake();
+    };
 
     // ---------- Camera rig: damped spherical orbit around a target ----------
     let width = 1;
     let height = 1;
-    const overviewRadius = () => clamp(OVERVIEW.radius * Math.max(1, 1.2 / (width / height)), OVERVIEW.radius, 14.5);
+    const overviewRadius = () => clamp(OVERVIEW.radius * Math.max(1, 1.5 / (width / height)), OVERVIEW.radius, 48);
 
     /** Portrait screens see less width, so close-ups back off a little. */
     const focusScale = () => clamp(0.85 / (width / height), 1, 1.5);
@@ -705,9 +949,10 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       camera.lookAt(cur.target);
       // The overview leaves room for the hero copy: beside it on wide screens, below it on narrow ones.
       const wide = width >= 900;
-      const dx = wide ? -0.1 * width * cur.shift : 0;
-      const dy = wide ? 0 : -0.14 * height * cur.shift;
-      camera.setViewOffset(width, height, dx, dy, width, height);
+      // The diorama sits centred and low, under the copy, like a model on a table.
+      const dx = 0;
+      const dy = (wide ? -0.09 : -0.14) * height * cur.shift;
+      camera.setViewOffset(width, height, dx, dy + panPx, width, height);
     };
 
     const resize = () => {
@@ -715,17 +960,16 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       height = Math.max(1, host.clientHeight);
       camera.aspect = width / height;
       renderer.setSize(width, height);
+      if (debrisOn) placeDebris();
+      composer.setPixelRatio(renderer.getPixelRatio());
+      composer.setSize(width, height);
       if (stationRef.current === "overview" && !zoomedRef.current) goal.radius = overviewRadius();
       else goal.radius = Math.min(goal.radius, overviewRadius());
     };
     resize();
-    // One load moment: start close on the terminal, then pull back to the whole room.
-    let introUntil = 0;
-    if (stationRef.current === "overview" && !zoomedRef.current && !isCalm()) {
-      setGoal(INTRO);
-      snap();
-      introUntil = performance.now() + 2600;
-    }
+    const introUntil = 0;
+    // Load moment: the camera holds still and the lab assembles itself from scattered pieces.
+    let assembleFrom = isCalm() ? -Infinity : 0;
     sync(stationRef.current, zoomedRef.current);
     if (!introUntil) snap();
     const ro = new ResizeObserver(() => { resize(); wake(); });
@@ -860,9 +1104,12 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     let shadowFrame = 0;
 
     let contextLost = false;
+    let useAO = true;
     const onContextLost = (e: Event) => {
       e.preventDefault();
       contextLost = true;
+      // A GPU that can't keep up with AO drops the context; come back without it.
+      useAO = false;
     };
     const onContextRestored = () => {
       contextLost = false;
@@ -884,23 +1131,94 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       cur.phi += (goal.phi - cur.phi) * k;
       cur.radius += (goal.radius - cur.radius) * k;
       cur.shift += (goal.shift - cur.shift) * k;
+      burst += (burstGoal - burst) * (calm ? 1 : 1 - Math.exp(-dt * 6));
+      const scrolled = window.scrollY;
+      setDebris(burst > 0.001 && !calm);
+      // The hero is sticky, so the page can scroll a long way before the room itself moves.
+      panPx = debrisOn ? Math.max(0, restTop - host.getBoundingClientRect().top) : 0;
+      const screens = scrolled / Math.max(1, window.innerHeight);
+      debrisOpacity = debrisOn ? 1 - clamp((screens - 1.8) / 1.2, 0, 1) : 1;
+      debris.style.opacity = String(debrisOpacity);
       applyCamera();
+      camera.updateMatrixWorld();
 
       if (!calm) animT += dt;
+      // The clock starts after the first frame is on screen: compiling shaders can take seconds.
+      const built = assembleFrom === 0 ? 0 : (now - assembleFrom) / 1000;
+      const assembling = built < ASSEMBLE_SECONDS;
+      if ((burst > 0.001 || assembling) && !exploded) {
+        exploded = true;
+        for (const p of pieces) { p.pos.copy(p.obj.position); p.rot.copy(p.obj.rotation); }
+      }
+      if (exploded) for (const p of pieces) { p.obj.position.copy(p.pos); p.obj.rotation.copy(p.rot); }
+      if (exploded && burst <= 0.001 && !assembling) {
+        exploded = false;
+        for (const { mesh, mat } of shell) { mat.transparent = false; mat.opacity = 1; mat.depthWrite = true; mat.needsUpdate = true; mesh.visible = true; }
+        if (sunShaft) sunShaft.visible = true;
+      }
       lab.tick(animT);
+      if (exploded) {
+        // Ease in, so the first bit of scroll only loosens the room before it flies apart.
+        const e = burst * burst * (3 - 2 * burst);
+        /** How far a piece still is from its place during the load-in (1 = scattered, 0 = home). */
+        const away = (p: Piece) => {
+          if (!assembling) return 0;
+          const t = clamp((built - p.delay) / 1.1, 0, 1);
+          return Math.pow(1 - t, 3);
+        };
+        // The shell fades in as the room assembles, and out as it shatters.
+        const solid = Math.min(1 - clamp(burst / 0.45, 0, 1), assembling ? clamp(built / 0.9, 0, 1) : 1);
+        for (const { mesh, mat } of shell) {
+          const fading = solid < 1;
+          if (mat.transparent !== fading) { mat.transparent = fading; mat.needsUpdate = true; }
+          mat.opacity = solid;
+          mat.depthWrite = !fading;
+          mesh.visible = solid > 0.01;
+        }
+        if (sunShaft) sunShaft.visible = solid > 0.5;
+        // World units per screen pixel at the lab's distance, along the camera's "up".
+        const perPx = (2 * cur.radius * Math.tan((camera.fov * DEG) / 2)) / height;
+        camUp.setFromMatrixColumn(camera.matrixWorld, 1);
+        for (const p of pieces) {
+          const f = Math.max(e, away(p));
+          p.obj.position.addScaledVector(p.dir, f);
+          if (p.drift > 0 && debrisOn) {
+            // Rise slower than the page and keep tumbling, so the pieces seem to fall through the sections.
+            // The camera pan already carries everything up with the page; this adds the piece's own rise.
+            const rise = (scrolled - panPx) * p.drift;
+            local.copy(camUp).applyQuaternion(p.toLocal).multiplyScalar(rise * perPx * p.scale);
+            p.obj.position.add(local);
+            const turn = screens * 0.5;
+            p.obj.rotation.x += p.spin.x * turn;
+            p.obj.rotation.y += p.spin.y * turn;
+          }
+          p.obj.rotation.x += p.spin.x * f;
+          p.obj.rotation.y += p.spin.y * f;
+          p.obj.rotation.z += p.spin.z * f;
+        }
+      }
       for (const [id, marker] of lab.markers) {
         const s = hovered === id ? 1.8 : stationRef.current === id ? 0.001 : 1;
         marker.scale.setScalar(calm ? s : marker.scale.x + (s - marker.scale.x) * Math.min(1, dt * 12));
       }
 
-      if (shadowFrame % 4 === 0) renderer.shadowMap.needsUpdate = true;
+      // Shadows only matter while the floor is still in view.
+      const shadowEvery = exploded ? (panPx < height * 0.7 ? 2 : 0) : 4;
+      if (shadowEvery && shadowFrame % shadowEvery === 0) renderer.shadowMap.needsUpdate = true;
       shadowFrame += 1;
-      renderer.render(scene, camera);
+      if (debrisOpacity > 0) {
+        if (useAO && !debrisOn) composer.render(dt);
+        else renderer.render(scene, camera);
+      }
       if (!host.dataset.ready) host.dataset.ready = "true"; // fade the scene in over the loader
-      if (visible && !covered && !document.hidden && !calm) raf = requestAnimationFrame(frame);
+      if (assembleFrom === 0) assembleFrom = performance.now();
+      const onScreen = debrisOn ? debrisOpacity > 0 : visible && !covered;
+      if (onScreen && !document.hidden && !calm) raf = requestAnimationFrame(frame);
     };
     const wake = () => {
-      if (disposed || raf || !visible || covered || document.hidden) return;
+      if (disposed || raf || document.hidden) return;
+      // In debris mode the overlay is on screen even when the hero itself is covered.
+      if (!debrisOn && burstGoal === 0 && (!visible || covered)) return;
       last = performance.now();
       raf = requestAnimationFrame(frame);
     };
@@ -917,6 +1235,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       wake();
     });
     io.observe(host);
+    window.addEventListener("scroll", readScroll, { passive: true });
+    readScroll();
     document.addEventListener("visibilitychange", wake);
     reducedMotion.addEventListener("change", onMotionChange);
     window.addEventListener("lab:preferences", onMotionChange);
@@ -931,6 +1251,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       coverObserver.disconnect();
       ro.disconnect();
       document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("scroll", readScroll);
       reducedMotion.removeEventListener("change", onMotionChange);
       window.removeEventListener("lab:preferences", onMotionChange);
       host.removeEventListener("pointerdown", onPointerDown);
@@ -955,11 +1276,14 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       for (const m of mats) m.dispose();
       for (const tx of textures) tx.dispose();
       key.shadow.map?.dispose();
+      gtao.dispose();
+      composer.dispose();
       renderer.dispose();
       // Hand the GPU context back now. Without this every hot reload leaks one, and the
       // browser eventually refuses to create any more.
       renderer.forceContextLoss();
       renderer.domElement.remove();
+      debris.remove();
     };
   }, []);
 
