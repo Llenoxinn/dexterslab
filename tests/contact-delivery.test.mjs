@@ -26,3 +26,8 @@ test("delivery reports success, rejection, network failure and swallows honeypot
 test("mailto fallback encodes the draft", () => {
   assert.match(mailtoDraft("me@x.com", input), /^mailto:me@x\.com\?subject=%5BPortfolio%5D/);
 });
+
+test("a solved hCaptcha token travels as h-captcha-response, and is omitted when absent", () => {
+  assert.equal(buildPayload("k", { ...input, captchaToken: "tok" })["h-captcha-response"], "tok");
+  assert.equal("h-captcha-response" in buildPayload("k", input), false);
+});

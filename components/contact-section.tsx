@@ -1,5 +1,6 @@
 "use client";
 
+import HCaptcha from "@hcaptcha/react-hcaptcha";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useClipboard } from "@/lib/use-clipboard";
 import { EnvelopeIcon, FacebookMark, GitHubMark, LinkedInMark } from "@/components/icons";
@@ -12,7 +13,7 @@ import {
   GAME_FLASK,
   GAME_TUBES,
 } from "@/lib/pixel-art";
-import { mailtoDraft, sendContactMessage } from "@/lib/contact-delivery";
+import { WEB3FORMS_HCAPTCHA_SITEKEY, mailtoDraft, sendContactMessage } from "@/lib/contact-delivery";
 import { site } from "@/lib/site";
 
 const WEB3FORMS_KEY = process.env.NEXT_PUBLIC_WEB3FORMS_KEY ?? "";
@@ -45,7 +46,7 @@ const SOCIAL_LINKS = [
   { label: "Facebook", href: site.facebook, handle: "acetylsphaericus", Icon: FacebookMark, external: true },
 ] as const;
 
-type FieldName = "name" | "email" | "message";
+type FieldName = "name" | "email" | "message" | "captcha";
 type FieldErrors = Partial<Record<FieldName, string>>;
 
 // The form validates itself and answers in the voice of the site, not with the grey browser bubble.
@@ -80,12 +81,14 @@ export function ContactSection() {
   // idle → sending → sent | error. "draft" is the no-key fallback that opens the email app.
   const [sentState, setSentState] = useState<"idle" | "sending" | "sent" | "draft" | "error">("idle");
   const [botcheck, setBotcheck] = useState("");
+  const [captchaToken, setCaptchaToken] = useState("");
+  const captchaRef = useRef<HCaptcha>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [activeField, setActiveField] = useState<ActiveField>(null);
   const [hoveredSocial, setHoveredSocial] = useState<string | null>(null);
   const [jumping, setJumping] = useState(false);
 
-  const firstError = errors.name ?? errors.email ?? errors.message;
+  const firstError = errors.name ?? errors.email ?? errors.message ?? errors.captcha;
   const clearError = (field: FieldName) =>
     setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
 
@@ -123,13 +126,14 @@ export function ContactSection() {
     e.preventDefault();
     const form = e.currentTarget;
     const found = validate(name, email, message);
+    if (WEB3FORMS_KEY && !captchaToken) found.captcha = "Tick the hCaptcha box so I know you're human.";
     setErrors(found);
     const firstInvalid = (["name", "email", "message"] as const).find((field) => found[field]);
     if (firstInvalid) {
       (form.elements.namedItem(firstInvalid) as HTMLElement | null)?.focus();
       return;
     }
-    const input = { name, email, subject, message, botcheck };
+    const input = { name, email, subject, message, botcheck, captchaToken };
 
     // No key configured (e.g. local dev): fall back to a pre-filled draft in the visitor's email app.
     if (!WEB3FORMS_KEY) {
@@ -142,6 +146,9 @@ export function ContactSection() {
 
     setSentState("sending");
     const result = await sendContactMessage(WEB3FORMS_KEY, input);
+    // hCaptcha tokens are single-use: always reset after a send attempt.
+    captchaRef.current?.resetCaptcha();
+    setCaptchaToken("");
     if (result.ok || result.reason === "spam") {
       setSentState("sent");
       clearTimeout(draftTimer.current);
@@ -283,6 +290,26 @@ export function ContactSection() {
               </span>
             )}
           </div>
+
+          {WEB3FORMS_KEY && (
+            <div className="contact-captcha">
+              <HCaptcha
+                ref={captchaRef}
+                sitekey={WEB3FORMS_HCAPTCHA_SITEKEY}
+                reCaptchaCompat={false}
+                onVerify={(token) => {
+                  setCaptchaToken(token);
+                  clearError("captcha");
+                }}
+                onExpire={() => setCaptchaToken("")}
+              />
+              {errors.captcha && (
+                <span className="contact-field-error" role="alert">
+                  {errors.captcha}
+                </span>
+              )}
+            </div>
+          )}
 
           <div className="contact-form-actions">
             <button

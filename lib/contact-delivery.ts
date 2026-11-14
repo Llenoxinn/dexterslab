@@ -8,6 +8,9 @@
 
 export const WEB3FORMS_ENDPOINT = "https://api.web3forms.com/submit";
 
+/** Web3Forms' shared hCaptcha sitekey for free plans (docs: spam-protection/hcaptcha). Public by design. */
+export const WEB3FORMS_HCAPTCHA_SITEKEY = "50b2fe65-b00b-4b9e-ad62-3ba471098be2";
+
 export type ContactMessage = {
   name: string;
   email: string;
@@ -15,6 +18,8 @@ export type ContactMessage = {
   message: string;
   /** Honeypot: real people never fill this hidden field in. */
   botcheck?: string;
+  /** Solved hCaptcha token; required when hCaptcha is enabled in the Web3Forms dashboard. */
+  captchaToken?: string;
 };
 
 export function buildPayload(accessKey: string, input: ContactMessage) {
@@ -29,6 +34,7 @@ export function buildPayload(accessKey: string, input: ContactMessage) {
     email: input.email.trim(),
     message: input.message.trim(),
     botcheck: input.botcheck ?? "",
+    ...(input.captchaToken ? { "h-captcha-response": input.captchaToken } : {}),
   };
 }
 
