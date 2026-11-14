@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { StackIcon } from "@/components/stack-icons";
+import { Card3D } from "@/components/ui/animated-3d-card";
 import { githubProjects, techStack } from "@/lib/content";
 import { site } from "@/lib/site";
 
@@ -196,11 +197,13 @@ export function GitHubSection() {
         <ul className="gh-showcase-grid">
           {visibleProjects.map((repo, ri) => (
             <li key={repo.slug} style={{ "--repo-idx": ri } as CSSProperties}>
-              <a
+              <Card3D
                 className="gh-repo-card gh-showcase-card"
                 href={repo.url}
                 target="_blank"
                 rel="noreferrer"
+                index={ri}
+                inView={inView}
               >
                 <div className="gh-showcase-top">
                   <div className="gh-showcase-title-group">
@@ -251,7 +254,7 @@ export function GitHubSection() {
                     );
                   })}
                 </ul>
-              </a>
+              </Card3D>
             </li>
           ))}
         </ul>
