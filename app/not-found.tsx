@@ -8,7 +8,7 @@ export default function NotFound() {
   return (
     <>
       <SiteHeader />
-      <main className="hero hero--static on-ink">
+      <main id="lab" tabIndex={-1} className="hero hero--static on-ink">
         <div className="hero-frame" aria-hidden="true">
           <span className="corner corner--tl" />
           <span className="corner corner--tr" />

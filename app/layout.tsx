@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Chakra_Petch, Inter, Pixelify_Sans } from "next/font/google";
+import { Chakra_Petch, Inter } from "next/font/google";
+import localFont from "next/font/local";
 import Script from "next/script";
-import "lenis/dist/lenis.css";
+import { LabCustomizer } from "@/components/lab-customizer";
+import { site } from "@/lib/site";
 import "./globals.css";
 
-const display = Pixelify_Sans({ weight: ["700"], subsets: ["latin"], variable: "--font-pixel", display: "swap" });
+const display = localFont({ src: "../assets/PixelifySans-Bold.ttf", weight: "700", variable: "--font-pixel", display: "swap" });
 // Section headlines match Notion /dev's headline voice (NotionInter is Notion's own cut of Inter).
 const heading = Inter({ weight: ["700"], subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const sans = Chakra_Petch({
@@ -14,17 +16,14 @@ const sans = Chakra_Petch({
   display: "swap",
 });
 
-const siteUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
-  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-  : "http://localhost:3000";
-
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
-  title: { default: "Dexter Juevesano — dexterslab", template: "%s — dexterslab" },
-  description: "The lab of Dexter Juevesano, computer science student at UP Cebu. Experiment in progress.",
+  metadataBase: new URL(site.url),
+  title: { default: "Dexter Juevesano | dexterslab", template: "%s | dexterslab" },
+  description: "Dexter Juevesano, computer science student at UP Cebu. Explore shipped web tools, cybersecurity projects, and computational biology research.",
   openGraph: {
     type: "website",
     siteName: "dexterslab",
+    locale: "en_PH",
     title: "dexterslab: experiment in progress",
     description: "The lab of Dexter Juevesano, computer science student at UP Cebu.",
   },
@@ -37,12 +36,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={`${display.variable} ${heading.variable} ${sans.variable}`} suppressHydrationWarning>
       <body>
-        {/* Lets CSS hide intro elements before paint (without JS everything stays visible),
-            and skips the boot screen after the first visit in a session. */}
+        <a href="#lab" className="skip-link">Skip to content</a>
+        {/* Apply saved appearance before paint; content remains visible without JavaScript. */}
         <Script id="js-flag" strategy="beforeInteractive">
-          {`document.documentElement.classList.add("js");try{if(sessionStorage.getItem("lab-booted"))document.documentElement.classList.add("booted")}catch(e){}`}
+          {`const root=document.documentElement;root.classList.add("js");try{const p=JSON.parse(localStorage.getItem("dexterslab:prefs")||"{}");root.dataset.labTheme=p.theme==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"phosphor":"dos"):["dos","phosphor","contrast"].includes(p.theme)?p.theme:"dos";root.dataset.labRails=p.rails===true?"on":"off";if(p.density==="compact")root.dataset.labDensity="compact";if(p.fx==="calm")root.dataset.labFx="calm"}catch(e){root.dataset.labTheme="dos";root.dataset.labRails="off"}`}
         </Script>
         {children}
+        <LabCustomizer />
       </body>
     </html>
   );

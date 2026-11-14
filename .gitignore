@@ -16,3 +16,7 @@ next-env.d.ts
 # local only: reference images (not ours to publish) and session notes
 inspiration/
 .remember/
+
+# local browser verification artifacts
+.playwright-cli/
+output/playwright/
