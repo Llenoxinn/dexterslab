@@ -127,7 +127,7 @@ export function ProjectsSection() {
         <h2 id="projects-title" className="section-title">
           Selected work
         </h2>
-        <p className="section-intro">Three tools I built from scratch. Pull the lever for the next one.</p>
+        <p className="section-intro">Three tools I built from scratch. Pull the lever on the right to roll in the next one.</p>
       </div>
 
       <ProjectSlotMachine items={projects} renderCard={card} />
