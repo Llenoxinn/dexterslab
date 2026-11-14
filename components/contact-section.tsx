@@ -204,7 +204,16 @@ export function ContactSection() {
       <div className="contact-hero">
         <div className="contact-word-stage" data-contact-word>
           <h2 id="contact-heading" className="section-title contact-hero-title">
-            {panel === "message" ? "Hello." : panel === "links" ? "Let’s connect." : "Get in touch"}
+            {panel === "message" ? (
+              "Hello."
+            ) : panel === "links" ? (
+              <span className="contact-links-morph" aria-label="Let’s connect. Ping me, anytime.">
+                <span className="contact-links-from" aria-hidden="true">Let’s connect.</span>
+                <span className="contact-links-to" aria-hidden="true">Ping me, anytime.</span>
+              </span>
+            ) : (
+              "Get in touch"
+            )}
           </h2>
         </div>
         <p className="section-intro">

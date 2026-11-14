@@ -26,6 +26,7 @@ export function createStudioWindows(root: THREE.Group, wall: THREE.Material, sid
       mesh.position.set(px, py, pz);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      mesh.userData.buildRole = "wall";
       group.add(mesh);
       return mesh;
     };
@@ -49,6 +50,7 @@ export function createStudioWindows(root: THREE.Group, wall: THREE.Material, sid
     const pane = new THREE.Mesh(new THREE.PlaneGeometry(w, top - bottom), sky);
     pane.position.set(openingX, (bottom + top) / 2, -0.18);
     pane.castShadow = false;
+    pane.userData.buildRole = "wall";
     group.add(pane);
     windows.push(group);
   }

@@ -3,6 +3,10 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import type { ResearchEntry } from "@/lib/content";
 import { narraTexture } from "@/lib/filipino-lab";
 import { site } from "@/lib/site";
@@ -192,7 +196,8 @@ function pageTexture(
     if (w.y < 1300) {
       w.y = Math.max(w.y, 1240);
       w.rule("rgba(26, 31, 61, 0.2)", 2, 34);
-      w.text(`${site.name} · UP Cebu`, 24, 600, fonts.body, MUTED, 1.3, 6);
+      w.text(study.authors.join(" · "), 22, 600, fonts.body, MUTED, 1.3, 10);
+      w.text(study.institution, 22, 400, fonts.body, MUTED, 1.3, 10);
       w.text("Click the notebook to read the full entry.", 24, 400, fonts.body, MUTED, 1.3, 0);
     }
   }
@@ -400,7 +405,8 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         latest.current.onUnsupported();
         return;
       }
-      renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+      const roomy = ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) > 4;
+      renderer.setPixelRatio(Math.min(devicePixelRatio || 1, roomy ? 2 : 1.5));
       renderer.toneMapping = THREE.NeutralToneMapping;
       renderer.toneMappingExposure = 1;
       renderer.shadowMap.enabled = true;
@@ -410,7 +416,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       renderer.domElement.setAttribute("role", "img");
       renderer.domElement.setAttribute(
         "aria-label",
-        "An open lab notebook on a wooden desk under a warm lamp. Its pages summarise each research study.",
+        "A lab notebook on a pale tabletop in soft daylight. Its pages summarise each research study.",
       );
 
       const scene = new THREE.Scene();
@@ -421,16 +427,16 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       /* Lighting: daylight on a white clay model, matching the hero lab. A soft sky fill and one
          low sun that throws long shadows across the bench. */
       scene.add(new THREE.HemisphereLight(0xffffff, 0xc9ccd8, 1.0));
-      const spot = new THREE.SpotLight(0xfff4e6, 120, 30, 0.5, 0.9, 1.5); // kept modest so the pages don't wash out
+      const spot = new THREE.SpotLight(0xfff4e6, 120, 20, 0.42, 0.9, 1.5); // kept modest so the pages don't wash out
       spot.position.set(-5.5, 8.5, -4.5);
       spot.target.position.set(0, 0, -0.1);
       spot.castShadow = true;
-      spot.shadow.mapSize.set(2048, 2048);
-      spot.shadow.radius = 3;
-      spot.shadow.blurSamples = 12;
-      spot.shadow.intensity = 0.8;
-      spot.shadow.bias = -0.0004;
-      spot.shadow.normalBias = 0.015;
+      spot.shadow.mapSize.setScalar(Math.min(renderer.capabilities.maxTextureSize, roomy ? 4096 : 2048));
+      spot.shadow.camera.near = 0.5;
+      spot.shadow.radius = roomy ? 3 : 1.5;
+      spot.shadow.intensity = 0.78;
+      spot.shadow.bias = -0.00008;
+      spot.shadow.normalBias = 0.004;
       scene.add(spot, spot.target);
       const fill = new THREE.DirectionalLight(0xf2f4ff, 0.45); // shadowless fill from the viewer's side
       fill.position.set(-4, 3, 5);
@@ -789,7 +795,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         disposables.push(clay, accent, glass, accentGlass);
         const swap = (m: THREE.Material) => {
           const sm = m as THREE.MeshStandardMaterial;
-          if (m === leftPageMat || m === rightPageMat || m === edgeMat) return m;
+          if (m === leftPageMat || m === rightPageMat || m === turnFrontMat || m === turnBackMat || m === edgeMat) return m;
           if (sm.map && sm.map !== deskWood) return m;
           const lit = sm.emissive && sm.emissiveIntensity > 0 && sm.emissive.getHex() !== 0;
           const blue = m === clothMat || lit;
@@ -798,13 +804,18 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         };
         scene.traverse((o) => {
           if (o instanceof THREE.PointLight) o.visible = false;
-          if (o instanceof THREE.Mesh) o.material = Array.isArray(o.material) ? o.material.map(swap) : swap(o.material);
+          if (o instanceof THREE.Mesh) {
+            o.material = Array.isArray(o.material) ? o.material.map(swap) : swap(o.material);
+            const solid = (Array.isArray(o.material) ? o.material : [o.material]).every((m) => !m.transparent);
+            o.castShadow = solid && o !== bench && o !== coverFace;
+            o.receiveShadow = solid && o !== turnFront && o !== turnBack;
+          }
         });
         // The tabletop is painted in exactly the page's background colour, with shadows laid over
         // it by a separate catcher. The scene then has no visible edge against the section behind
         // it, even for the moment a slow device lets the canvas trail the scroll.
         const flat = new THREE.MeshBasicMaterial({ color: BG, toneMapped: false, fog: false });
-        const catcherMat = new THREE.ShadowMaterial({ color: 0x1a1f5c, opacity: 0.2 });
+        const catcherMat = new THREE.ShadowMaterial({ color: 0x252b49, opacity: 0.3 });
         disposables.push(flat, catcherMat);
         (bench as THREE.Mesh).material = flat;
         bench.receiveShadow = false;
@@ -814,6 +825,30 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         catcher.receiveShadow = true;
         scene.add(catcher);
       }
+
+      // Contact shading anchors the cover, paper edges and small props to the tabletop.
+      const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: roomy ? 4 : 2 }));
+      composer.addPass(new RenderPass(scene, camera));
+      const gtao = new GTAOPass(scene, camera, 1, 1);
+      gtao.blendIntensity = 0.55;
+      gtao.updateGtaoMaterial({ radius: 0.16, distanceExponent: 1.6, thickness: 0.15, scale: 1, samples: roomy ? 16 : 8 });
+      gtao.updatePdMaterial({ radius: 5, depthPhi: 1, normalPhi: 4, samples: 16 });
+      const gtaoVisibility = gtao as unknown as { _overrideVisibility: () => void; _visibilityCache: THREE.Object3D[] };
+      const hideBase = gtaoVisibility._overrideVisibility.bind(gtao);
+      gtaoVisibility._overrideVisibility = () => {
+        hideBase();
+        scene.traverse((object) => {
+          if (object instanceof THREE.Mesh && object.visible && (Array.isArray(object.material) ? object.material : [object.material]).every((material) => material.transparent)) {
+            object.visible = false;
+            gtaoVisibility._visibilityCache.push(object);
+          }
+        });
+      };
+      composer.addPass(gtao);
+      const output = new OutputPass();
+      composer.addPass(output);
+      let useAO = true;
+      const render = () => { if (useAO) composer.render(); else renderer.render(scene, camera); };
 
       const frameCamera = () => {
         const aspect = host.clientWidth / Math.max(1, host.clientHeight);
@@ -877,7 +912,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
           setMap(rightPageMat, r);
         }
 
-        const key = `${coverAngle.toFixed(2)}|${leaf.visible ? flip.toFixed(2) : "-"}|${book.position.x.toFixed(2)}`;
+        const key = `${coverAngle.toFixed(4)}|${leaf.visible ? flip.toFixed(4) : "-"}|${book.position.x.toFixed(4)}|${book.rotation.y.toFixed(4)}`;
         if (key !== shadowKey) {
           shadowKey = key;
           renderer.shadowMap.needsUpdate = true;
@@ -920,9 +955,12 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         // If the stage changed size without a resize event reaching us, catch up before drawing.
         const buffer = renderer.getSize(sizeProbe);
         if (buffer.x !== host.clientWidth || buffer.y !== host.clientHeight) resize();
-        if (!still) animateProps(dt);
+        if (!still) {
+          animateProps(dt);
+          renderer.shadowMap.needsUpdate = true;
+        }
         applyState(current);
-        renderer.render(scene, camera);
+        render();
 
         // Bubbles keep the loop alive while on screen; otherwise render only while settling.
         const settling =
@@ -944,8 +982,9 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         camera.updateProjectionMatrix();
         // CSS sizes the canvas (100% of the stage); only the drawing buffer is set here.
         renderer.setSize(host.clientWidth, host.clientHeight, false);
+        composer.setSize(host.clientWidth, host.clientHeight);
         applyState(current);
-        renderer.render(scene, camera);
+        render();
       };
       const resizeObserver = new ResizeObserver(resize);
       resizeObserver.observe(host);
@@ -996,6 +1035,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       const onLost = (event: Event) => {
         event.preventDefault();
         contextLost = true;
+        useAO = false;
       };
       const onRestored = () => {
         contextLost = false;
@@ -1039,6 +1079,9 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         coverMat.map?.dispose();
         disposables.forEach((d) => d.dispose());
         spot.shadow.map?.dispose();
+        gtao.dispose();
+        output.dispose();
+        composer.dispose();
         renderer.dispose();
         renderer.forceContextLoss();
         renderer.domElement.remove();

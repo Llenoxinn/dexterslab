@@ -65,6 +65,10 @@ export type ResearchEntry = {
   domain: string;
   modality: string;
   summary: string;
+  authors: string[];
+  institution: string;
+  date?: string;
+  abstract: string[];
   highlights: Array<{
     heading: string;
     detail: string;
@@ -346,17 +350,26 @@ export const researchWorks: ResearchEntry[] = [
     title:
       "ADMET-IT: In Silico Structural Analyses, Molecular Docking, Pharmacokinetic ADME-Tox Profiling of Bioactive Phytocompounds Against Diabetes-Related Enzymes, and In Vitro Evaluation of Cytotoxicity, and Alpha-Glucosidase Inhibitory Activity of Ficus septica Burm. f. leaf ethanolic and methanolic extracts",
     summary:
-      "Integrated computational pharmacology and wet-lab investigation evaluating bioactive phytocompounds from Ficus septica Burm. f. (Hauili / Lagnub) as candidate inhibitors of diabetes-associated metabolic enzymes.",
+      "Computational and laboratory investigation of Lagnub (Ficus septica Burm. f.) leaf extracts as potential inhibitors of diabetes-related enzymes. Methanolic extracts showed stronger alpha-glucosidase inhibition, supporting further study of their antidiabetic potential.",
+    authors: ["Baby Trisha S. Quimod", "Dexter S. Juevesano", "Johanna D. Cereño"],
+    institution: "San Remigio National High School · San Remigio I, Cebu Province, Region VII",
+    abstract: [
+      "Diabetes mellitus is a significant global health challenge. In support of the UN Sustainable Development Goal on health and well-being, this study explored the antidiabetic potential of Lagnub (Ficus septica Burm. f.) leaf extracts through in silico and in vitro analyses of cytotoxicity, pharmacokinetics, and inhibition of diabetes-related enzymes.",
+      "AutoDock Vina was used to assess the binding affinities of Aesculin, α-Amyrin, β-Amyrin, β-Sitosterol, Coumarin, Genistin, Kaempferitrin, Stigmasterol, and Tylophorine against targets including PDB 2QV4, PDB 3TOP, and glycogen synthase kinase-3 beta (GSK-3β). BIOVIA Discovery Studio and ChimeraX were used to visualize ligand–target interactions. The docking analyses indicated inhibitory potential comparable to acarbose.",
+      "Pharmacokinetic and toxicity predictions were conducted with pkCSM and SwissADME. β-Sitosterol displayed favorable predicted drug-like characteristics, including absorption and low toxicity risks. The BOILED-Egg model was used to assess gastrointestinal absorption and brain penetration potential.",
+      "The brine shrimp lethality assay (BSLA) yielded LC50 values of 139.74 ppm for the ethanolic extract and 480.79 ppm for the methanolic extract. An in vitro alpha-glucosidase inhibitory assay using p-nitrophenyl α-D-glucopyranoside demonstrated dose-dependent enzyme inhibition, with the methanolic extract exhibiting stronger activity and significant inhibition relative to the positive control.",
+      "The findings suggest promising antidiabetic potential in Ficus septica leaves. Further investigation using advanced methodologies and higher extract concentrations is needed to evaluate therapeutic efficacy.",
+    ],
     highlights: [
       {
-        heading: "In Silico Docking & ADME-Tox Pipeline",
+        heading: "Docking & Pharmacokinetic Profiling",
         detail:
-          "Conducted structural modeling, receptor-ligand molecular docking against diabetes-related enzymes, and pharmacokinetic ADME-Tox (Absorption, Distribution, Metabolism, Excretion, and Toxicity) screening of candidate Ficus septica phytocompounds.",
+          "Nine phytocompounds were docked against targets including 2QV4, 3TOP, and GSK-3β using AutoDock Vina. pkCSM and SwissADME predictions identified favorable absorption and toxicity profiles for β-Sitosterol.",
       },
       {
-        heading: "In Vitro Bioassay & Enzyme Inhibition",
+        heading: "Cytotoxicity & Enzyme Inhibition",
         detail:
-          "Prepared ethanolic and methanolic leaf extracts of Ficus septica Burm. f. and evaluated their in vitro cytotoxicity profiles alongside alpha-glucosidase inhibitory activity.",
+          "BSLA LC50: 139.74 ppm (ethanolic) and 480.79 ppm (methanolic). Both extracts showed dose-dependent alpha-glucosidase inhibition; the methanolic extract exhibited stronger activity. These findings support further investigation, rather than establish therapeutic efficacy.",
       },
     ],
     tags: [
@@ -375,19 +388,29 @@ export const researchWorks: ResearchEntry[] = [
     domain: "Phytochemistry, Oral Microbiology & Biofilm Attenuation",
     modality: "In Vitro",
     title:
-      "Phytochemical Analysis, Antibacterial Activity, and Anti-Quorum Sensing Activity of Hilo Grass (Paspalum conjugatum) Extract against Streptococcus mutans",
+      "Phytochemical Analysis, Antibacterial Activity, and Anti-Quorum Sensing Activity of Hilo Grass Stem and Leaves (Paspalum conjugatum) Extract against Streptococcus mutans (S. mutans)",
     summary:
-      "Experimental evaluation of ethanolic and aqueous stem and leaf extracts from Paspalum conjugatum (Hilo grass) targeting cariogenic pathogen Streptococcus mutans through both growth inhibition and quorum-sensing disruption.",
+      "An in vitro study of Hilo grass (Paspalum conjugatum) extracts against the dental-caries-associated bacterium Streptococcus mutans. The extracts showed concentration-dependent antibacterial activity and quorum-sensing inhibition, with lower antibacterial efficacy than streptomycin.",
+    authors: ["Dexter S. Juevesano", "Johanna D. Cereño", "Khrislyn Rhose T. Dungog", "Ma. Jhea F. Tudlasan"],
+    institution: "San Remigio National High School · San Remigio, Cebu",
+    date: "June 2023 · S.Y. 2022–2023",
+    abstract: [
+      "Dental caries is a prevalent chronic illness associated with Streptococcus mutans, a gram-positive bacterium in the oral cavity. This study examined the phytochemical constituents, antibacterial effects, and quorum-sensing inhibition of Paspalum conjugatum, locally known as Hilo grass.",
+      "Leaves were gathered, washed, and air-dried. Extracts prepared with 95% ethanol and water were left for 24 hours before qualitative phytochemical screening. Antibacterial activity was evaluated by disc diffusion and agar well diffusion. The anti-quorum-sensing assay used these methods with Luria–Bertani agar. Minimum inhibitory concentration (MIC) and minimum bactericidal concentration (MBC) were determined using a resazurin-based microplate broth dilution method and nutrient agar plates, respectively.",
+      "The ethanolic extract tested positive for alkaloids, anthraquinones, tannins, flavonoids, and saponins. The aqueous extract contained flavonoids, tannins, coumarins, and saponins. Antibacterial activity increased with concentration: 100% extract showed the greatest activity, followed by 50% and 25% extracts.",
+      "Across three trials, the 100% extract had an average inhibition-zone value of 11, compared with 22.4 for the positive control, streptomycin. The pure extract also showed substantial quorum-sensing inhibition. The MIC was 31.25 mg/mL, and the MBC was 62.5 mg/mL.",
+      "Although less effective than streptomycin, Paspalum conjugatum extract exhibited antibacterial activity sufficient to inhibit growth and kill S. mutans under the study conditions.",
+    ],
     highlights: [
       {
         heading: "Qualitative Phytochemical Screening",
         detail:
-          "Characterized secondary metabolites present in Paspalum conjugatum stem and leaf extracts to identify bioactive alkaloids, flavonoids, tannins, and phenolic constituents.",
+          "Ethanolic extracts contained alkaloids, anthraquinones, tannins, flavonoids, and saponins. Aqueous extracts contained flavonoids, tannins, coumarins, and saponins.",
       },
       {
         heading: "Antibacterial & Anti-Quorum Sensing Assays",
         detail:
-          "Assessed antibacterial susceptibility and cell-to-cell signaling (quorum sensing) inhibition against Streptococcus mutans to evaluate virulence and cariogenic biofilm suppression.",
+          "Activity increased from 25% to 100% extract concentration but remained below streptomycin. Pure extract showed substantial quorum-sensing inhibition. MIC: 31.25 mg/mL; MBC: 62.5 mg/mL, determined through resazurin broth dilution and nutrient agar assays.",
       },
     ],
     tags: [

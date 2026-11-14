@@ -87,3 +87,42 @@ test("PING changes happen individually across ten seconds while the rest remain 
   assert.ok(midway.filter((phase) => phase > 0 && phase < 1).length <= 5);
   assert.ok(phases(16).every((phase) => phase === 1));
 });
+
+test("the room entrance builds the foundation before walls and props, with walls anchored to the floor", () => {
+  const root = new THREE.Group();
+  const scene = new THREE.Scene();
+  scene.add(root);
+  const material = new THREE.MeshStandardMaterial();
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(12, .4, 10), material);
+  floor.position.y = -.2;
+  floor.userData.buildRole = "floor";
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(12, 6, .3), material);
+  wall.position.set(0, 3, -5);
+  wall.userData.buildRole = "wall";
+  const prop = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
+  prop.position.set(0, .5, 0);
+  root.add(floor, wall, prop);
+  const home = root.children.map((object) => ({ position: object.position.clone(), scale: object.scale.clone() }));
+  const journey = createJourney(root, { center: new THREE.Vector3(), toCamera: new THREE.Vector3(0, 0, 1) });
+  const camera = new THREE.PerspectiveCamera(30, 1.5, .5, 200);
+  camera.position.set(0, 8, 30);
+  camera.lookAt(0, 2, 0);
+  camera.updateMatrixWorld();
+  const input = { camera, time: 0, scroll: 0, contentEdge: .8, pointer: null, from: "room", to: "burst", mix: 0 };
+  journey.apply({ ...input, built: .3 });
+  assert.equal(floor.visible, true);
+  assert.equal(wall.visible, false);
+  assert.equal(prop.visible, false);
+  journey.reset();
+  journey.apply({ ...input, built: 1 });
+  root.updateMatrixWorld(true);
+  assert.ok(wall.scale.y > 0 && wall.scale.y < 1);
+  assert.ok(Math.abs(new THREE.Box3().setFromObject(wall).min.y) < .00001, "The growing wall remains on the floor");
+  assert.equal(prop.visible, false);
+  journey.reset();
+  journey.apply({ ...input, built: Infinity });
+  root.children.forEach((object, i) => {
+    assert.ok(object.position.distanceTo(home[i].position) < .00001);
+    assert.ok(object.scale.distanceTo(home[i].scale) < .00001);
+  });
+});

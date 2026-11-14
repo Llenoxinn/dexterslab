@@ -24,7 +24,7 @@ export const STAGES = ["room", "burst", "swirl", "trail", "scatter", "orbit", "f
 export type Stage = (typeof STAGES)[number];
 
 /** Load-in length: the room is set out left to right, and the last prop lands just before this. */
-export const ASSEMBLE_SECONDS = 3.8;
+export const ASSEMBLE_SECONDS = 4.6;
 /** How strongly the 3D layer shows behind each part of the page (the copy has to stay readable). */
 export const STAGE_OPACITY: Record<Stage, number> = { room: 1, burst: 1, swirl: 1, trail: 0.85, scatter: 0.85, orbit: 0.85, frame: 0.9 };
 
@@ -45,6 +45,8 @@ type Piece = {
   phase: number;
   /** Load-in: seconds before the piece is set down. */
   delay: number;
+  buildRole: "floor" | "wall" | "prop";
+  baseOffset: number;
   /** 0..1, decides which formations the piece takes part in (most of them are sparse). */
   pick: number;
   /** Index into the Contact frame's slots, or -1 when the piece sits that formation out. */
@@ -87,6 +89,9 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
     }
     const shell = !unit && size > 3;
     o.getWorldPosition(tmp);
+    box.setFromObject(o);
+    const baseOffset = tmp.y - box.min.y;
+    const buildRole = o.userData.buildRole === "floor" ? "floor" : o.userData.buildRole === "wall" || shell ? "wall" : "prop";
 
     let dir: THREE.Vector3;
     let spin: THREE.Vector3;
@@ -122,15 +127,12 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
       dir,
       spin,
       phase: rand() * Math.PI * 2,
-      // Build order on load: the room is laid out in a sweep from left to right. Everything that
-      // stands on the same patch of floor arrives together, lower parts first, so a desk is set
-      // down and then its things are placed on it.
-      delay: shell
-        ? 0
-        : 0.55 +
-          clamp((Math.round(tmp.x / 1.6) * 1.6 + 7.3) / 20.3, 0, 1) * 2.1 +
-          (Math.abs(Math.round(tmp.z / 1.6)) % 3) * 0.12 +
-          clamp(tmp.y / 5, 0, 1) * 0.4,
+      buildRole,
+      baseOffset,
+      // Foundation first, then walls from their bottom edge, then furniture and its contents.
+      delay: buildRole === "floor" ? 0 : buildRole === "wall"
+        ? .45 + clamp((tmp.x + 7.3) / 20.3, 0, 1) * .3
+        : 1.3 + clamp(tmp.y / 5, 0, 1) * 1.25 + clamp((tmp.x + 7.3) / 20.3, 0, 1) * .65 + rand() * .18,
       pick: rand(),
       slot: -1,
       ring: -1,
@@ -213,6 +215,7 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
     camera: THREE.PerspectiveCamera;
     time: number;
     scroll: number;
+    interlude?: number;
     orbitCenter: THREE.Vector3;
     /** Where the page content ends, in normalized screen x (0..1). The columns live outside it. */
     contentEdge: number;
@@ -255,11 +258,15 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
         // so the formation keeps moving while the page is still.
         const outer = p.ring % 2 === 0;
         // The rings turn on their own and also with the scroll, so they never sit still.
-        const turn = t * 0.2 + c.scroll * 0.0011;
+        const beat = c.interlude ?? 0;
+        const release = smooth(clamp((beat - .48) / .22, 0, 1));
+        const gather = smooth(clamp((beat - .73) / .2, 0, 1));
+        const expansion = 1 + release * .45 - gather * .34;
+        const turn = t * 0.14 + c.scroll * 0.00065 + release * .8;
         const a = (Math.floor(p.ring / 2) / (ringPieces.length / 2)) * Math.PI * 2 + (outer ? turn : -turn * 1.3);
         // Both rings clear the headline: they pass above and below it, and beside it at the ends.
-        const rx = outer ? 0.93 : 0.8;
-        const ry = (outer ? 0.86 : 0.7) + Math.sin(t * 0.6 + p.phase) * 0.012;
+        const rx = (outer ? 1.02 : .89) * expansion;
+        const ry = ((outer ? .97 : .82) + Math.sin(t * .6 + p.phase) * .012) * expansion;
         const sx = Math.cos(a) * rx;
         const sy = Math.sin(a) * ry + 0.02;
         const hover = near(c, sx, sy);
@@ -433,14 +440,22 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
         aQuat.slerp(bQuat, mp);
         aScale.lerp(bScale, mp);
 
-        if (assembling && !p.shell) {
-          // Load-in: each piece appears a little above its spot and is set down, no tumbling.
-          const t = clamp((c.built - p.delay) / 0.6, 0, 1);
-          const drop = Math.pow(1 - t, 3);
-          aPos.y += drop * 2.2;
-          // A small overshoot as it lands, like something being pressed into place.
-          const pop = t <= 0 ? 0 : t < 0.7 ? (t / 0.7) * 1.06 : 1.06 - ((t - 0.7) / 0.3) * 0.06;
-          aScale.multiplyScalar(pop);
+        if (assembling) {
+          const t = clamp((c.built - p.delay) / (p.buildRole === "prop" ? .95 : 1.25), 0, 1);
+          const rise = 1 - Math.pow(1 - t, 4);
+          if (p.buildRole === "floor") {
+            aPos.y -= (1 - rise) * .45;
+            aScale.x *= .92 + rise * .08;
+            aScale.z *= .92 + rise * .08;
+          } else if (p.buildRole === "wall") {
+            // Preserve the bottom edge in world space as each wall grows upward.
+            aPos.y -= p.baseOffset * (1 - rise);
+            aScale.y *= Math.max(.001, rise);
+          } else {
+            aPos.y -= (1 - rise) * Math.min(1.8, Math.max(.4, p.baseOffset + .4));
+            aScale.multiplyScalar(.94 + rise * .06);
+          }
+          if (t <= 0) aScale.setScalar(0);
         }
 
         // World target → the mesh's local space under its (static) parent.
@@ -478,7 +493,6 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
       }
 
       let opacity = shellOpacity[c.from] + (shellOpacity[c.to] - shellOpacity[c.from]) * m;
-      if (assembling) opacity = Math.min(opacity, clamp(c.built / 0.5, 0, 1));
       for (const s of shellMats) setShell(s, opacity);
       return opacity;
     },
