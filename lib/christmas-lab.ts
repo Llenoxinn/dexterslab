@@ -128,22 +128,36 @@ export function createChristmasDecor(root: THREE.Group, core: THREE.Group, termi
   gift(decor, -2.5, 1.95, 0.4, pine);
   gift(decor, 5.9, 2.6, 0.8, red);
 
-  // An inset four-pane window opens the room onto a quiet Christmas evening.
+  // A capiz window: molave frame, the left half slid open onto a Christmas night, the right half pearly capiz.
   const windowFrame = new THREE.Group();
   windowFrame.name = "laboratory-window";
   windowFrame.position.set(-2.25, 3.05, -3.81);
   decor.add(windowFrame);
-  const night = new THREE.MeshBasicMaterial({ color: 0x0e2343 });
+  const night = new THREE.MeshBasicMaterial({ color: 0x0e1a3a });
+  const molave = material(0x3e2415);
   box(windowFrame, night, [3.15, 2.05, 0.045], 0, 0, -0.055);
   for (const side of [-1, 1]) {
-    box(windowFrame, cream, [0.11, 2.25, 0.18], side * 1.64, 0, 0.035);
-    box(windowFrame, cream, [3.38, 0.11, 0.18], 0, side * 1.07, 0.035);
+    box(windowFrame, molave, [0.12, 2.25, 0.18], side * 1.64, 0, 0.035);
+    box(windowFrame, molave, [3.38, 0.12, 0.18], 0, side * 1.07, 0.035);
   }
-  box(windowFrame, cream, [0.06, 2.08, 0.14], 0, 0, 0.04);
-  box(windowFrame, cream, [3.18, 0.06, 0.14], 0, -0.05, 0.04);
-  box(windowFrame, cream, [3.55, 0.12, 0.4], 0, -1.14, 0.13);
-  ball(windowFrame, bulbs[0], 0.19, 0.92, 0.61, -0.015);
-  ball(windowFrame, night, 0.18, 1.0, 0.66, 0.05);
+  box(windowFrame, molave, [0.07, 2.08, 0.14], 0, 0, 0.04);
+  box(windowFrame, molave, [3.55, 0.12, 0.4], 0, -1.14, 0.13);
+  const capiz = new THREE.MeshStandardMaterial({
+    color: 0xf3ead6, emissive: 0x9fb4ff, emissiveIntensity: 0.28, roughness: 0.35, transparent: true, opacity: 0.82,
+  });
+  const capizPane = new THREE.PlaneGeometry(0.165, 0.165);
+  const capizPanel = new THREE.Group();
+  capizPanel.name = "capiz-panel";
+  capizPanel.position.set(0.82, 0, 0.09);
+  windowFrame.add(capizPanel);
+  box(capizPanel, molave, [1.6, 2.04, 0.03], 0, 0, -0.02);
+  const panes = new THREE.InstancedMesh(capizPane, capiz, 80);
+  for (let row = 0; row < 10; row++) {
+    for (let col = 0; col < 8; col++) panes.setMatrixAt(row * 8 + col, new THREE.Matrix4().makeTranslation(-0.665 + col * 0.19, -0.855 + row * 0.19, 0));
+  }
+  capizPanel.add(panes);
+  ball(windowFrame, bulbs[0], 0.19, -0.92, 0.61, -0.015);
+  ball(windowFrame, night, 0.18, -0.84, 0.66, 0.05);
   for (let index = 0; index < 20; index++) {
     const x = Math.sin(index * 9.7) * 1.43;
     const y = 0.14 + ((index * 17) % 13) * 0.062;

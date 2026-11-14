@@ -92,8 +92,6 @@ export function NotionHero() {
               </a>
             </div>
           </div>
-
-          <p className="hero-3d-cue">Drag to look around. Scroll to zoom. Click the equipment.</p>
         </div>
 
         <div className="hero-3d-bottom">

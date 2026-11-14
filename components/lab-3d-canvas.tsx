@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { createCartoonLab } from "@/lib/lab-cartoon";
+import { createFilipinoLab, narraTexture, sawaliTexture, signTexture } from "@/lib/filipino-lab";
 import { createChristmasDecor } from "@/lib/christmas-lab";
 
 export type FocusStation = "terminal" | "core" | "tank" | "bench" | "rack";
@@ -69,32 +69,6 @@ function pixelTexture(w: number, h: number, draw: (ctx: CanvasRenderingContext2D
   return tex;
 }
 
-function createFloorTexture() {
-  return pixelTexture(32, 32, (ctx) => {
-    for (let y = 0; y < 2; y++) {
-      for (let x = 0; x < 2; x++) {
-        ctx.fillStyle = (x + y) % 2 === 0 ? "#3a5cc4" : "#2b44a3";
-        ctx.fillRect(x * 16, y * 16, 16, 16);
-      }
-    }
-  });
-}
-
-/** Riveted wall panels, two units square. */
-function createWallTexture() {
-  return pixelTexture(32, 32, (ctx) => {
-    ctx.fillStyle = "#1313ba";
-    ctx.fillRect(0, 0, 32, 32);
-    ctx.fillStyle = "#0f0fa2";
-    ctx.fillRect(0, 0, 32, 1);
-    ctx.fillRect(0, 0, 1, 32);
-    ctx.fillStyle = "#2222d0";
-    ctx.fillRect(1, 1, 31, 1);
-    ctx.fillStyle = "#3838e6";
-    for (const [x, y] of [[3, 3], [29, 3], [3, 29], [29, 29]]) ctx.fillRect(x, y, 1, 1);
-  });
-}
-
 function createCrtTexture() {
   return pixelTexture(64, 48, (ctx) => {
     ctx.fillStyle = "#0a0a5d";
@@ -118,38 +92,6 @@ function createCrtTexture() {
     ctx.fillStyle = "#f6f6fc";
     ctx.fillRect(5, 41, 2, 2);
     ctx.fillRect(7, 43, 2, 2);
-  });
-}
-
-function createBlueprintTexture() {
-  return pixelTexture(96, 64, (ctx) => {
-    ctx.fillStyle = "#1313ba";
-    ctx.fillRect(0, 0, 96, 64);
-    ctx.fillStyle = "#2424d6";
-    for (let x = 0; x < 96; x += 8) ctx.fillRect(x, 0, 1, 64);
-    for (let y = 0; y < 64; y += 8) ctx.fillRect(0, y, 96, 1);
-    ctx.fillStyle = "#f6f6fc";
-    // flask outline
-    ctx.fillRect(18, 10, 8, 1);
-    ctx.fillRect(19, 11, 1, 14);
-    ctx.fillRect(24, 11, 1, 14);
-    for (let i = 0; i < 12; i++) {
-      ctx.fillRect(18 - i, 25 + i * 2, 1, 2);
-      ctx.fillRect(25 + i, 25 + i * 2, 1, 2);
-    }
-    ctx.fillRect(7, 49, 30, 1);
-    ctx.fillStyle = "#6666fd";
-    for (let i = 0; i < 8; i++) ctx.fillRect(11 - Math.min(i, 3), 41 + i, 22 + Math.min(i, 3) * 2, 1);
-    // waveform + notes
-    ctx.fillStyle = "#f6f6fc";
-    for (let x = 0; x < 40; x++) {
-      ctx.fillRect(50 + x, Math.round(20 + Math.sin(x * 0.45) * 7), 1, 1);
-    }
-    ctx.fillStyle = "#cbcbef";
-    ctx.fillRect(50, 36, 34, 2);
-    ctx.fillRect(50, 42, 26, 2);
-    ctx.fillRect(50, 48, 38, 2);
-    ctx.fillRect(50, 54, 16, 2);
   });
 }
 
@@ -213,29 +155,24 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
   const std = (color: number, extra: THREE.MeshStandardMaterialParameters = {}) =>
     new THREE.MeshStandardMaterial({ color, roughness: 0.72, metalness: 0.04, flatShading: false, ...extra });
 
-  const floorTex = createFloorTexture();
-  floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
-  floorTex.repeat.set(10, 13);
-  const wallTex = createWallTexture();
-  wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping;
-  wallTex.repeat.set(7, 6);
-  const sideWallTex = wallTex.clone();
-  sideWallTex.repeat.set(9, 6);
+  // Filipino wooden lab: narra floorboards and woven sawali walls.
+  const floorTex = narraTexture([4, 6]);
+  const wallTex = sawaliTexture([16, 14]);
+  const sideWallTex = sawaliTexture([20, 14]);
   textures.push(wallTex, sideWallTex);
   const crtTex = createCrtTexture();
-  const blueprintTex = createBlueprintTexture();
-  textures.push(floorTex, crtTex, blueprintTex);
+  textures.push(floorTex, crtTex);
 
   const M = {
-    // Cartoon secret-lab palette: royal-blue panels, periwinkle trims, a bright checker floor.
-    wall: std(0x2a3a9c),
-    sideWall: std(0x22307f),
-    floor: std(0xffffff, { roughness: 0.45, map: floorTex }),
-    paper: std(0xeef0fb),
-    lav: std(0xb9c4f2),
-    ink: std(0x2c3d96),
-    mid: std(0x5a86dc),
-    deep: std(0x151d5e),
+    // Warm woods for the room and furniture; the lab hardware keeps the site's ink blues.
+    wall: std(0xd6c0a2, { map: wallTex, roughness: 0.9 }),
+    sideWall: std(0xb89c7c, { map: sideWallTex, roughness: 0.9 }),
+    floor: std(0xffffff, { roughness: 0.5, metalness: 0.02, map: floorTex }),
+    paper: std(0xf1ead9),
+    lav: std(0xc9cbe8),
+    ink: std(0x2a3a8f),
+    mid: std(0x4f78c9),
+    deep: std(0x3a2214, { roughness: 0.6 }),
     steel: std(0xa4b7c6, { metalness: 0.45, roughness: 0.4 }),
     neon: std(NEON, { emissive: NEON, emissiveIntensity: 1.3 }),
     glow: std(0xffe2b2, { emissive: 0xffc67d, emissiveIntensity: 0.75 }),
@@ -256,7 +193,7 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
       depthWrite: false,
     }),
     screen: new THREE.MeshBasicMaterial({ map: crtTex, toneMapped: false }),
-    blueprint: new THREE.MeshBasicMaterial({ map: blueprintTex, toneMapped: false }),
+    blueprint: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.75 }),
     led: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
   };
 
@@ -283,12 +220,6 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
   put(root, box(14, 0.2, 0.06), M.deep, 0, 0.1, -3.97, false);
   put(root, box(14, 0.1, 0.05), M.mid, 0, 4.6, -3.975, false);
 
-  // pendant lamps: the cords run up out of frame
-  for (const [x, z] of [[1.0, -2.2], [5.9, -1.6]] as const) {
-    put(root, cyl(0.02, 0.02, 8, 5), M.deep, x, 8.6, z, false);
-    put(root, cyl(0.12, 0.42, 0.3, 8), M.deep, x, 4.5, z);
-    put(root, cyl(0.2, 0.2, 0.05, 8), M.glow, x, 4.34, z, false);
-  }
 
   // ---------- Terminal: desk, CRT, shelf, oscilloscope ----------
   const terminal = station("terminal", 1.0, -3.3, [-0.3, 2.42, 0]);
@@ -351,8 +282,11 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
   }
 
   // ---------- Back-wall blueprint board + gas cylinders ----------
-  put(root, box(1.9, 1.34, 0.06), M.paper, 5.7, 3.1, -3.97);
-  const board = put(root, new THREE.PlaneGeometry(1.76, 1.2), M.blueprint, 5.7, 3.1, -3.935, false);
+  // A hand-painted "Maligayang Pasko!" board where the blueprint used to hang.
+  // It hangs on two ropes from the ceiling beam, in front of the parol garland.
+  put(root, box(1.72, 0.9, 0.08), M.deep, 3.1, 4.55, -2.5);
+  const board = put(root, new THREE.PlaneGeometry(1.6, 0.8), M.blueprint, 3.1, 4.55, -2.455, false);
+  for (const rx of [2.45, 3.75]) put(root, cyl(0.012, 0.012, 1.7, 5), M.lav, rx, 5.85, -2.5, false);
   board.receiveShadow = false;
   for (const [x, z, mat] of [
     [6.35, -3.4, M.paper],
@@ -525,7 +459,18 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
     }),
   );
 
-  const cartoon = createCartoonLab(root, { deep: M.deep, paper: M.paper, neon: M.neon });
+  // Paint the sign once the display font has loaded, so the lettering isn't a fallback face.
+  const paintSign = () => {
+    const font = getComputedStyle(document.documentElement).getPropertyValue("--font-pixel").trim() || "sans-serif";
+    const sign = signTexture(font);
+    textures.push(sign);
+    M.blueprint.map = sign;
+    M.blueprint.needsUpdate = true;
+  };
+  if (document.fonts?.status === "loaded") paintSign();
+  else document.fonts?.ready.then(paintSign, paintSign);
+  const filipino = createFilipinoLab(root, M.deep);
+  textures.push(...filipino.textures);
 
   let lastArc = -1;
   let lastLed = -1;
@@ -575,7 +520,7 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
       }
 
       christmas.tick(t);
-      cartoon.tick(t);
+      filipino.tick(t);
       // The drone blinks every few seconds.
       droneEyes.scale.y = (t % 3.7) < 0.12 ? 0.15 : 1;
 
@@ -661,11 +606,15 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     host.dataset.renderStyle = "smooth";
     host.appendChild(renderer.domElement);
 
-    scene.background = new THREE.Color(0x101a5a);
-    scene.fog = new THREE.Fog(0x101a5a, 19, 42);
-    scene.add(new THREE.HemisphereLight(0xd8e2ff, 0x1a2266, 1.55));
-    const key = new THREE.DirectionalLight(0xffe4bd, 2.4);
-    key.position.set(5, 13, 10);
+    // Cinematic night: a low warm ambience, cool moonlight through the capiz window, lamplight doing the rest.
+    scene.background = new THREE.Color(0x140c09);
+    scene.fog = new THREE.Fog(0x140c09, 16, 36);
+    scene.add(new THREE.HemisphereLight(0xffd9b0, 0x2a160c, 0.42));
+    const moon = new THREE.DirectionalLight(0x8fa6ff, 1.1);
+    moon.position.set(-4, 7, -12);
+    scene.add(moon);
+    const key = new THREE.DirectionalLight(0xffc98f, 0.95);
+    key.position.set(6, 12, 9);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
     key.shadow.camera.left = -12;
@@ -681,7 +630,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     coreGlow.position.set(-2.4, 1.5, 0.8);
     const crtGlow = new THREE.PointLight(PAPER, 3, 3.5);
     crtGlow.position.set(0.9, 1.8, -2.5);
-    const lampGlow = new THREE.PointLight(0xffd5a2, 18, 9);
+    const lampGlow = new THREE.PointLight(0xffb36b, 6, 7);
     lampGlow.position.set(1.0, 4.1, -2.2);
     scene.add(key, tankGlow, coreGlow, crtGlow, lampGlow);
 
@@ -740,13 +689,18 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       zoomBy: (factor) => { if (!zoomedRef.current) { zoomTo(goal.radius * factor); wake(); } },
     };
 
+    let animT = 0; // declared before applyCamera, which reads it for the idle drift
     const applyCamera = () => {
-      const sinPhi = Math.sin(cur.phi);
+      // A slow, handheld-style drift on the whole-lab view makes the room feel filmed rather than rendered.
+      const drift = stationRef.current === "overview" && !zoomedRef.current && !isCalm() ? 1 : 0;
+      const theta = cur.theta + drift * Math.sin(animT * 0.13) * 0.035;
+      const phi = cur.phi + drift * Math.sin(animT * 0.09 + 1) * 0.012;
+      const sinPhi = Math.sin(phi);
       const r = cur.radius;
       camera.position.set(
-        clamp(cur.target.x + r * sinPhi * Math.sin(cur.theta), -ROOM.x, ROOM.x),
-        clamp(cur.target.y + r * Math.cos(cur.phi), ROOM.yMin, ROOM.yMax),
-        Math.min(cur.target.z + r * sinPhi * Math.cos(cur.theta), ROOM.zFront),
+        clamp(cur.target.x + r * sinPhi * Math.sin(theta), -ROOM.x, ROOM.x),
+        clamp(cur.target.y + r * Math.cos(phi), ROOM.yMin, ROOM.yMax),
+        Math.min(cur.target.z + r * sinPhi * Math.cos(theta), ROOM.zFront),
       );
       camera.lookAt(cur.target);
       // The overview leaves room for the hero copy: beside it on wide screens, below it on narrow ones.
@@ -903,7 +857,6 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     let visible = true;
     let covered = false;
     let last = performance.now();
-    let animT = 0;
     let shadowFrame = 0;
 
     let contextLost = false;
