@@ -32,13 +32,13 @@ const BLOCK_T = 0.06; // paper block thickness per side
 const SEG = 32;
 
 /* ── Palette: Dexter's-lab night blues, warm spotlight, parol accents ──── */
-const BG = 0x140c09;
+const BG = 0xeef0f6; // the same pale table the hero's clay lab sits on
 const CLOTH = 0x1a1f8c;
 const PAPER = "#f5f0e3";
 const GRID = "rgba(70, 92, 190, 0.13)";
 const INK = "#1313ba";
-const TEXT = "#1a1f3d";
-const MUTED = "#535a7a";
+const TEXT = "#0b0f2e"; // near-black ink: the daylight scene is bright, so the copy has to be dark
+const MUTED = "#2a3052";
 
 const smoothstep = (a: number, b: number, x: number) => {
   const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1);
@@ -401,8 +401,8 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         return;
       }
       renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-      renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.05;
+      renderer.toneMapping = THREE.NeutralToneMapping;
+      renderer.toneMappingExposure = 1;
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFShadowMap;
       renderer.shadowMap.autoUpdate = false;
@@ -418,17 +418,21 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       scene.fog = new THREE.Fog(BG, 8.6, 17);
       const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 40);
 
-      /* Lighting: a cool lab ambience and one warm spotlight pooling on the notebook. */
-      scene.add(new THREE.HemisphereLight(0xffd2a8, 0x140c09, 0.5));
-      const spot = new THREE.SpotLight(0xffe0a6, 120, 16, 0.42, 0.7, 1.5);
-      spot.position.set(0.3, 7.4, 1.4);
+      /* Lighting: daylight on a white clay model, matching the hero lab. A soft sky fill and one
+         low sun that throws long shadows across the bench. */
+      scene.add(new THREE.HemisphereLight(0xffffff, 0xc9ccd8, 1.0));
+      const spot = new THREE.SpotLight(0xfff4e6, 120, 30, 0.5, 0.9, 1.5); // kept modest so the pages don't wash out
+      spot.position.set(-5.5, 8.5, -4.5);
       spot.target.position.set(0, 0, -0.1);
       spot.castShadow = true;
-      spot.shadow.mapSize.set(1536, 1536);
+      spot.shadow.mapSize.set(2048, 2048);
+      spot.shadow.radius = 3;
+      spot.shadow.blurSamples = 12;
+      spot.shadow.intensity = 0.8;
       spot.shadow.bias = -0.0004;
       spot.shadow.normalBias = 0.015;
       scene.add(spot, spot.target);
-      const fill = new THREE.DirectionalLight(0x8fa6ff, 0.4); // cool moonlight rim
+      const fill = new THREE.DirectionalLight(0xf2f4ff, 0.45); // shadowless fill from the viewer's side
       fill.position.set(-4, 3, 5);
       scene.add(fill);
 
@@ -774,6 +778,43 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       let shadowKey = "";
       const elapsed = { t: 0 };
 
+      /* Clay pass: everything turns matte white except what carries the content. Printed surfaces
+         (pages, cover, labels) keep their textures; the notebook cloth and anything that glowed
+         become the DOS-blue accent; glass stays glass. */
+      {
+        const clay = std({ color: 0xf3f3f5, roughness: 0.92, metalness: 0 });
+        const accent = std({ color: 0x2323d2, roughness: 0.6, emissive: 0x2323d2, emissiveIntensity: 0.15 });
+        const glass = std({ color: 0xffffff, roughness: 0.15, transparent: true, opacity: 0.3, depthWrite: false });
+        const accentGlass = std({ color: 0x2323d2, roughness: 0.3, transparent: true, opacity: 0.4, depthWrite: false });
+        disposables.push(clay, accent, glass, accentGlass);
+        const swap = (m: THREE.Material) => {
+          const sm = m as THREE.MeshStandardMaterial;
+          if (m === leftPageMat || m === rightPageMat || m === edgeMat) return m;
+          if (sm.map && sm.map !== deskWood) return m;
+          const lit = sm.emissive && sm.emissiveIntensity > 0 && sm.emissive.getHex() !== 0;
+          const blue = m === clothMat || lit;
+          if (m.transparent && m.opacity < 0.95) return blue ? accentGlass : glass;
+          return blue ? accent : clay;
+        };
+        scene.traverse((o) => {
+          if (o instanceof THREE.PointLight) o.visible = false;
+          if (o instanceof THREE.Mesh) o.material = Array.isArray(o.material) ? o.material.map(swap) : swap(o.material);
+        });
+        // The tabletop is painted in exactly the page's background colour, with shadows laid over
+        // it by a separate catcher. The scene then has no visible edge against the section behind
+        // it, even for the moment a slow device lets the canvas trail the scroll.
+        const flat = new THREE.MeshBasicMaterial({ color: BG, toneMapped: false, fog: false });
+        const catcherMat = new THREE.ShadowMaterial({ color: 0x1a1f5c, opacity: 0.2 });
+        disposables.push(flat, catcherMat);
+        (bench as THREE.Mesh).material = flat;
+        bench.receiveShadow = false;
+        const catcher = new THREE.Mesh(bench.geometry, catcherMat);
+        catcher.rotation.x = -Math.PI / 2;
+        catcher.position.y = 0.002;
+        catcher.receiveShadow = true;
+        scene.add(catcher);
+      }
+
       const frameCamera = () => {
         const aspect = host.clientWidth / Math.max(1, host.clientHeight);
         const tanHalf = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
@@ -876,6 +917,9 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         smoothX += (pointerX - smoothX) * k;
         smoothY += (pointerY - smoothY) * k;
 
+        // If the stage changed size without a resize event reaching us, catch up before drawing.
+        const buffer = renderer.getSize(sizeProbe);
+        if (buffer.x !== host.clientWidth || buffer.y !== host.clientHeight) resize();
         if (!still) animateProps(dt);
         applyState(current);
         renderer.render(scene, camera);
@@ -886,6 +930,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         if (visible && !document.hidden && (settling || !still)) frame = requestAnimationFrame(draw);
       };
 
+      const sizeProbe = new THREE.Vector2();
       const wake = () => {
         if (!frame && visible && !document.hidden && !contextLost && !disposed) {
           lastTime = performance.now();
@@ -897,7 +942,8 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       const resize = () => {
         camera.aspect = host.clientWidth / Math.max(1, host.clientHeight);
         camera.updateProjectionMatrix();
-        renderer.setSize(host.clientWidth, host.clientHeight);
+        // CSS sizes the canvas (100% of the stage); only the drawing buffer is set here.
+        renderer.setSize(host.clientWidth, host.clientHeight, false);
         applyState(current);
         renderer.render(scene, camera);
       };
