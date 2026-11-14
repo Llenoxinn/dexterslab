@@ -1,6 +1,7 @@
 "use client";
 
-import HCaptcha from "@hcaptcha/react-hcaptcha";
+import dynamic from "next/dynamic";
+import type HCaptcha from "@hcaptcha/react-hcaptcha";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useClipboard } from "@/lib/use-clipboard";
 import { EnvelopeIcon, FacebookMark, GitHubMark, LinkedInMark } from "@/components/icons";
@@ -17,6 +18,7 @@ import { WEB3FORMS_HCAPTCHA_SITEKEY, mailtoDraft, sendContactMessage } from "@/l
 import { site } from "@/lib/site";
 
 const WEB3FORMS_KEY = process.env.NEXT_PUBLIC_WEB3FORMS_KEY ?? "";
+const ContactCaptcha = dynamic(() => import("@/components/contact-captcha"), { ssr: false });
 
 const WAVE_W = DEXTER_WAVE_A[0].length;
 const WAVE_H = DEXTER_WAVE_A.length;
@@ -69,6 +71,9 @@ const SOCIAL_BUBBLES: Record<string, string> = {
 };
 
 export function ContactSection() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const messageButtonRef = useRef<HTMLButtonElement>(null);
+  const linksButtonRef = useRef<HTMLButtonElement>(null);
   const { status: copyStatus, copy } = useClipboard();
   const copied = copyStatus === "copied";
   const jumpTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -91,8 +96,21 @@ export function ContactSection() {
   const [panel, setPanel] = useState<"message" | "links" | null>(null);
   const togglePanel = (next: "message" | "links") => {
     setPanel((prev) => (prev === next ? null : next));
+    setHoveredSocial(null);
+    setActiveField(null);
     setCaptchaToken(""); // the captcha widget remounts with the form
   };
+
+  // Keep the heading and the objects in view when the taller form opens near the page's end.
+  useEffect(() => {
+    if (!panel) return;
+    const section = sectionRef.current;
+    if (!section) return;
+    const top = section.getBoundingClientRect().top;
+    if (top < 48 || top > window.innerHeight * 0.3) {
+      section.scrollIntoView({ behavior: "instant", block: "start" });
+    }
+  }, [panel]);
 
   const firstError = errors.name ?? errors.email ?? errors.message ?? errors.captcha;
   const clearError = (field: FieldName) =>
@@ -169,19 +187,34 @@ export function ContactSection() {
 
   return (
     <section
+      ref={sectionRef}
       id="contact"
       aria-labelledby="contact-heading"
       className="wrap lab-section contact-section"
+      data-contact-mode={panel ?? "idle"}
+      data-contact-social={hoveredSocial ? SOCIAL_LINKS.findIndex((social) => social.label === hoveredSocial) : -1}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || !panel) return;
+        event.preventDefault();
+        (panel === "message" ? messageButtonRef : linksButtonRef).current?.focus();
+        setPanel(null);
+        setHoveredSocial(null);
+      }}
     >
       <div className="contact-hero">
-        <h2 id="contact-heading" className="section-title contact-hero-title">
-          Get in touch
-        </h2>
+        <div className="contact-word-stage" data-contact-word>
+          <h2 id="contact-heading" className="section-title contact-hero-title">
+            {panel === "message" ? "Hello." : panel === "links" ? "Let’s connect." : "Get in touch"}
+          </h2>
+        </div>
         <p className="section-intro">
-          Have a project, an internship opening, or a CTF team that needs one more?
+          {panel === "message" ? "Every good collaboration starts with a hello. What’s on your mind?" :
+            panel === "links" ? "A few corners of the internet I call home." :
+            "Have a project, an internship opening, or a CTF team that needs one more?"}
         </p>
         <div className="contact-hero-actions">
           <button
+            ref={messageButtonRef}
             type="button"
             className={`btn ${panel === "message" ? "btn-solid" : "btn-ghost"}`}
             aria-expanded={panel === "message"}
@@ -191,6 +224,7 @@ export function ContactSection() {
             Write me a message
           </button>
           <button
+            ref={linksButtonRef}
             type="button"
             className={`btn ${panel === "links" ? "btn-solid" : "btn-ghost"}`}
             aria-expanded={panel === "links"}
@@ -318,8 +352,8 @@ export function ContactSection() {
 
           {WEB3FORMS_KEY && (
             <div className="contact-captcha">
-              <HCaptcha
-                ref={captchaRef}
+              <ContactCaptcha
+                captchaRef={captchaRef}
                 sitekey={WEB3FORMS_HCAPTCHA_SITEKEY}
                 reCaptchaCompat={false}
                 onVerify={(token) => {
@@ -404,12 +438,13 @@ export function ContactSection() {
                   aria-label={label}
                   data-tooltip={`${label}: ${handle}`}
                   className="social"
-                  onMouseEnter={() => setHoveredSocial(label)}
-                  onMouseLeave={() => setHoveredSocial((prev) => (prev === label ? null : prev))}
+                  onPointerEnter={(event) => { if (event.pointerType === "mouse") setHoveredSocial(label); }}
+                  onPointerLeave={() => setHoveredSocial((prev) => (prev === label ? null : prev))}
                   onFocus={() => setHoveredSocial(label)}
                   onBlur={() => setHoveredSocial((prev) => (prev === label ? null : prev))}
                 >
                   <Icon />
+                  <span className="contact-social-label">{label}</span>
                 </a>
               ))}
             </div>

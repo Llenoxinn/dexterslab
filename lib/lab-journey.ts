@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { CONTACT_WORD_POINTS, type ContactChoreography } from "./contact-choreography";
+import { createPingGeometry } from "./ping-geometry";
 
 /**
  * The lab's scroll journey. The page has one fixed 3D layer behind every section, and the same
@@ -33,6 +35,7 @@ type Piece = {
   shell: boolean;
   /** Bounding radius in world units, at home. */
   size: number;
+  center: THREE.Vector3;
   homePos: THREE.Vector3;
   homeQuat: THREE.Quaternion;
   homeScale: THREE.Vector3;
@@ -112,6 +115,7 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
       unit,
       shell,
       size,
+      center: o.worldToLocal(box.setFromObject(o).getCenter(new THREE.Vector3())),
       homePos: o.position.clone(),
       homeQuat: o.quaternion.clone(),
       homeScale: o.scale.clone(),
@@ -154,6 +158,18 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
     [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
   }
   candidates.forEach((p, i) => { p.slot = i; });
+  const pingRoot = new THREE.Group();
+  pingRoot.name = "contact-ping-words";
+  const pingGeometry = createPingGeometry();
+  const pingWords = candidates.map(() => {
+    const material = new THREE.MeshBasicMaterial({ color: 0x1313ba, transparent: true, opacity: 0, depthWrite: false });
+    const mesh = new THREE.Mesh(pingGeometry, material);
+    mesh.visible = false;
+    pingRoot.add(mesh);
+    return mesh;
+  });
+  // Kept outside the travelling lab, so replacements don't become journey pieces themselves.
+  root.parent?.add(pingRoot);
 
   // Interlude rings: evenly spaced places for the mid-sized pieces, alternating between two rings.
   const RING_COUNT = 72;
@@ -179,8 +195,13 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
   const bScale = new THREE.Vector3();
   const euler = new THREE.Euler();
   const world = new THREE.Matrix4();
-  const parentInv = new THREE.Matrix4();
-  const parentCache = new Map<THREE.Object3D, THREE.Matrix4>();
+  const parentCache = new Map<THREE.Object3D, { inverse: THREE.Matrix4; frame: number }>();
+  let frameNumber = 0;
+  const contactPos = new THREE.Vector3();
+  const contactScale = new THREE.Vector3();
+  const contactQuat = new THREE.Quaternion();
+  const contactRotation = new THREE.Quaternion();
+  const centerOffset = new THREE.Vector3();
 
   /** A point `dist` units from the camera, through normalized screen coords (-1..1). */
   const screenPoint = (camera: THREE.PerspectiveCamera, nx: number, ny: number, dist: number, out: THREE.Vector3) => {
@@ -197,6 +218,7 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
     contentEdge: number;
     /** Pointer in normalized screen coords, or null when it is away. */
     pointer: { x: number; y: number } | null;
+    contact?: ContactChoreography;
   };
   /** 0..1: how close a screen point is to the pointer. Pieces near it swell, like a dock. */
   const near = (c: Ctx, nx: number, ny: number) => {
@@ -270,10 +292,13 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
         // Narrow gutters push it to the very edge and shrink the pieces to fit.
         const column = clamp((1 + c.contentEdge) / 2, 0.8, 0.975);
         const fit = clamp((1 - c.contentEdge) / 0.2, 0.4, 1);
-        const nx = (right ? column : -column) + Math.sin(u * Math.PI * 4 + p.phase + t * 0.8) * 0.006 * fit;
+        // A shallow helix gives the journey depth without crossing the reading column.
+        const depth = Math.sin(u * Math.PI * 2 + t * 0.16);
+        let nx = (right ? column : -column) + Math.sin(u * Math.PI * 4 + p.phase + t * 0.8) * 0.012 * fit;
         const ny = 1.12 - u * 2.24;
         const hover = near(c, nx, ny);
-        screenPoint(c.camera, nx, ny, 30, pos);
+        nx += (right ? 1 : -1) * hover * 0.025 * fit;
+        screenPoint(c.camera, nx, ny, 30 + depth * 1.5, pos);
         euler.set(0.35, p.phase + c.scroll * 0.0012 + t * 0.35 + hover * 1.4, 0.08);
         quat.setFromEuler(euler);
         scale.copy(roomScale).multiplyScalar(clamp((p.unit ? 0.85 : 0.5) / Math.max(0.05, p.size), 0.3, 2.6) * fit * (1 + hover * 0.7));
@@ -287,12 +312,61 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
           return;
         }
         const [nx, ny] = slots[p.slot];
-        screenPoint(c.camera, nx + Math.sin(t * 0.5 + p.phase) * 0.004, ny + Math.cos(t * 0.4 + p.phase) * 0.006, 26, pos);
-        euler.set(0.35, p.phase + Math.sin(t * 0.3 + p.phase) * 0.15, 0.08);
+        const hover = near(c, nx, ny);
+        const portrait = c.camera.aspect < 0.85;
+        // On phones the border hugs the edges, leaving room for the form.
+        const frameX = portrait && Math.abs(nx) > 0.6 ? Math.sign(nx) * (0.9 + (p.slot % 3) * 0.04) : nx;
+        screenPoint(c.camera, frameX + Math.sin(t * 0.5 + p.phase) * 0.008, ny + Math.cos(t * 0.4 + p.phase) * 0.01, 26 - hover * 1.5, pos);
+        euler.set(0.35 + hover * 0.2, p.phase + Math.sin(t * 0.3 + p.phase) * 0.15 + hover * 0.45, 0.08);
         quat.setFromEuler(euler);
         // Normalize sizes so the border reads as an even row of objects.
-        const target = p.unit ? 0.95 : 0.6;
-        scale.copy(roomScale).multiplyScalar(clamp(target / Math.max(0.05, p.size), 0.35, 3));
+        const target = (p.unit ? 0.95 : 0.6) * (portrait ? 0.38 : 1) * (1 + hover * 0.18);
+        scale.copy(roomScale).multiplyScalar(clamp(target / Math.max(0.05, p.size), 0.08, 3));
+        pos.sub(centerOffset.copy(p.center).multiply(scale).applyQuaternion(quat));
+
+        const contact = c.contact;
+        if (!contact || contact.message + contact.links < 0.0001) return;
+        if (contact.message > 0.0001) {
+          const point = CONTACT_WORD_POINTS[p.slot];
+          // Spare props become a short underline, so every object has a destination.
+          const spareCount = Math.max(1, candidates.length - CONTACT_WORD_POINTS.length);
+          const x = point?.x ?? ((p.slot - CONTACT_WORD_POINTS.length + 0.5) / spareCount - 0.5) * 14;
+          const y = point?.y ?? -3.5;
+          screenPoint(c.camera, contact.wordX + x * contact.cellX, contact.wordY + y * contact.cellY, 26, contactPos);
+          // Face the camera with a little depth. The lettering stays readable while typing.
+          euler.set(0.14 * Math.sin(p.phase), 0.22 * Math.cos(p.phase), 0.07 * Math.sin(p.phase));
+          contactQuat.copy(c.camera.quaternion).multiply(contactRotation.setFromEuler(euler));
+          contactScale.copy(roomScale).multiplyScalar(contact.cellSize * (point ? 0.58 : 0.28) / Math.max(0.05, p.size));
+          contactPos.sub(centerOffset.copy(p.center).multiply(contactScale).applyQuaternion(contactQuat));
+          pos.lerp(contactPos, contact.message);
+          quat.slerp(contactQuat, contact.message);
+          scale.lerp(contactScale, contact.message);
+        }
+        if (contact.links > 0.0001) {
+          // Four groups of satellites: a focused social channel pulls its group forward.
+          const channel = p.slot % 4;
+          const selected = contact.energy * (1 - Math.min(1, Math.abs(channel - contact.social)));
+          const ring = p.slot % 2;
+          const a = (p.slot / candidates.length) * Math.PI * 6 + t * (ring ? -0.42 : 0.36);
+          // Uneven spiral bands live beyond a protected ellipse around the text and cards.
+          const wobble = (1 + Math.sin(t * 0.7 + p.phase)) * 0.035;
+          const rx = contact.orbitRadiusX + ring * 0.065 + wobble;
+          const ry = contact.orbitRadiusY + ring * 0.04 + wobble;
+          const sx = contact.orbitX + Math.cos(a) * rx;
+          const sy = contact.orbitY + Math.sin(a) * ry;
+          const proximity = near(c, sx, sy);
+          screenPoint(c.camera, sx, sy, 28 - selected * 4 - proximity * 2, contactPos);
+          euler.set(p.phase + t * 0.45, p.phase + t * 0.6 + selected * 0.9, Math.cos(a) * 0.5);
+          contactQuat.setFromEuler(euler);
+          const size = (p.unit ? 0.64 : 0.38) * (portrait ? 0.42 : 1) * (1 + selected * 0.65 + proximity * 0.3);
+          contactScale.copy(roomScale).multiplyScalar(size / Math.max(0.05, p.size));
+          contactPos.sub(centerOffset.copy(p.center).multiply(contactScale).applyQuaternion(contactQuat));
+          // Weighted blend keeps rapid message ↔ links toggles continuous.
+          const weight = contact.links;
+          pos.lerp(contactPos, weight);
+          quat.slerp(contactQuat, weight);
+          scale.lerp(contactScale, weight);
+        }
         return;
       }
     }
@@ -309,6 +383,7 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
     pieces,
     /** Put every piece back at its home transform; the lab's own tick animates from there. */
     reset() {
+      pingWords.forEach((word) => { word.visible = false; });
       for (const p of pieces) {
         p.obj.position.copy(p.homePos);
         p.obj.quaternion.copy(p.homeQuat);
@@ -336,7 +411,7 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
       c.camera.getWorldPosition(camPos);
       screenPoint(c.camera, 0, 0.02, 30, orbitCenter);
       root.updateMatrixWorld(true);
-      parentCache.clear();
+      frameNumber++;
       const m = smooth(clamp(c.mix, 0, 1));
 
       for (const p of pieces) {
@@ -367,13 +442,33 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
         }
 
         // World target → the mesh's local space under its (static) parent.
-        const parent = p.obj.parent!;
-        let inv = parentCache.get(parent);
-        if (!inv) {
-          inv = parentInv.copy(parent.matrixWorld).invert().clone();
-          parentCache.set(parent, inv);
+        if (p.slot >= 0 && c.contact) {
+          const stageWeight = c.from === "frame" ? 1 : c.to === "frame" ? m : 0;
+          const conversion = (c.contact.linksWord ?? 0) * c.contact.links * stageWeight;
+          const amount = smooth(clamp(conversion * 1.3 - p.slot / candidates.length * .3, 0, 1));
+          const word = pingWords[p.slot];
+          word.visible = amount > .001;
+          if (word.visible) {
+            // Each word inherits its prop's moving centre; it never travels toward a common word.
+            word.position.copy(aPos).add(centerOffset.copy(p.center).multiply(aScale).applyQuaternion(aQuat));
+            word.quaternion.copy(c.camera.quaternion);
+            word.rotateZ(Math.sin(c.time * .5 + p.phase) * .18);
+            word.scale.setScalar((c.camera.aspect < .85 ? .28 : .7) * (.85 + amount * .15));
+            word.material.opacity = amount;
+            aScale.multiplyScalar(1 - amount);
+          }
         }
-        world.compose(aPos, aQuat, aScale).premultiply(inv);
+        const parent = p.obj.parent!;
+        let cached = parentCache.get(parent);
+        if (!cached) {
+          cached = { inverse: new THREE.Matrix4(), frame: -1 };
+          parentCache.set(parent, cached);
+        }
+        if (cached.frame !== frameNumber) {
+          cached.inverse.copy(parent.matrixWorld).invert();
+          cached.frame = frameNumber;
+        }
+        world.compose(aPos, aQuat, aScale).premultiply(cached.inverse);
         world.decompose(p.obj.position, p.obj.quaternion, p.obj.scale);
         p.obj.visible = aScale.x > 0.004;
       }

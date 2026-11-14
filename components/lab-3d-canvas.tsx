@@ -11,6 +11,7 @@ import { createFilipinoLab, narraTexture, sawaliTexture, signTexture } from "@/l
 import { createChristmasDecor } from "@/lib/christmas-lab";
 import { ASSEMBLE_SECONDS, STAGES, STAGE_OPACITY, createJourney } from "@/lib/lab-journey";
 import { addLabProps } from "@/lib/lab-props";
+import { CONTACT_WORD_COLUMNS, CONTACT_SPIRAL_SECONDS, type ContactChoreography } from "@/lib/contact-choreography";
 import { createStudioWindows, STUDIO_BACK_WINDOW, STUDIO_SUN_DIRECTION } from "@/lib/studio-daylight";
 
 export type FocusStation = "terminal" | "core" | "tank" | "bench" | "rack";
@@ -787,6 +788,23 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     let smoothY = window.scrollY;
     const heroShell = host.closest(".hero-3d-shell");
     let stageOpacity = 1;
+    const contactEl = document.getElementById("contact");
+    const wordEl = contactEl?.querySelector<HTMLElement>("[data-contact-word]");
+    const contactPose: ContactChoreography = {
+      message: 0, links: 0, wordX: 0, wordY: 0.5, cellX: 0.06, cellY: 0.09, cellSize: 0.6,
+      orbitX: 0, orbitY: 0, orbitRadiusX: 0.8, orbitRadiusY: 0.75, social: -1, energy: 0,
+    };
+    let contactMode = contactEl?.dataset.contactMode ?? "idle";
+    let linksSeconds = 0;
+    let contactSocial = -1;
+    const contactObserver = new MutationObserver(() => {
+      const nextMode = contactEl?.dataset.contactMode ?? "idle";
+      if (nextMode !== contactMode) linksSeconds = 0;
+      contactMode = nextMode;
+      contactSocial = Number(contactEl?.dataset.contactSocial ?? -1);
+      wake();
+    });
+    if (contactEl) contactObserver.observe(contactEl, { attributes: true, attributeFilter: ["data-contact-mode", "data-contact-social"] });
 
     /** Where each formation is fully formed, in page scroll pixels, from the real section positions. */
     const timeline = () => {
@@ -1110,6 +1128,37 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         }
       }
       const to = Math.min(from + 1, STAGES.length - 1);
+      // Retarget from the current pose: repeated clicks never restart or snap the objects.
+      const contactK = calm ? 1 : 1 - Math.exp(-dt * 4.8);
+      if (contactMode === "links" && STAGES[from] === "frame" && !calm) linksSeconds += dt;
+      const targetWord = contactMode === "links" && linksSeconds > CONTACT_SPIRAL_SECONDS ? 1 : 0;
+      contactPose.linksWord = (contactPose.linksWord ?? 0) + (targetWord - (contactPose.linksWord ?? 0)) * (calm ? 1 : 1 - Math.exp(-dt * 2.4));
+      contactPose.message += ((contactMode === "message" ? 1 : 0) - contactPose.message) * contactK;
+      contactPose.links += ((contactMode === "links" ? 1 : 0) - contactPose.links) * contactK;
+      contactPose.energy += ((contactSocial >= 0 ? 1 : 0) - contactPose.energy) * contactK;
+      if (contactSocial >= 0) contactPose.social = contactSocial;
+      if (STAGES[to] === "frame" && wordEl) {
+        const rect = wordEl.getBoundingClientRect();
+        const stageRect = stage.getBoundingClientRect();
+        const cell = Math.min(rect.width / (CONTACT_WORD_COLUMNS + 2), rect.height / 7);
+        contactPose.wordX = ((rect.left + rect.width / 2 - stageRect.left) / width) * 2 - 1;
+        contactPose.wordY = 1 - ((rect.top + rect.height * 0.43 - stageRect.top) / height) * 2;
+        contactPose.cellX = cell * 2 / width;
+        contactPose.cellY = cell * 2 / height;
+        contactPose.cellSize = 2 * 26 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * cell / height;
+        const panelRect = document.getElementById("contact-panel")?.getBoundingClientRect();
+        if (panelRect && contactMode === "links") {
+          contactPose.orbitY = 1 - ((rect.top + (panelRect.bottom - rect.top) / 2 - stageRect.top) / height) * 2;
+          // Bounds protect the entire heading, copy, buttons and card from the spiral's inner edge.
+          const protectedWidth = Math.max(panelRect.width, rect.width);
+          contactPose.orbitRadiusX = Math.max(.84, (protectedWidth + 150) / width * 1.16);
+          contactPose.orbitRadiusY = Math.max(.8, (panelRect.bottom - rect.top + 120) / height * 1.16);
+        }
+      }
+      if (contactEl) {
+        const ready = !calm && STAGES[from] === "frame" && contactPose.message > .12;
+        if ((contactEl.dataset.wordReady === "true") !== ready) contactEl.dataset.wordReady = String(ready);
+      }
       // Reduced motion: no journey, the lab just fades as you leave the hero.
       const eased = mix * mix * (3 - 2 * mix);
       stageOpacity = calm
@@ -1128,6 +1177,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         scroll: scrolled,
         contentEdge,
         pointer: pointerOn ? pointerNdc : null,
+        contact: contactPose,
         from: STAGES[from],
         to: STAGES[to],
         mix,
@@ -1197,6 +1247,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       apiRef.current = null;
       io.disconnect();
       coverObserver.disconnect();
+      contactObserver.disconnect();
+      if (contactEl) delete contactEl.dataset.wordReady;
       ro.disconnect();
       pageObserver.disconnect();
       document.removeEventListener("visibilitychange", wake);
