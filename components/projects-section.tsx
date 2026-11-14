@@ -1,21 +1,13 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { useState } from "react";
 import Image from "next/image";
 import { Modal } from "@/components/modal";
 import { StackIcon } from "@/components/stack-icons";
-import { type ProjectEntry, type ProjectStatus, projects, techStack } from "@/lib/content";
-
-const STATUS_FILTERS: Array<{ id: "all" | ProjectStatus; label: string }> = [
-  { id: "all", label: "All" },
-  { id: "shipped", label: "Shipped" },
-  { id: "in progress", label: "In progress" },
-  { id: "archived", label: "Archived" },
-];
+import { ProjectSlotMachine } from "@/components/project-slot-machine";
+import { type ProjectEntry, projects, techStack } from "@/lib/content";
 
 const STACK_ID_BY_NAME = new Map(techStack.map((item) => [item.name.toLowerCase(), item.id]));
-const CARD_STACK_LIMIT = 4;
 
 function ExternalArrow() {
   return (
@@ -58,137 +50,87 @@ function ProjectPreview({ project }: { project: ProjectEntry }) {
 }
 
 export function ProjectsSection() {
-  const [status, setStatus] = useState<"all" | ProjectStatus>("all");
   const [selected, setSelected] = useState<ProjectEntry | null>(null);
 
-  const filtered = status === "all" ? projects : projects.filter((p) => p.status === status);
+  const card = (project: ProjectEntry) => {
+    const primaryHref = project.links?.live ?? project.links?.source;
+    return (
+      <article className="work-case">
+        <div className="work-case-media">
+          <a href={primaryHref} target="_blank" rel="noreferrer" className="work-case-stage-link" aria-label={`Open ${project.name}`}>
+            <div className="work-case-viewport">
+              <ProjectPreview project={project} />
+            </div>
+          </a>
+        </div>
+
+        <div className="work-case-content">
+          <div className="work-case-header">
+            <div className="work-case-eyebrow">
+              <span className="work-case-kind">{project.figureLabel}</span>
+              <span className="work-case-year">{project.date}</span>
+            </div>
+            <h3 className="work-case-title">{project.name}</h3>
+            <p className="work-case-summary">{project.summary}</p>
+          </div>
+
+          <dl className="work-case-specs">
+            <div className="work-case-spec">
+              <dt>Architecture</dt>
+              <dd>{project.built}</dd>
+            </div>
+            <div className="work-case-spec">
+              <dt>Outcome</dt>
+              <dd>{project.result}</dd>
+            </div>
+          </dl>
+
+          <div className="work-case-Bottom">
+            <ul className="work-case-stack" aria-label={`${project.name} tech stack`}>
+              {project.stack.map((tech) => {
+                const iconId = STACK_ID_BY_NAME.get(tech.toLowerCase()) ?? tech.toLowerCase();
+                return (
+                  <li key={tech} className="spec-chip spec-chip--icon">
+                    <StackIcon id={iconId} />
+                    <span>{tech}</span>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div className="work-case-actions">
+              <button type="button" className="work-bento-cta work-bento-cta--primary" onClick={() => setSelected(project)}>
+                <span>Case study</span>
+              </button>
+              {project.links?.live && (
+                <a className="work-bento-cta work-bento-cta--ghost" href={project.links.live} target="_blank" rel="noreferrer">
+                  <span>Live site</span>
+                  <ExternalArrow />
+                </a>
+              )}
+              {project.links?.source && (
+                <a className="work-bento-cta work-bento-cta--ghost" href={project.links.source} target="_blank" rel="noreferrer">
+                  <span>Source</span>
+                  <ExternalArrow />
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      </article>
+    );
+  };
 
   return (
     <section id="projects" className="wrap lab-section work-section" aria-labelledby="projects-title">
-      <div className="section-head work-section-head">
-        <div className="work-head-copy">
-          <h2 id="projects-title" className="section-title">
-            Selected work
-          </h2>
-          <p className="section-intro">
-            Three tools I built from scratch. Open a case study for the details.
-          </p>
-        </div>
-
-        <div className="filter-pills" role="group" aria-label="Filter projects by status">
-          {STATUS_FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              className={`filter-pill ${status === f.id ? "is-active" : ""}`}
-              aria-pressed={status === f.id}
-              onClick={() => setStatus(f.id)}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+      <div className="work-section-head">
+        <h2 id="projects-title" className="section-title">
+          Selected work
+        </h2>
+        <p className="section-intro">Three tools I built from scratch. Pull the lever for the next one.</p>
       </div>
 
-      <p className="sr-only" role="status">{filtered.length} projects shown.</p>
-      {filtered.length === 0 && <div className="work-empty">
-        <h3>No projects with this status yet.</h3>
-        <button type="button" className="choice-chip" onClick={() => setStatus("all")}>View all projects</button>
-      </div>}
-      <div className="work-editorial-list">
-        {filtered.map((project, index) => {
-          const primaryHref = project.links?.live ?? project.links?.source;
-
-          return (
-            <article
-              key={project.slug}
-              className="work-case"
-              style={{ "--work-idx": index } as CSSProperties}
-            >
-              {/* Left 7-column visual stage with concentric bezel */}
-              <div className="work-case-media">
-                <a
-                  href={primaryHref}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="work-case-stage-link"
-                  aria-label={`Open ${project.name}`}
-                >
-                  <div className="work-case-viewport">
-                    <ProjectPreview project={project} />
-                  </div>
-                </a>
-              </div>
-
-              {/* Right 5-column editorial brief */}
-              <div className="work-case-content">
-                <div className="work-case-header">
-                  <div className="work-case-eyebrow">
-                    <span className="work-case-kind">{project.figureLabel}</span>
-                    <span className="work-case-year">{project.date}</span>
-                  </div>
-
-                  <h3 className="work-case-title">{project.name}</h3>
-                  <p className="work-case-summary">{project.tagline}</p>
-                </div>
-
-                <div className="work-case-Bottom">
-                  <ul className="work-case-stack" aria-label={`${project.name} tech stack`}>
-                    {project.stack.slice(0, CARD_STACK_LIMIT).map((tech) => {
-                      const iconId = STACK_ID_BY_NAME.get(tech.toLowerCase()) ?? tech.toLowerCase();
-                      return (
-                        <li key={tech} className="spec-chip spec-chip--icon">
-                          <StackIcon id={iconId} />
-                          <span>{tech}</span>
-                        </li>
-                      );
-                    })}
-                    {project.stack.length > CARD_STACK_LIMIT && (
-                      <li className="spec-chip" aria-label={`and ${project.stack.length - CARD_STACK_LIMIT} more`}>
-                        +{project.stack.length - CARD_STACK_LIMIT}
-                      </li>
-                    )}
-                  </ul>
-
-                  <div className="work-case-actions">
-                    <button
-                      type="button"
-                      className="work-bento-cta work-bento-cta--primary"
-                      onClick={() => setSelected(project)}
-                    >
-                      <span>Case study</span>
-                    </button>
-
-                    {project.links?.live && (
-                      <a
-                        className="work-bento-cta work-bento-cta--ghost"
-                        href={project.links.live}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <span>Live site</span>
-                        <ExternalArrow />
-                      </a>
-                    )}
-
-                    {project.links?.source && (
-                      <a
-                        className="work-bento-cta work-bento-cta--ghost"
-                        href={project.links.source}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <span>Source</span>
-                        <ExternalArrow />
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+      <ProjectSlotMachine items={projects} renderCard={card} />
 
       {selected && (
         <Modal className="spec-modal-backdrop" labelledBy="spec-modal-title" onClose={() => setSelected(null)}>
