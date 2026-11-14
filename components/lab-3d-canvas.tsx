@@ -9,6 +9,7 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { createFilipinoLab, narraTexture, sawaliTexture, signTexture } from "@/lib/filipino-lab";
 import { createChristmasDecor } from "@/lib/christmas-lab";
+import { ASSEMBLE_SECONDS, STAGES, STAGE_OPACITY, createJourney } from "@/lib/lab-journey";
 import { addLabProps } from "@/lib/lab-props";
 
 export type FocusStation = "terminal" | "core" | "tank" | "bench" | "rack";
@@ -28,8 +29,6 @@ const LAVENDER = 0xcbcbef;
 const PAPER = 0xf6f6fc;
 
 const DEG = Math.PI / 180;
-/** Load-in length: the last props land a little under three seconds after the first frame. */
-const ASSEMBLE_SECONDS = 3.1;
 const LIMITS = { thetaMin: -60 * DEG, thetaMax: 60 * DEG, phiMin: 38 * DEG, phiMax: 88 * DEG, radiusMin: 2.6 };
 /** The lab is a diorama seen from outside; these bounds only keep the camera above the table and out of the back wall. */
 const ROOM = { x: 40, zFront: 40, yMin: 0.6, yMax: 40 };
@@ -248,6 +247,7 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
   put(terminal, box(0.4, 0.05, 0.04), M.ink, 1.15, 0.42, 0.57);
 
   const crt = group(terminal, -0.3, 1.06, -0.12, 0.3);
+  crt.userData.unit = true; // travels as one intact object in the scroll journey
   put(crt, box(0.7, 0.12, 0.6), M.lav, 0, 0.06, 0);
   put(crt, box(1.3, 1.0, 0.5), M.paper, 0, 0.66, 0.2);
   put(crt, box(0.95, 0.75, 0.5), M.lav, 0, 0.62, -0.3);
@@ -267,6 +267,7 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
   }
 
   const chair = group(terminal, 0.95, 0, 1.25, -0.55);
+  chair.userData.unit = true; // travels as one intact object in the scroll journey
   put(chair, cyl(0.34, 0.38, 0.06, 8), M.deep, 0, 0.03, 0);
   put(chair, cyl(0.05, 0.05, 0.5, 8), M.steel, 0, 0.3, 0);
   put(chair, box(0.62, 0.1, 0.6), M.ink, 0, 0.6, 0);
@@ -314,6 +315,7 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
   }
   // ---------- Tesla coil on the open floor ----------
   const coil = group(root, 3.6, 0, -2.6);
+  coil.userData.unit = true; // travels as one intact object in the scroll journey
   put(coil, box(0.9, 0.3, 0.9), M.deep, 0, 0.15, 0);
   put(coil, cyl(0.1, 0.16, 1.2, 8), M.paper, 0, 0.9, 0);
   for (let i = 0; i < 3; i++) flat(coil, torus(0.2, 0.035, 12), M.neon, 0, 0.55 + i * 0.3, 0);
@@ -402,6 +404,7 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
     return b;
   });
   const consoleUnit = group(tank, -1.35, 0, 0.9, 0.5);
+  consoleUnit.userData.unit = true; // travels as one intact object in the scroll journey
   put(consoleUnit, box(0.5, 0.9, 0.4), M.paper, 0, 0.45, 0);
   const panel = put(consoleUnit, box(0.56, 0.06, 0.46), M.deep, 0, 0.94, 0.02);
   panel.rotation.x = 0.35;
@@ -418,6 +421,7 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
   }
 
   const stir = group(bench, 0.05, 1.06, 0.72);
+  stir.userData.unit = true; // travels as one intact object in the scroll journey
   put(stir, box(0.62, 0.12, 0.62), M.lav, 0, 0.06, 0);
   put(stir, box(0.06, 0.04, 0.02), M.neon, 0.2, 0.06, 0.32, false);
   const lathe = (pts: Array<[number, number]>) => new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), 14);
@@ -431,6 +435,7 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
   });
 
   const tubes = group(bench, 0.12, 1.06, -0.12, -0.3);
+  tubes.userData.unit = true; // travels as one intact object in the scroll journey
   put(tubes, box(0.7, 0.05, 0.24), M.steel, 0, 0.025, 0);
   put(tubes, box(0.7, 0.04, 0.24), M.steel, 0, 0.34, 0);
   put(tubes, box(0.04, 0.34, 0.2), M.steel, -0.33, 0.18, 0);
@@ -462,6 +467,7 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
 
   // ---------- Patrol drone ----------
   const drone = group(root, 0, 3.4, 0);
+  drone.userData.unit = true; // travels as one intact object in the scroll journey
   put(drone, box(0.42, 0.16, 0.42), M.paper, 0, 0, 0);
   // Big cartoon eyes make the patrol drone a little lab buddy.
   const droneEyes = group(drone, 0, 0.0, 0.215);
@@ -713,7 +719,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     renderer.shadowMap.autoUpdate = false;
     renderer.domElement.style.imageRendering = "auto";
     host.dataset.renderStyle = "clay";
-    host.appendChild(renderer.domElement);
+
 
     // Daylight on a white model: a soft sky fill, and one low sun through the window doing the drawing.
     scene.background = new THREE.Color(BACKDROP);
@@ -724,16 +730,22 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     key.position.copy(SUN_AT).addScaledVector(SUN_DIR, 26);
     key.target.position.copy(SUN_AT);
     key.castShadow = true;
-    key.shadow.mapSize.set(2048, 2048); // ~60 texels per metre over the larger floor
-    key.shadow.camera.left = -17;
-    key.shadow.camera.right = 17;
-    key.shadow.camera.top = 17;
-    key.shadow.camera.bottom = -17;
-    key.shadow.camera.near = 4;
-    key.shadow.camera.far = 60;
-    key.shadow.bias = -0.0004;
-    key.shadow.normalBias = 0.025;
-    key.shadow.radius = 3;
+    // The shadow frustum is fitted to the room, so every texel lands on something visible:
+    // about 110 texels per metre on roomy devices, which keeps the blinds' stripes crisp.
+    const roomy = ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) > 4;
+    key.shadow.mapSize.setScalar(roomy ? 3072 : 2048);
+    key.shadow.camera.left = -13.5;
+    key.shadow.camera.right = 13.5;
+    key.shadow.camera.top = 11;
+    key.shadow.camera.bottom = -11;
+    key.shadow.camera.near = 8;
+    key.shadow.camera.far = 46;
+    key.shadow.bias = -0.0003;
+    key.shadow.normalBias = 0.02;
+    // A slightly soft edge and a touch of fill inside the shadow: sunlit, not cut out.
+    key.shadow.radius = 2.2;
+    key.shadow.blurSamples = 12;
+    key.shadow.intensity = 0.82;
     // Layer 1 holds shadow-only geometry (the window blinds): the sun sees it, the camera does not.
     key.shadow.camera.layers.enable(1);
     scene.add(key, key.target);
@@ -774,114 +786,71 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     composer.addPass(gtao);
     composer.addPass(new OutputPass());
 
-    // ---------- Scroll: the diorama comes apart into floating pieces as the page moves on ----------
-    type Piece = {
-      obj: THREE.Object3D;
-      dir: THREE.Vector3;
-      spin: THREE.Vector3;
-      /** Share of the page's scroll speed the piece rises at once it is debris (parallax). */
-      drift: number;
-      /** Load-in: seconds before the piece starts flying into place. */
-      delay: number;
-      /** Turns world-space vectors into the parent's local space. */
-      toLocal: THREE.Quaternion;
-      scale: number;
-      pos: THREE.Vector3;
-      rot: THREE.Euler;
-    };
-    const pieces: Piece[] = [];
-    const shell: Array<{ mesh: THREE.Mesh; mat: THREE.Material }> = [];
-    const sunShaft = scene.getObjectByName("sun-shaft");
-    {
-      const rand = (() => { let seed = 11; return () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646; })();
-      const center = new THREE.Vector3(ROOM_CENTER_X, 0.5, ROOM_CENTER_Z);
-      const world = new THREE.Vector3();
-      // Toward the overview camera: pieces never fly into the lens.
-      const toCamera = new THREE.Vector3(
+    // ---------- Scroll journey: one fixed 3D layer behind the whole page ----------
+    // The canvas lives in a fixed layer behind every section; the hero host stays as the pointer
+    // surface. The same meshes assemble, shatter and re-form section by section (lib/lab-journey).
+    const stage = document.createElement("div");
+    stage.className = "lab-scene-layer";
+    stage.setAttribute("aria-hidden", "true");
+    document.body.prepend(stage);
+    stage.appendChild(renderer.domElement);
+    const journey = createJourney(root, {
+      center: new THREE.Vector3(ROOM_CENTER_X, 0.5, ROOM_CENTER_Z),
+      toCamera: new THREE.Vector3(
         Math.sin(OVERVIEW.phi) * Math.sin(OVERVIEW.theta),
         Math.cos(OVERVIEW.phi),
         Math.sin(OVERVIEW.phi) * Math.cos(OVERVIEW.theta),
-      );
-      root.traverse((o) => {
-        if (!(o instanceof THREE.Mesh)) return;
-        if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
-        const size = (o.geometry.boundingSphere?.radius ?? 0) * o.getWorldScale(world).x;
-        o.getWorldPosition(world);
-        let dir: THREE.Vector3;
-        let spin: THREE.Vector3;
-        if (size > 3) {
-          // The floor and walls fall away slowly and tilt open, like a model being taken apart.
-          dir = new THREE.Vector3((world.x - center.x) * 0.25, -2.5 - rand() * 1.5, -1.5 - rand());
-          spin = new THREE.Vector3(rand() - 0.5, rand() - 0.5, rand() - 0.5).multiplyScalar(0.35);
-        } else {
-          dir = world.clone().sub(center);
-          dir.y = Math.abs(dir.y) + 2 + rand() * 4;
-          dir.x += (rand() - 0.5) * 6;
-          dir.z += (rand() - 0.5) * 6;
-          dir.normalize();
-          const facing = dir.dot(toCamera);
-          if (facing > 0) dir.addScaledVector(toCamera, -facing * 1.4).normalize();
-          dir.multiplyScalar(4 + rand() * 10);
-          spin = new THREE.Vector3(rand() - 0.5, rand() - 0.5, rand() - 0.5).multiplyScalar(4);
-        }
-        const toLocal = new THREE.Quaternion();
-        o.parent?.getWorldQuaternion(toLocal);
-        toLocal.invert();
-        const scale = 1 / (o.parent?.getWorldScale(new THREE.Vector3()).x || 1);
-        dir.applyQuaternion(toLocal).multiplyScalar(scale);
-        const drift = size > 3 ? 0 : 0.08 + rand() * 0.55;
-        if (size > 3) {
-          // Floor and walls dissolve as the room shatters; only the small pieces travel down the page.
-          const m = (o.material as THREE.Material).clone();
-          o.material = m;
-          shell.push({ mesh: o, mat: m });
-        }
-        // Build order on load: floor and walls, then furniture from the ground up, small props last.
-        const delay = size > 3 ? rand() * 0.25 : 0.45 + clamp(world.y / 4, 0, 1) * 0.8 + rand() * 0.6;
-        pieces.push({ obj: o, dir, spin, drift, delay, toLocal, scale, pos: new THREE.Vector3(), rot: new THREE.Euler() });
-      });
-    }
-    const camUp = new THREE.Vector3();
-    const local = new THREE.Vector3();
-    let burstGoal = 0;
-    let burst = 0;
-    let exploded = false;
-    // Past the top of the page the canvas moves into a fixed overlay, so the debris can drift down
-    // through the next sections. The camera pans with the page so the room still scrolls away with it.
-    const debris = document.createElement("div");
-    debris.className = "lab-debris";
-    debris.setAttribute("aria-hidden", "true");
-    const backdrop = scene.background;
-    let debrisOn = false;
-    let debrisOpacity = 1;
-    let panPx = 0;
-    let restTop = 0;
-    const placeDebris = () => {
-      debris.style.width = `${width}px`;
-      debris.style.height = `${height}px`;
+      ),
+    });
+    const sunShaft = scene.getObjectByName("sun-shaft");
+    let journeyWasOn = false;
+    let journalEl: HTMLElement | null = null;
+    let smoothY = window.scrollY;
+    const heroShell = host.closest(".hero-3d-shell");
+    let stageOpacity = 1;
+
+    /** Where each formation is fully formed, in page scroll pixels, from the real section positions. */
+    const timeline = () => {
+      const vh = window.innerHeight;
+      const top = (id: string, fallback: number) => {
+        const el = document.getElementById(id);
+        return el ? el.getBoundingClientRect().top + window.scrollY : fallback;
+      };
+      const keys = [
+        0,
+        vh * 0.9,
+        // The rings finish forming most of a screen into the pinned interlude: the organizing
+        // happens in front of the headline, driven by the scroll.
+        top("interlude", vh) + vh * 0.95,
+        top("method", vh * 3) - vh * 0.25,
+        top("experience", vh * 2) - vh * 0.5,
+        top("achievements", vh * 4) - vh * 0.6,
+        top("contact", vh * 5) - vh * 0.3,
+      ];
+      for (let i = 1; i < keys.length; i++) keys[i] = Math.max(keys[i], keys[i - 1] + 60);
+      return keys;
     };
-    const setDebris = (on: boolean) => {
-      if (on === debrisOn) return;
-      debrisOn = on;
-      if (on) {
-        // Pin the overlay exactly where the hero canvas is on screen right now (the hero is sticky).
-        restTop = host.getBoundingClientRect().top;
-        debris.style.top = `${restTop}px`;
-        placeDebris();
-        document.body.appendChild(debris);
-        debris.appendChild(renderer.domElement);
-        scene.background = null;
-      } else {
-        host.insertBefore(renderer.domElement, host.firstChild);
-        debris.remove();
-        scene.background = backdrop;
-      }
+    let keys = timeline();
+    // Where the page content ends on screen (the columns of debris stay outside it), and the pointer.
+    let contentEdge = 0.92;
+    const measureContent = () => {
+      const wrap = document.querySelector<HTMLElement>("[data-sheet] .wrap");
+      if (wrap) contentEdge = clamp(1 - (2 * wrap.getBoundingClientRect().left) / Math.max(1, window.innerWidth), 0.5, 0.98);
     };
-    const readScroll = () => {
-      const span = Math.max(1, host.clientHeight * 0.55);
-      burstGoal = isCalm() ? 0 : clamp(window.scrollY / span, 0, 1);
-      wake();
+    measureContent();
+    const pointerNdc = { x: 0, y: 0 };
+    let pointerOn = false;
+    const onStagePointer = (e: PointerEvent) => {
+      if (e.pointerType === "touch") return;
+      const rect = stage.getBoundingClientRect();
+      pointerNdc.x = ((e.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1;
+      pointerNdc.y = -(((e.clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1);
+      pointerOn = true;
     };
+    const onStagePointerOut = () => { pointerOn = false; };
+    window.addEventListener("pointermove", onStagePointer, { passive: true });
+    document.documentElement.addEventListener("pointerleave", onStagePointerOut);
+    const readScroll = () => wake();
 
     // ---------- Camera rig: damped spherical orbit around a target ----------
     let width = 1;
@@ -952,7 +921,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       // The diorama sits centred and low, under the copy, like a model on a table.
       const dx = 0;
       const dy = (wide ? -0.09 : -0.14) * height * cur.shift;
-      camera.setViewOffset(width, height, dx, dy + panPx, width, height);
+      camera.setViewOffset(width, height, dx, dy, width, height);
     };
 
     const resize = () => {
@@ -960,7 +929,13 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       height = Math.max(1, host.clientHeight);
       camera.aspect = width / height;
       renderer.setSize(width, height);
-      if (debrisOn) placeDebris();
+      // The fixed layer sits exactly where the hero canvas area is at the top of the page.
+      stage.style.top = `${host.getBoundingClientRect().top + window.scrollY}px`;
+      stage.style.width = `${width}px`;
+      stage.style.height = `${height}px`;
+      scene.background = new THREE.Color(getComputedStyle(document.body).backgroundColor || BACKDROP);
+      keys = timeline();
+      measureContent();
       composer.setPixelRatio(renderer.getPixelRatio());
       composer.setSize(width, height);
       if (stationRef.current === "overview" && !zoomedRef.current) goal.radius = overviewRadius();
@@ -974,6 +949,9 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     if (!introUntil) snap();
     const ro = new ResizeObserver(() => { resize(); wake(); });
     ro.observe(host);
+    // Sections change height as fonts, images and data load; keep the scroll timeline in step.
+    const pageObserver = new ResizeObserver(() => { keys = timeline(); wake(); });
+    pageObserver.observe(document.body);
 
     // ---------- Pointer: orbit, pinch, hover, click-to-focus ----------
     const raycaster = new THREE.Raycaster();
@@ -985,6 +963,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     let zoomTimer = 0;
 
     const pick = (e: { clientX: number; clientY: number }, targets: THREE.Object3D[]) => {
+      // Once the page scrolls, the fixed 3D layer no longer lines up with the hero: no picking.
+      if (window.scrollY > 4) return undefined;
       const rect = host.getBoundingClientRect();
       ndc.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
       raycaster.setFromCamera(ndc, camera);
@@ -1131,94 +1111,83 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       cur.phi += (goal.phi - cur.phi) * k;
       cur.radius += (goal.radius - cur.radius) * k;
       cur.shift += (goal.shift - cur.shift) * k;
-      burst += (burstGoal - burst) * (calm ? 1 : 1 - Math.exp(-dt * 6));
-      const scrolled = window.scrollY;
-      setDebris(burst > 0.001 && !calm);
-      // The hero is sticky, so the page can scroll a long way before the room itself moves.
-      panPx = debrisOn ? Math.max(0, restTop - host.getBoundingClientRect().top) : 0;
-      const screens = scrolled / Math.max(1, window.innerHeight);
-      debrisOpacity = debrisOn ? 1 - clamp((screens - 1.8) / 1.2, 0, 1) : 1;
-      debris.style.opacity = String(debrisOpacity);
       applyCamera();
       camera.updateMatrixWorld();
-
       if (!calm) animT += dt;
+
+      // Which two formations the scroll sits between, and how far along.
+      // Follow the page with a little lag, so a fast flick of the wheel plays the transition
+      // through instead of jumping to its end.
+      const pageY = window.scrollY;
+      smoothY = calm || Math.abs(pageY - smoothY) < 0.5 ? pageY : smoothY + (pageY - smoothY) * (1 - Math.exp(-dt * 4.5));
+      const scrolled = smoothY;
+      let from = 0;
+      let mix = 0;
+      if (!calm) {
+        while (from < keys.length - 1 && scrolled >= keys[from + 1]) from++;
+        if (from < keys.length - 1) {
+          const span = Math.min(keys[from + 1] - keys[from], window.innerHeight);
+          mix = clamp((scrolled - (keys[from + 1] - span)) / span, 0, 1);
+        }
+      }
+      const to = Math.min(from + 1, STAGES.length - 1);
+      // Reduced motion: no journey, the lab just fades as you leave the hero.
+      const eased = mix * mix * (3 - 2 * mix);
+      stageOpacity = calm
+        ? 1 - clamp(scrolled / (window.innerHeight * 0.8), 0, 1)
+        : STAGE_OPACITY[STAGES[from]] + (STAGE_OPACITY[STAGES[to]] - STAGE_OPACITY[STAGES[from]]) * eased;
+      stage.style.opacity = String(stageOpacity);
+
       // The clock starts after the first frame is on screen: compiling shaders can take seconds.
-      const built = assembleFrom === 0 ? 0 : (now - assembleFrom) / 1000;
-      const assembling = built < ASSEMBLE_SECONDS;
-      if ((burst > 0.001 || assembling) && !exploded) {
-        exploded = true;
-        for (const p of pieces) { p.pos.copy(p.obj.position); p.rot.copy(p.obj.rotation); }
-      }
-      if (exploded) for (const p of pieces) { p.obj.position.copy(p.pos); p.obj.rotation.copy(p.rot); }
-      if (exploded && burst <= 0.001 && !assembling) {
-        exploded = false;
-        for (const { mesh, mat } of shell) { mat.transparent = false; mat.opacity = 1; mat.depthWrite = true; mat.needsUpdate = true; mesh.visible = true; }
-        if (sunShaft) sunShaft.visible = true;
-      }
+      const built = calm ? Infinity : assembleFrom === 0 ? 0 : (now - assembleFrom) / 1000;
+      const journeyOn = !(from === 0 && mix === 0 && built >= ASSEMBLE_SECONDS);
+      if (journeyOn || journeyWasOn) journey.reset();
       lab.tick(animT);
-      if (exploded) {
-        // Ease in, so the first bit of scroll only loosens the room before it flies apart.
-        const e = burst * burst * (3 - 2 * burst);
-        /** How far a piece still is from its place during the load-in (1 = scattered, 0 = home). */
-        const away = (p: Piece) => {
-          if (!assembling) return 0;
-          const t = clamp((built - p.delay) / 1.1, 0, 1);
-          return Math.pow(1 - t, 3);
-        };
-        // The shell fades in as the room assembles, and out as it shatters.
-        const solid = Math.min(1 - clamp(burst / 0.45, 0, 1), assembling ? clamp(built / 0.9, 0, 1) : 1);
-        for (const { mesh, mat } of shell) {
-          const fading = solid < 1;
-          if (mat.transparent !== fading) { mat.transparent = fading; mat.needsUpdate = true; }
-          mat.opacity = solid;
-          mat.depthWrite = !fading;
-          mesh.visible = solid > 0.01;
-        }
-        if (sunShaft) sunShaft.visible = solid > 0.5;
-        // World units per screen pixel at the lab's distance, along the camera's "up".
-        const perPx = (2 * cur.radius * Math.tan((camera.fov * DEG) / 2)) / height;
-        camUp.setFromMatrixColumn(camera.matrixWorld, 1);
-        for (const p of pieces) {
-          const f = Math.max(e, away(p));
-          p.obj.position.addScaledVector(p.dir, f);
-          if (p.drift > 0 && debrisOn) {
-            // Rise slower than the page and keep tumbling, so the pieces seem to fall through the sections.
-            // The camera pan already carries everything up with the page; this adds the piece's own rise.
-            const rise = (scrolled - panPx) * p.drift;
-            local.copy(camUp).applyQuaternion(p.toLocal).multiplyScalar(rise * perPx * p.scale);
-            p.obj.position.add(local);
-            const turn = screens * 0.5;
-            p.obj.rotation.x += p.spin.x * turn;
-            p.obj.rotation.y += p.spin.y * turn;
-          }
-          p.obj.rotation.x += p.spin.x * f;
-          p.obj.rotation.y += p.spin.y * f;
-          p.obj.rotation.z += p.spin.z * f;
-        }
-      }
+      const shellOpacity = journey.apply({
+        camera,
+        time: animT,
+        scroll: scrolled,
+        contentEdge,
+        pointer: pointerOn ? pointerNdc : null,
+        from: STAGES[from],
+        to: STAGES[to],
+        mix,
+        built,
+      });
+      journeyWasOn = journeyOn;
+      // The station buttons only make sense while the room is whole.
+      heroShell?.classList.toggle("is-burst", from > 0 || mix > 0.04);
+      if (sunShaft) sunShaft.visible = from === 0 && mix < 0.5 && shellOpacity > 0.5;
+      const nearRoom = from === 0 && mix < 0.3;
+
       for (const [id, marker] of lab.markers) {
         const s = hovered === id ? 1.8 : stationRef.current === id ? 0.001 : 1;
         marker.scale.setScalar(calm ? s : marker.scale.x + (s - marker.scale.x) * Math.min(1, dt * 12));
       }
 
-      // Shadows only matter while the floor is still in view.
-      const shadowEvery = exploded ? (panPx < height * 0.7 ? 2 : 0) : 4;
-      if (shadowEvery && shadowFrame % shadowEvery === 0) renderer.shadowMap.needsUpdate = true;
+      // Shadows follow every frame while pieces are landing or leaving the floor.
+      if (shadowFrame % (journeyOn && from === 0 ? 1 : 4) === 0) renderer.shadowMap.needsUpdate = true;
       shadowFrame += 1;
-      if (debrisOpacity > 0) {
-        if (useAO && !debrisOn) composer.render(dt);
+      // The journal is a full-screen scene of its own with an opaque backdrop. While it covers the
+      // viewport this layer is invisible, so it stops drawing and leaves the GPU to the journal.
+      const journal = (journalEl ??= document.getElementById("research"));
+      const jr = journal?.getBoundingClientRect();
+      const coveredByJournal = !!jr && jr.top <= 0 && jr.bottom >= window.innerHeight;
+      if (stageOpacity > 0 && !coveredByJournal) {
+        // AO only while the assembled room is on screen; the debris reads fine without it.
+        if (useAO && nearRoom) composer.render(dt);
         else renderer.render(scene, camera);
       }
-      if (!host.dataset.ready) host.dataset.ready = "true"; // fade the scene in over the loader
+      if (!host.dataset.ready) {
+        host.dataset.ready = "true"; // fade the scene in over the loader
+        stage.dataset.ready = "true";
+      }
       if (assembleFrom === 0) assembleFrom = performance.now();
-      const onScreen = debrisOn ? debrisOpacity > 0 : visible && !covered;
-      if (onScreen && !document.hidden && !calm) raf = requestAnimationFrame(frame);
+      // The layer is always on screen; with reduced motion it only redraws on scroll.
+      if (stageOpacity > 0 && !document.hidden && !calm) raf = requestAnimationFrame(frame);
     };
     const wake = () => {
       if (disposed || raf || document.hidden) return;
-      // In debris mode the overlay is on screen even when the hero itself is covered.
-      if (!debrisOn && burstGoal === 0 && (!visible || covered)) return;
       last = performance.now();
       raf = requestAnimationFrame(frame);
     };
@@ -1250,8 +1219,11 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       io.disconnect();
       coverObserver.disconnect();
       ro.disconnect();
+      pageObserver.disconnect();
       document.removeEventListener("visibilitychange", wake);
       window.removeEventListener("scroll", readScroll);
+      window.removeEventListener("pointermove", onStagePointer);
+      document.documentElement.removeEventListener("pointerleave", onStagePointerOut);
       reducedMotion.removeEventListener("change", onMotionChange);
       window.removeEventListener("lab:preferences", onMotionChange);
       host.removeEventListener("pointerdown", onPointerDown);
@@ -1283,7 +1255,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       // browser eventually refuses to create any more.
       renderer.forceContextLoss();
       renderer.domElement.remove();
-      debris.remove();
+      stage.remove();
     };
   }, []);
 

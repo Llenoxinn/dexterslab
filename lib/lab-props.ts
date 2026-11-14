@@ -60,6 +60,7 @@ export function addLabProps(root: THREE.Group) {
 
   // Microscope.
   const scope = group(table, -1.1, 1.05, -0.1, 0.5);
+  scope.userData.unit = true; // travels as one intact object in the scroll journey
   put(scope, box(0.42, 0.06, 0.5), clay, 0, 0.03, 0);
   const arm = put(scope, box(0.1, 0.62, 0.12), clay, 0, 0.36, -0.16);
   arm.rotation.x = 0.18;
@@ -70,6 +71,7 @@ export function addLabProps(root: THREE.Group) {
 
   // Laptop.
   const laptop = group(table, 0.15, 1.05, 0.05, -0.25);
+  laptop.userData.unit = true; // travels as one intact object in the scroll journey
   put(laptop, box(0.72, 0.03, 0.5), clay, 0, 0.015, 0);
   const lid = put(laptop, box(0.72, 0.48, 0.025), clay, 0, 0.24, -0.25);
   lid.rotation.x = -0.28;
@@ -101,6 +103,7 @@ export function addLabProps(root: THREE.Group) {
   // ---------- Blocky accent chairs (our version of the reference's bright chairs) ----------
   const chair = (x: number, z: number, rotY: number) => {
     const c = group(props, x, 0, z, rotY);
+    c.userData.unit = true; // travels as one intact object in the scroll journey
     put(c, box(0.62, 0.09, 0.6), accent, 0, 0.5, 0);
     put(c, box(0.62, 0.68, 0.09), accent, 0, 0.88, -0.26);
     // A cantilever frame instead of four legs: two closed side loops.
@@ -117,6 +120,7 @@ export function addLabProps(root: THREE.Group) {
 
   // ---------- Bookshelf on the left wall ----------
   const shelf = group(props, -6.72, 0, 4.7, Math.PI / 2);
+  shelf.userData.unit = true; // travels as one intact object in the scroll journey
   put(shelf, box(2.6, 3.2, 0.06), clay, 0, 1.6, -0.24);
   for (const x of [-1.27, 1.27]) put(shelf, box(0.06, 3.2, 0.5), clay, x, 1.6, 0);
   for (let row = 0; row < 5; row++) {
@@ -139,12 +143,14 @@ export function addLabProps(root: THREE.Group) {
 
   // ---------- Reading corner: lounge chair and a floor lamp ----------
   const lounge = group(props, -4.9, 0, 5.6, 0.55);
+  lounge.userData.unit = true; // travels as one intact object in the scroll journey
   put(lounge, box(1.15, 0.36, 1.0), clay, 0, 0.3, 0);
   put(lounge, box(1.15, 0.9, 0.24), clay, 0, 0.75, -0.42);
   for (const sx of [-0.52, 0.52]) put(lounge, box(0.18, 0.62, 1.0), clay, sx, 0.4, 0);
   put(lounge, box(0.9, 0.12, 0.72), clay, 0, 0.53, 0.08);
 
   const lamp = group(props, -6.0, 0, 6.3, 0.9);
+  lamp.userData.unit = true; // travels as one intact object in the scroll journey
   put(lamp, cyl(0.24, 0.26, 0.04), clay, 0, 0.02, 0);
   put(lamp, cyl(0.02, 0.02, 2.2), clay, 0, 1.1, 0);
   const lampArm = put(lamp, cyl(0.018, 0.018, 0.9), clay, 0, 2.3, 0.3);
@@ -160,6 +166,7 @@ export function addLabProps(root: THREE.Group) {
   });
   const plant = (x: number, z: number, scale: number) => {
     const p = group(props, x, 0, z);
+    p.userData.unit = true; // travels as one intact object in the scroll journey
     p.scale.setScalar(scale);
     put(p, cyl(0.28, 0.22, 0.55), clay, 0, 0.275, 0);
     for (let i = 0; i < 9; i++) {
@@ -179,6 +186,7 @@ export function addLabProps(root: THREE.Group) {
   plant(7.4, -3.3, 1.0);
   plant(-6.2, 2.9, 0.95);
   const snake = group(props, 3.3, 0, -3.5);
+  snake.userData.unit = true; // travels as one intact object in the scroll journey
   put(snake, cyl(0.2, 0.17, 0.42), clay, 0, 0.21, 0);
   for (let i = 0; i < 7; i++) {
     const blade = put(snake, cached("blade", () => { const g = new THREE.SphereGeometry(0.06, 8, 10); g.scale(1, 9, 0.3); return g; }), clay, (rand() - 0.5) * 0.18, 0.75, (rand() - 0.5) * 0.18);
@@ -187,6 +195,7 @@ export function addLabProps(root: THREE.Group) {
 
   // ---------- Robot arm on a plinth, front right ----------
   const robot = group(props, 11.2, 0, 6.4, -0.9);
+  robot.userData.unit = true; // travels as one intact object in the scroll journey
   put(robot, box(1.0, 0.7, 1.0), clay, 0, 0.35, 0);
   put(robot, cyl(0.32, 0.36, 0.2), clay, 0, 0.8, 0);
   const shoulder = group(robot, 0, 0.92, 0, 0.4);
@@ -221,6 +230,7 @@ export function addLabProps(root: THREE.Group) {
   put(desk2, box(0.9, 0.75, 1.05), clay, 1.2, 0.5, 0);
   for (const [x, ry] of [[-0.6, 0.18], [0.45, -0.18]] as const) {
     const mon = group(desk2, x, 1.05, -0.2, ry);
+    mon.userData.unit = true; // travels as one intact object in the scroll journey
     put(mon, box(0.3, 0.03, 0.22), clay, 0, 0.015, 0);
     put(mon, box(0.06, 0.38, 0.05), clay, 0, 0.21, -0.05);
     put(mon, box(1.0, 0.6, 0.05), clay, 0, 0.62, 0);
@@ -238,6 +248,7 @@ export function addLabProps(root: THREE.Group) {
   }
 
   const printer = group(props, 12.3, 0, -1.4, -Math.PI / 2);
+  printer.userData.unit = true; // travels as one intact object in the scroll journey
   put(printer, box(1.2, 0.9, 0.8), clay, 0, 0.45, 0);
   put(printer, box(0.9, 0.06, 0.7), clay, 0, 0.93, 0);
   for (const [x, z] of [[-0.42, -0.3], [0.42, -0.3], [-0.42, 0.3], [0.42, 0.3]]) put(printer, box(0.05, 0.9, 0.05), clay, x, 1.4, z);
