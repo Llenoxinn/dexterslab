@@ -91,7 +91,7 @@ export function SiteHeader({ home = false }: { home?: boolean }) {
             onClick={() => setMenuOpen((o) => !o)}
           >
             <span className="hamburger" aria-hidden="true">
-              {menuOpen ? "×" : "≡"}
+              <span /><span />
             </span>
           </button>
         </nav>
