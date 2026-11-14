@@ -133,8 +133,8 @@ const HEAD_HIT = [
 const COAT = [
   "...PPPLNNLPPP...",
   "..PPPPPLNNLPPPP.",
-  ".LPPPPPPNNPPPPPL",
-  ".LPNPPPPPPPPPPPL",
+  ".PPPPPPPNNPPPPP.",
+  ".PPNPPPPPPPPPPP.",
   "..PPPPPPPPPPPP..",
   "..PPPPPPPPPPPP..",
 ];
@@ -157,8 +157,8 @@ export const DEXTER_WAVE_A = [
   ...HEAD,
   "...PPPLNNLPPP.LL",
   "..PPPPPLNNLPPPPL",
-  ".LPPPPPPNNPPPPP.",
-  ".LPNPPPPPPPPPPP.",
+  ".PPPPPPPNNPPPPP.",
+  ".PPNPPPPPPPPPPP.",
   ...COAT.slice(4),
   ...PASS,
 ];
@@ -167,8 +167,8 @@ export const DEXTER_WAVE_B = [
   "....LLLDDLLL..LL",
   "...PPPLNNLPPP.L.",
   "..PPPPPLNNLPPPPL",
-  ".LPPPPPPNNPPPPP.",
-  ".LPNPPPPPPPPPPP.",
+  ".PPPPPPPNNPPPPP.",
+  ".PPNPPPPPPPPPPP.",
   ...COAT.slice(4),
   ...PASS,
 ];
@@ -340,4 +340,73 @@ export const MAGNIFIER = [
   "............##..",
   ".............##.",
   "..............##",
+];
+
+
+// Plot twist hazards (score >= 200): flying cars, UFOs, and dimensional rifts.
+const CAR_BODY = [
+  "......PPPPPPPP......",
+  "....PPLLLLLLLLPP....",
+  "...PPLDDDDDDDDLPP...",
+  ".PPPPPPPPPPPPPPPPPP.",
+  "NNPPPPPPPPPPPPPPPPNN",
+  ".LLLLLLLLLLLLLLLLLL.",
+];
+export const CAR_A = [
+  ...CAR_BODY,
+  "...NNN........NNN...",
+  "....N..........N....",
+];
+export const CAR_B = [
+  ...CAR_BODY,
+  "..N.N..........N.N..",
+  "....................",
+];
+
+const UFO_BODY = [
+  "......LLLLLL......",
+  "....LLPPPPPPPL....",
+  "...LPPDDDDDDPPL...",
+  ".PPPPPPPPPPPPPPPP.",
+];
+export const UFO_A = [
+  ...UFO_BODY,
+  "NNPPNNPPNNPPNNPPNN",
+  "..LLLLLLLLLLLLLL..",
+  ".....N......N.....",
+];
+export const UFO_B = [
+  ...UFO_BODY,
+  "PPNNPPNNPPNNPPNNPP",
+  "..LLLLLLLLLLLLLL..",
+  "....N........N....",
+];
+
+export const RIFT_A = [
+  "....NNNN....",
+  "..NNPPPPNN..",
+  ".NPPPLLLPPN.",
+  "NPPLNNNNLPPN",
+  "NPLNNPPNNLPN",
+  "NPLNPNNPNLPN",
+  "NPLNPNNPNLPN",
+  "NPLNNPPNNLPN",
+  "NPPLNNNNLPPN",
+  ".NPPPLLLPPN.",
+  "..NNPPPPNN..",
+  "....NNNN....",
+];
+export const RIFT_B = [
+  "....PPPP....",
+  "..PPNNNNPP..",
+  ".PNNNPPPPNN.",
+  "PNNLPPPPPLNP",
+  "PNLPNNNNPLNP",
+  "PNLPN..NPLNP",
+  "PNLPN..NPLNP",
+  "PNLPNNNNPLNP",
+  "PNNLPPPPPLNP",
+  ".PNNNPPPPNN.",
+  "..PPNNNNPP..",
+  "....PPPP....",
 ];
