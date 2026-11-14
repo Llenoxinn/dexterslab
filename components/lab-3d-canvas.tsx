@@ -11,6 +11,7 @@ import { createFilipinoLab, narraTexture, sawaliTexture, signTexture } from "@/l
 import { createChristmasDecor } from "@/lib/christmas-lab";
 import { ASSEMBLE_SECONDS, STAGES, STAGE_OPACITY, createJourney } from "@/lib/lab-journey";
 import { addLabProps } from "@/lib/lab-props";
+import { createStudioWindows, STUDIO_BACK_WINDOW, STUDIO_SUN_DIRECTION } from "@/lib/studio-daylight";
 
 export type FocusStation = "terminal" | "core" | "tank" | "bench" | "rack";
 export type StationId = "overview" | FocusStation | "free";
@@ -38,7 +39,6 @@ const ROOM_CENTER_Z = -4.3 + ROOM_DEPTH / 2;
 /** The floor runs from the left wall (x = -7.3) out past the right of the original lab, to x = 13. */
 const ROOM_WIDTH = 20.3;
 const ROOM_CENTER_X = -7.3 + ROOM_WIDTH / 2;
-const WALL_H = 7;
 
 /** Clay render: one matte white for everything, DOS blue for the lab hardware, a pale table to sit on. */
 const CLAY = 0xf3f3f5;
@@ -229,8 +229,7 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
   // ---------- Shell: a cutaway diorama. A floor slab, the back wall and the left wall; the
   // front and right stay open so the camera looks in from outside, like a model on a table. ----------
   put(root, box(ROOM_WIDTH, 0.4, ROOM_DEPTH), M.floor, ROOM_CENTER_X, -0.2, ROOM_CENTER_Z).castShadow = false;
-  put(root, box(ROOM_WIDTH, WALL_H, 0.3), M.wall, ROOM_CENTER_X, WALL_H / 2, -4.15).castShadow = false;
-  put(root, box(0.3, WALL_H, ROOM_DEPTH), M.sideWall, -7.15, WALL_H / 2, ROOM_CENTER_Z).castShadow = false;
+  const daylight = createStudioWindows(root, M.wall, M.sideWall);
   put(root, box(0.06, 0.2, ROOM_DEPTH), M.deep, -6.97, 0.1, ROOM_CENTER_Z, false);
   put(root, box(0.05, 0.1, ROOM_DEPTH), M.mid, -6.975, 4.6, ROOM_CENTER_Z, false);
   put(root, box(ROOM_WIDTH - 0.6, 0.2, 0.06), M.deep, ROOM_CENTER_X, 0.1, -3.97, false);
@@ -503,7 +502,7 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
   return {
     stations: [terminal, core, tank, bench, rack],
     accents: new Set<THREE.Material>([M.ink, M.neon, M.liquid, M.tankFluid, M.holo, M.glow]),
-    keep: new Set<THREE.Material>([M.screen, M.blueprint, M.led]),
+    keep: new Set<THREE.Material>([M.screen, M.blueprint, M.led, daylight.sky]),
     markers,
     activate: christmas.activate,
     tick: (t: number) => {
@@ -613,31 +612,13 @@ function applyClay(root: THREE.Object3D, lab: Pick<LabBuild, "accents" | "keep">
 }
 
 /**
- * Window light: slatted blinds that only the sun can see (layer 1) throw striped shadows across
- * the floor, and a faint shaft of haze runs from the window down to where the stripes land.
+ * A faint shaft of haze follows the sunlight from the studio window to the floor.
+ * The visible window frames and louvres cast the actual shadows.
  */
 function addSunlight(scene: THREE.Scene, sunDir: THREE.Vector3): THREE.Texture[] {
-  const windowAt = new THREE.Vector3(-2.25, 3.05, -3.62);
-  const w = 2.6;
-  const h = 2.4;
-
-  const blinds = new THREE.Group();
-  blinds.position.copy(windowAt);
-  const slatMat = new THREE.MeshBasicMaterial({ colorWrite: false });
-  const slat = new THREE.BoxGeometry(w, 0.13, 0.04);
-  for (let i = 0; i < 9; i++) {
-    const m = new THREE.Mesh(slat, slatMat);
-    m.position.y = -h / 2 + 0.12 + i * 0.27;
-    m.rotation.x = -0.35;
-    blinds.add(m);
-  }
-  const mullion = new THREE.Mesh(new THREE.BoxGeometry(0.1, h, 0.04), slatMat);
-  blinds.add(mullion);
-  blinds.traverse((o) => {
-    o.layers.set(1);
-    if (o instanceof THREE.Mesh) o.castShadow = true;
-  });
-  scene.add(blinds);
+  const windowAt = new THREE.Vector3(STUDIO_BACK_WINDOW.x, STUDIO_BACK_WINDOW.y, STUDIO_BACK_WINDOW.z + 0.21);
+  const w = STUDIO_BACK_WINDOW.width;
+  const h = STUDIO_BACK_WINDOW.height;
 
   // The shaft: two crossed planes along the sun ray, brightest mid-way and soft at every edge.
   const len = windowAt.y / sunDir.y;
@@ -650,7 +631,7 @@ function addSunlight(scene: THREE.Scene, sunDir: THREE.Vector3): THREE.Texture[]
         vec3 q = abs(vP) / uHalf;
         float edge = (1.0 - smoothstep(0.45, 1.0, q.x)) * (1.0 - smoothstep(0.45, 1.0, q.y));
         float along = 1.0 - smoothstep(0.2, 1.0, q.z);
-        gl_FragColor = vec4(1.0, 0.985, 0.95, 0.2 * edge * along);
+        gl_FragColor = vec4(1.0, 0.96, 0.85, 0.13 * edge * along);
       }`,
     transparent: true,
     depthWrite: false,
@@ -723,10 +704,10 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
 
     // Daylight on a white model: a soft sky fill, and one low sun through the window doing the drawing.
     scene.background = new THREE.Color(BACKDROP);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xc9ccd8, 1.35));
-    const SUN_DIR = new THREE.Vector3(-6, 8, -9).normalize();
+    scene.add(new THREE.HemisphereLight(0xf0f5ff, 0xc9ccd8, 0.85));
+    const SUN_DIR = STUDIO_SUN_DIRECTION;
     const SUN_AT = new THREE.Vector3(ROOM_CENTER_X, 0, ROOM_CENTER_Z);
-    const key = new THREE.DirectionalLight(0xfff4e6, 2.6);
+    const key = new THREE.DirectionalLight(0xfff1d9, 3.0);
     key.position.copy(SUN_AT).addScaledVector(SUN_DIR, 26);
     key.target.position.copy(SUN_AT);
     key.castShadow = true;
@@ -746,11 +727,9 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     key.shadow.radius = 2.2;
     key.shadow.blurSamples = 12;
     key.shadow.intensity = 0.82;
-    // Layer 1 holds shadow-only geometry (the window blinds): the sun sees it, the camera does not.
-    key.shadow.camera.layers.enable(1);
     scene.add(key, key.target);
     // A shadowless fill from the viewer's side keeps the inside of the walls white, not grey.
-    const fill = new THREE.DirectionalLight(0xf2f4ff, 0.9);
+    const fill = new THREE.DirectionalLight(0xf2f4ff, 0.45);
     fill.position.set(10, 6, 14);
     scene.add(fill);
 
