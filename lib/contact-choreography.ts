@@ -4,10 +4,6 @@ const GLYPHS: Record<string, readonly string[]> = {
   E: ["111", "100", "110", "100", "111"],
   L: ["100", "100", "100", "100", "111"],
   O: ["111", "101", "101", "101", "111"],
-  P: ["111", "101", "111", "100", "100"],
-  I: ["111", "010", "010", "010", "111"],
-  N: ["101", "111", "111", "111", "101"],
-  G: ["111", "100", "101", "101", "111"],
 };
 
 export const CONTACT_WORD = "HELLO";
@@ -18,14 +14,21 @@ const wordPoints = (word: string) => [...word].flatMap((letter, index) =>
   )),
 );
 export const CONTACT_WORD_POINTS = wordPoints(CONTACT_WORD);
-export const CONTACT_PING_POINTS = wordPoints("PING");
 export const CONTACT_SPIRAL_SECONDS = 4.5;
+
+/** Independent onsets over ten seconds; only a few props are ever converting together. */
+export function pingConversion(seconds: number, slot: number, count: number): number {
+  const order = (slot * 37) % Math.max(1, count);
+  const start = CONTACT_SPIRAL_SECONDS + order / Math.max(1, count - 1) * 10;
+  const progress = Math.max(0, Math.min(1, (seconds - start) / .7));
+  return progress * progress * (3 - 2 * progress);
+}
 
 /** Mutable frame data shared with the journey; motion stays outside React's render loop. */
 export type ContactChoreography = {
   message: number;
   links: number;
-  linksWord?: number;
+  linksElapsed?: number;
   wordX: number;
   wordY: number;
   cellX: number;

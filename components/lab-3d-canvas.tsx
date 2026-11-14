@@ -11,7 +11,7 @@ import { createFilipinoLab, narraTexture, sawaliTexture, signTexture } from "@/l
 import { createChristmasDecor } from "@/lib/christmas-lab";
 import { ASSEMBLE_SECONDS, STAGES, STAGE_OPACITY, createJourney } from "@/lib/lab-journey";
 import { addLabProps } from "@/lib/lab-props";
-import { CONTACT_WORD_COLUMNS, CONTACT_SPIRAL_SECONDS, type ContactChoreography } from "@/lib/contact-choreography";
+import { CONTACT_WORD_COLUMNS, type ContactChoreography } from "@/lib/contact-choreography";
 import { createStudioWindows, STUDIO_BACK_WINDOW, STUDIO_SUN_DIRECTION } from "@/lib/studio-daylight";
 
 export type FocusStation = "terminal" | "core" | "tank" | "bench" | "rack";
@@ -1131,8 +1131,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       // Retarget from the current pose: repeated clicks never restart or snap the objects.
       const contactK = calm ? 1 : 1 - Math.exp(-dt * 4.8);
       if (contactMode === "links" && STAGES[from] === "frame" && !calm) linksSeconds += dt;
-      const targetWord = contactMode === "links" && linksSeconds > CONTACT_SPIRAL_SECONDS ? 1 : 0;
-      contactPose.linksWord = (contactPose.linksWord ?? 0) + (targetWord - (contactPose.linksWord ?? 0)) * (calm ? 1 : 1 - Math.exp(-dt * 2.4));
+      contactPose.linksElapsed = linksSeconds;
       contactPose.message += ((contactMode === "message" ? 1 : 0) - contactPose.message) * contactK;
       contactPose.links += ((contactMode === "links" ? 1 : 0) - contactPose.links) * contactK;
       contactPose.energy += ((contactSocial >= 0 ? 1 : 0) - contactPose.energy) * contactK;

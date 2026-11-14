@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CONTACT_WORD_POINTS, type ContactChoreography } from "./contact-choreography";
+import { CONTACT_WORD_POINTS, pingConversion, type ContactChoreography } from "./contact-choreography";
 import { createPingGeometry } from "./ping-geometry";
 
 /**
@@ -162,7 +162,7 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
   pingRoot.name = "contact-ping-words";
   const pingGeometry = createPingGeometry();
   const pingWords = candidates.map(() => {
-    const material = new THREE.MeshBasicMaterial({ color: 0x1313ba, transparent: true, opacity: 0, depthWrite: false });
+    const material = new THREE.MeshStandardMaterial({ color: 0x2323d2, roughness: .36, metalness: .12, transparent: true, opacity: 0, depthWrite: false });
     const mesh = new THREE.Mesh(pingGeometry, material);
     mesh.visible = false;
     pingRoot.add(mesh);
@@ -347,9 +347,11 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
           const channel = p.slot % 4;
           const selected = contact.energy * (1 - Math.min(1, Math.abs(channel - contact.social)));
           const ring = p.slot % 2;
-          const a = (p.slot / candidates.length) * Math.PI * 6 + t * (ring ? -0.42 : 0.36);
+          const speed = .3 + (Math.sin(p.phase * 7) + 1) * .16;
+          const disturbance = Math.sin(t * 1.1 + p.phase) * .18 + Math.sin(t * .47 + p.phase * 3) * .22;
+          const a = p.phase + (p.slot / candidates.length) * Math.PI * 6 + t * (ring ? -speed : speed) + disturbance;
           // Uneven spiral bands live beyond a protected ellipse around the text and cards.
-          const wobble = (1 + Math.sin(t * 0.7 + p.phase)) * 0.035;
+          const wobble = (1 + Math.sin(t * .7 + p.phase)) * .075 + (1 + Math.cos(t * 1.3 + p.phase * 3)) * .025;
           const rx = contact.orbitRadiusX + ring * 0.065 + wobble;
           const ry = contact.orbitRadiusY + ring * 0.04 + wobble;
           const sx = contact.orbitX + Math.cos(a) * rx;
@@ -444,15 +446,17 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
         // World target → the mesh's local space under its (static) parent.
         if (p.slot >= 0 && c.contact) {
           const stageWeight = c.from === "frame" ? 1 : c.to === "frame" ? m : 0;
-          const conversion = (c.contact.linksWord ?? 0) * c.contact.links * stageWeight;
-          const amount = smooth(clamp(conversion * 1.3 - p.slot / candidates.length * .3, 0, 1));
+          const individual = pingConversion(c.contact.linksElapsed ?? 0, p.slot, candidates.length);
+          const amount = individual * c.contact.links * stageWeight;
           const word = pingWords[p.slot];
           word.visible = amount > .001;
           if (word.visible) {
             // Each word inherits its prop's moving centre; it never travels toward a common word.
             word.position.copy(aPos).add(centerOffset.copy(p.center).multiply(aScale).applyQuaternion(aQuat));
             word.quaternion.copy(c.camera.quaternion);
-            word.rotateZ(Math.sin(c.time * .5 + p.phase) * .18);
+            word.rotateY(Math.sin(c.time * .65 + p.phase) * .55);
+            word.rotateX(Math.cos(c.time * .4 + p.phase) * .18);
+            word.rotateZ(Math.sin(c.time * .5 + p.phase) * .3);
             word.scale.setScalar((c.camera.aspect < .85 ? .28 : .7) * (.85 + amount * .15));
             word.material.opacity = amount;
             aScale.multiplyScalar(1 - amount);

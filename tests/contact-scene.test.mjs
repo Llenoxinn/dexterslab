@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { registerHooks } from "node:module";
 import * as THREE from "three";
-import { CONTACT_WORD_POINTS } from "../lib/contact-choreography.ts";
+import { CONTACT_WORD_POINTS, pingConversion } from "../lib/contact-choreography.ts";
 import { createStudioWindows } from "../lib/studio-daylight.ts";
 
 registerHooks({ resolve(specifier, context, next) {
@@ -48,14 +48,14 @@ test("contact objects form the word in screen space and return to their original
     }
   }
   journey.reset();
-  journey.apply({ ...input, contact: { ...contact, message: 0, links: 1, linksWord: 1 } });
+  journey.apply({ ...input, contact: { ...contact, message: 0, links: 1, linksElapsed: 16 } });
   const words = scene.getObjectByName("contact-ping-words").children;
   assert.ok(words.length > 40);
   assert.ok(words.every((word) => word.visible && word.material.opacity === 1));
   const positions = words.map((word) => word.position.clone());
   assert.ok(new Set(positions.map((p) => p.toArray().join(","))).size > 40, "PING words retain separate positions");
   journey.reset();
-  journey.apply({ ...input, time: 2, contact: { ...contact, message: 0, links: 1, linksWord: 1 } });
+  journey.apply({ ...input, time: 2, contact: { ...contact, message: 0, links: 1, linksElapsed: 16 } });
   assert.ok(words.every((word, i) => word.position.distanceTo(positions[i]) > .01), "Every PING word continues orbiting");
   journey.reset();
   assert.ok(words.every((word) => !word.visible));
@@ -76,4 +76,14 @@ test("studio windows leave genuine openings and visible louvres cast shadows", (
   assert.ok(hits.length > 0, "Opening has a sky pane");
   assert.ok(hits.every((hit) => !hit.object.castShadow), "Opaque wall must not block the opening");
   assert.ok(windows.every((window) => window.children.filter((child) => child.castShadow).length > 10));
+});
+
+test("PING changes happen individually across ten seconds while the rest remain props", () => {
+  const phases = (seconds) => Array.from({ length: 62 }, (_, slot) => pingConversion(seconds, slot, 62));
+  assert.ok(phases(4).every((phase) => phase === 0));
+  const midway = phases(9);
+  assert.ok(midway.filter((phase) => phase === 1).length > 15);
+  assert.ok(midway.filter((phase) => phase === 0).length > 15);
+  assert.ok(midway.filter((phase) => phase > 0 && phase < 1).length <= 5);
+  assert.ok(phases(16).every((phase) => phase === 1));
 });
