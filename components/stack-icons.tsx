@@ -46,7 +46,7 @@ export function StackIcon({ id, ...props }: { id: string } & IconProps) {
       );
     case "typescript":
       return (
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" {...props}>
+        <svg viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd" aria-hidden="true" focusable="false" {...props}>
           <path d="M3 3h18v18H3V3Zm9.2 9.4H9.6v7.1H8v-7.1H5.4V11h6.8v1.4Zm7.1 4.8c0 1.5-1.1 2.4-2.8 2.4-1.1 0-2.1-.4-2.7-1.1l1-1.1c.5.5 1.1.8 1.8.8.8 0 1.2-.3 1.2-.8 0-.5-.4-.8-1.4-1.1l-.6-.2c-1.3-.4-2-1.1-2-2.3 0-1.3 1-2.2 2.5-2.2 1 0 1.9.3 2.5 1l-.9 1.1c-.5-.4-1-.6-1.6-.6-.6 0-1 .3-1 .7s.3.7 1.2 1l.6.2c1.5.5 2.2 1.1 2.2 2.2Z" />
         </svg>
       );
@@ -74,7 +74,7 @@ export function StackIcon({ id, ...props }: { id: string } & IconProps) {
     case "nextjs":
     case "next.js":
       return (
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" {...props}>
+        <svg viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd" aria-hidden="true" focusable="false" {...props}>
           <path d="M12 2a10 10 0 1 0 7.7 16.4L9.4 7.5H8v9h1.5v-6.7l9.2 10A10 10 0 0 0 12 2Zm3.2 5.5v6.8l1.5 1.8V7.5h-1.5Z" />
         </svg>
       );
