@@ -29,6 +29,8 @@ export type ProjectStatus = "shipped" | "in progress" | "archived";
 export type ProjectEntry = {
   slug: string;
   name: string;
+  /** One short line for the card; the long fields live in the case-study dialog. */
+  tagline: string;
   summary: string;
   problem: string;
   built: string;
@@ -178,6 +180,7 @@ export const projects: ProjectEntry[] = [
   {
     slug: "dfctf",
     name: "dfCTF",
+    tagline: "A CTF platform with server-checked flags and weekly leaderboards.",
     summary:
       "Capture-the-Flag platform with server-side flag verification, weekly Asia/Manila leaderboards, first-blood tracking, and staff authoring workflows.",
     problem:
@@ -200,6 +203,7 @@ export const projects: ProjectEntry[] = [
   {
     slug: "belaude",
     name: "BELaude",
+    tagline: "Works out the semester GWA you need for UP Latin honors.",
     summary:
       "Client-side UP Latin honors roadmap planner that calculates the exact semester GWA needed to graduate Summa, Magna, or Cum Laude.",
     problem:
@@ -221,6 +225,7 @@ export const projects: ProjectEntry[] = [
   {
     slug: "sylvi",
     name: "Sylvi",
+    tagline: "True-to-size ID photo sheets for print shops, with automatic face cropping.",
     summary:
       "True-to-size ID photo layout and print-shop automation studio with client-side MediaPipe face cropping and 300 DPI print-sheet export.",
     problem:

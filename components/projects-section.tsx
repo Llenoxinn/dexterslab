@@ -15,6 +15,7 @@ const STATUS_FILTERS: Array<{ id: "all" | ProjectStatus; label: string }> = [
 ];
 
 const STACK_ID_BY_NAME = new Map(techStack.map((item) => [item.name.toLowerCase(), item.id]));
+const CARD_STACK_LIMIT = 4;
 
 function ExternalArrow() {
   return (
@@ -51,7 +52,7 @@ function ProjectPreview({ project }: { project: ProjectEntry }) {
   return (
     <div className="work-preview-unavailable">
       <span className="display">{project.name}</span>
-      <p>{imgFailed ? "Preview unavailable. Explore the project using the links below." : project.summary}</p>
+      <p>{imgFailed ? "Preview unavailable. Explore the project using the links below." : project.tagline}</p>
     </div>
   );
 }
@@ -70,7 +71,7 @@ export function ProjectsSection() {
             Selected work
           </h2>
           <p className="section-intro">
-            Flagship platforms and tools built from scratch. Inspect the live deployments or open the case study for architecture details.
+            Three tools I built from scratch. Open a case study for the details.
           </p>
         </div>
 
@@ -128,23 +129,12 @@ export function ProjectsSection() {
                   </div>
 
                   <h3 className="work-case-title">{project.name}</h3>
-                  <p className="work-case-summary">{project.summary}</p>
+                  <p className="work-case-summary">{project.tagline}</p>
                 </div>
-
-                <dl className="work-case-specs">
-                  <div className="work-case-spec">
-                    <dt>Architecture</dt>
-                    <dd>{project.built}</dd>
-                  </div>
-                  <div className="work-case-spec">
-                    <dt>Outcome</dt>
-                    <dd>{project.result}</dd>
-                  </div>
-                </dl>
 
                 <div className="work-case-Bottom">
                   <ul className="work-case-stack" aria-label={`${project.name} tech stack`}>
-                    {project.stack.map((tech) => {
+                    {project.stack.slice(0, CARD_STACK_LIMIT).map((tech) => {
                       const iconId = STACK_ID_BY_NAME.get(tech.toLowerCase()) ?? tech.toLowerCase();
                       return (
                         <li key={tech} className="spec-chip spec-chip--icon">
@@ -153,6 +143,11 @@ export function ProjectsSection() {
                         </li>
                       );
                     })}
+                    {project.stack.length > CARD_STACK_LIMIT && (
+                      <li className="spec-chip" aria-label={`and ${project.stack.length - CARD_STACK_LIMIT} more`}>
+                        +{project.stack.length - CARD_STACK_LIMIT}
+                      </li>
+                    )}
                   </ul>
 
                   <div className="work-case-actions">
