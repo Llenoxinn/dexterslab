@@ -386,26 +386,23 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         rib.rotation.x = Math.PI / 2;
       }
 
-      // Left and right paper blocks (sit on top of the cover boards at y = 0.052).
-      const leftStack = box(book, paperBlockMat, pageWidth, 0.11, pageHeight, -0.85, 0.107, 0);
+      // Right paper block (sits on top of back cover board at y = 0.052).
       box(book, paperBlockMat, pageWidth, 0.11, pageHeight, 0.85, 0.107, 0);
 
       // Crimson silk ribbon bookmark.
       const ribbon = box(book, mat(0xa8434e, { roughness: 0.72 }), 0.085, 0.01, 0.34, 0.42, 0.052, 1.24);
       ribbon.castShadow = false;
 
-      // Static left & right reading surfaces (y = 0.164, cleanly above the 0.162 stack top).
+      // Static right reading surface (y = 0.164, cleanly above the 0.162 stack top).
       const leftPageMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, side: THREE.FrontSide });
       const rightPageMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, side: THREE.FrontSide });
-      const leftPage = addMesh(book, new THREE.PlaneGeometry(pageWidth, pageHeight), leftPageMat, -0.85, 0.164, 0);
-      leftPage.rotation.x = -Math.PI / 2;
-      leftPage.castShadow = false;
       const rightPage = addMesh(book, new THREE.PlaneGeometry(pageWidth, pageHeight), rightPageMat, 0.85, 0.164, 0);
       rightPage.rotation.x = -Math.PI / 2;
       rightPage.castShadow = false;
 
       // Front hardcover pivot: starts at y = 0.188 when closed, and drops to y = 0.026 when fully open
-      // so it lies flat UNDER the left paper stack instead of burying the left page.
+      // so it lies flat on the desk. Left stack + left page are mounted on its inner face so they
+      // swing open with the cover and never intersect it mid-turn.
       const coverPivot = new THREE.Group();
       coverPivot.position.set(0, 0.188, 0);
       book.add(coverPivot);
@@ -417,6 +414,12 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       const coverFace = addMesh(coverPivot, new THREE.PlaneGeometry(1.72, 2.44), coverMat, 0.88, 0.028, 0);
       coverFace.rotation.x = -Math.PI / 2;
       coverMat.map = manuscriptTexture(latest.current.studies[0], "cover", headingFont, bodyFont);
+
+      const leftStack = box(coverPivot, paperBlockMat, pageWidth, 0.11, pageHeight, 0.85, -0.081, 0);
+      const leftPage = addMesh(coverPivot, new THREE.PlaneGeometry(pageWidth, pageHeight), leftPageMat, 0.85, -0.138, 0);
+      leftPage.rotateX(-Math.PI / 2);
+      leftPage.rotateY(Math.PI);
+      leftPage.castShadow = false;
 
       // Curved 3D turning page pivot.
       const turnPivot = new THREE.Group();
@@ -490,10 +493,9 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         const coverAngle = openAmount * Math.PI;
 
         coverPivot.rotation.z = coverAngle;
-        // Drop the cover pivot as it opens so the open front cover sits flat at y = 0.026 beneath leftStack.
-        coverPivot.position.y = THREE.MathUtils.lerp(0.188, 0.026, Math.sin(coverAngle * 0.5));
+        coverPivot.position.y = THREE.MathUtils.lerp(0.188, 0.026, openAmount);
 
-        const isOpened = coverAngle > Math.PI * 0.52;
+        const isOpened = coverAngle > 0.05;
         leftStack.visible = isOpened;
         leftPage.visible = isOpened;
 

@@ -175,31 +175,33 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
                     className={activeIndex === index ? "is-selected" : ""}
                     onClick={() => scrollToStudy(index)}
                   >
-                    <span className="research-tab-num">0{index + 1}</span>
                     {paper.shortName}
                   </button>
                 ))}
               </nav>
 
-              <div className="research-hud-actions">
-                <div className="research-hud-progress" aria-label={`Study ${activeIndex + 1} of ${studies.length}`}>
-                  <span role="status">
-                    0{activeIndex + 1} / 0{studies.length}
-                  </span>
-                  <div className="research-scroll-meter" aria-hidden="true">
-                    <span style={{ transform: `scaleX(${progress})` }} />
-                  </div>
+              <span className="research-hud-divider" aria-hidden="true" />
+
+              <div className="research-hud-progress" aria-label={`Study ${activeIndex + 1} of ${studies.length}`}>
+                <span role="status">
+                  {activeIndex + 1}/{studies.length}
+                </span>
+                <div className="research-scroll-meter" aria-hidden="true">
+                  <span style={{ transform: `scaleX(${progress})` }} />
                 </div>
-                <span className="research-desk-hint">Scroll to turn pages</span>
-                <button
-                  type="button"
-                  className="research-read-button"
-                  onClick={() => setReadingIndex(activeIndex)}
-                >
-                  Read manuscript
-                </button>
               </div>
+
+              <span className="research-hud-divider" aria-hidden="true" />
+
+              <button
+                type="button"
+                className="research-read-button"
+                onClick={() => setReadingIndex(activeIndex)}
+              >
+                Read manuscript
+              </button>
             </div>
+            <p className="research-desk-hint">Scroll to open and turn pages · Click the book to read</p>
           </div>
         )}
       </div>
