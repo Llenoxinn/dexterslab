@@ -4,13 +4,6 @@ import { useEffect, useRef, useState } from "react";
 
 const CODE = "CODE";
 const GLYPHS = "{}<>/;=#$_01[]%&*+!?";
-/** The last word keeps changing its mind: mostly BEGIN, now and then BEGUN or BE GONE! */
-const ENDINGS: Array<{ word: string; hold: number }> = [
-  { word: "BEGIN", hold: 3400 },
-  { word: "BEGUN", hold: 1700 },
-  { word: "BEGIN", hold: 3000 },
-  { word: "BE GONE!", hold: 1900 },
-];
 
 const glyph = () => GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
 
@@ -25,26 +18,37 @@ export function LabInterlude() {
   const ref = useRef<HTMLElement>(null);
   const [inView, setInView] = useState(false);
   const [code, setCode] = useState(CODE);
-  const [ending, setEnding] = useState(0);
+  const [decoded, setDecoded] = useState(false);
+  const [calm, setCalm] = useState(false);
+  const played = useRef(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const io = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting), { threshold: 0.2 });
     io.observe(el);
-    return () => io.disconnect();
+    const media = matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setCalm(media.matches || document.documentElement.dataset.labFx === "calm");
+    sync();
+    media.addEventListener("change", sync);
+    window.addEventListener("lab:preferences", sync);
+    return () => {
+      io.disconnect();
+      media.removeEventListener("change", sync);
+      window.removeEventListener("lab:preferences", sync);
+    };
   }, []);
 
   // Everything below only runs while the line is on screen and motion is welcome.
   useEffect(() => {
-    if (!inView || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (calm) {
       setCode(CODE);
-      setEnding(0);
+      setDecoded(true);
       return;
     }
+    if (!inView || played.current) return;
     let tick = 0;
     let scramble = 0;
-    let next = 0;
     // Decode: every letter spins through glyphs and locks in turn, left to right.
     const decode = () => {
       tick = 0;
@@ -52,31 +56,24 @@ export function LabInterlude() {
       scramble = window.setInterval(() => {
         tick += 1;
         setCode(CODE.split("").map((ch, i) => (tick > 7 + i * 5 ? ch : glyph())).join(""));
-        if (tick > 7 + CODE.length * 5) window.clearInterval(scramble);
+        if (tick > 7 + CODE.length * 5) {
+          window.clearInterval(scramble);
+          setDecoded(true);
+          played.current = true;
+        }
       }, 45);
     };
     decode();
-    const again = window.setInterval(decode, 5200);
-
-    let index = 0;
-    const advance = () => {
-      index = (index + 1) % ENDINGS.length;
-      setEnding(index);
-      next = window.setTimeout(advance, ENDINGS[index].hold);
-    };
-    next = window.setTimeout(advance, ENDINGS[0].hold);
 
     return () => {
       window.clearInterval(scramble);
-      window.clearInterval(again);
-      window.clearTimeout(next);
     };
-  }, [inView]);
+  }, [inView, calm]);
 
-  const word = ENDINGS[ending].word;
+  const word = "BEGIN";
 
   return (
-    <section ref={ref} id="interlude" className={`lab-interlude ${inView ? "is-inview" : ""}`} aria-labelledby="interlude-title">
+    <section ref={ref} id="interlude" className={`lab-interlude ${inView ? "is-inview" : ""} ${decoded ? "is-decoded" : ""}`} aria-labelledby="interlude-title">
       <div className="lab-interlude-pin">
         <h2 id="interlude-title" className="lab-interlude-title" aria-label="Let the code begin">
           <span className="lab-interlude-line" aria-hidden="true">
@@ -101,7 +98,7 @@ export function LabInterlude() {
               <span className="lab-interlude-flap">
                 {word.split("").map((ch, i) => (
                   // The key changes whenever this slot's letter changes, which replays the flip.
-                  <span key={`${i}-${ch}`} className="lab-interlude-flap-cell" style={{ animationDelay: `${i * 45}ms` }}>
+                  <span key={`${i}-${ch}`} className="lab-interlude-flap-cell" style={{ transitionDelay: `${i * 45}ms` }}>
                     {ch === " " ? " " : ch}
                   </span>
                 ))}
@@ -110,6 +107,7 @@ export function LabInterlude() {
             </span>
           </span>
         </h2>
+        <span className="lab-interlude-signal" aria-hidden="true"><span /></span>
         <p className="lab-interlude-sub">Web tools, CTF wins and research, all out of this one lab.</p>
       </div>
     </section>
