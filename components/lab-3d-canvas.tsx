@@ -892,6 +892,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     let covered = false;
     let last = performance.now();
     let animT = 0;
+    let shadowFrame = 0;
 
     let contextLost = false;
     const onContextLost = (e: Event) => {
@@ -927,7 +928,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         marker.scale.setScalar(calm ? s : marker.scale.x + (s - marker.scale.x) * Math.min(1, dt * 12));
       }
 
-      renderer.shadowMap.needsUpdate = true;
+      if (shadowFrame % 4 === 0) renderer.shadowMap.needsUpdate = true;
+      shadowFrame += 1;
       renderer.render(scene, camera);
       if (visible && !covered && !document.hidden && !calm) raf = requestAnimationFrame(frame);
     };

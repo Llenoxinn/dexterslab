@@ -23,19 +23,18 @@ type Props = {
   onUnsupported: () => void;
 };
 
-const ABSTRACT_PLACEHOLDER = "Abstract to be provided. This space is reserved for the research question, methodology, principal findings, and conclusions.";
 const JOURNAL_TITLE = "Computational & Experimental Biology";
 
 /** Typeset real manuscript content into a physical page, rather than a screenshot mockup. */
 function manuscriptTexture(study: ResearchEntry, page: "abstract" | "methods" | "cover", font: string) {
   const canvas = document.createElement("canvas");
-  canvas.width = 1536;
-  canvas.height = 2176;
+  canvas.width = 1024;
+  canvas.height = 1450;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("The manuscript could not be drawn.");
   const width = canvas.width;
-  const margin = 138;
-  let y = 130;
+  const margin = 92;
+  let y = 88;
   const ink = page === "cover" ? "#eff2f8" : "#1e293c";
   ctx.fillStyle = page === "cover" ? "#17304f" : "#f8f9fc";
   ctx.fillRect(0, 0, width, canvas.height);
@@ -57,51 +56,48 @@ function manuscriptTexture(study: ResearchEntry, page: "abstract" | "methods" | 
   };
   const rule = () => {
     ctx.strokeStyle = page === "cover" ? "#71839b" : "#b4becd";
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(margin, y); ctx.lineTo(width - margin, y); ctx.stroke(); y += 70;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(margin, y); ctx.lineTo(width - margin, y); ctx.stroke(); y += 46;
   };
 
   if (page === "cover") {
-    y = 210;
-    text("RESEARCH STUDIES", 35, 600, "#b6c4d7", 45);
+    y = 140;
+    text("RESEARCH STUDIES", 24, 600, "#b6c4d7", 30);
     rule();
-    y = 700;
-    text(JOURNAL_TITLE, 112, 600, ink, 100);
-    text(site.name, 52, 400, ink, 25);
-    text("University of the Philippines Cebu", 41, 400, "#c9d2df");
-    y = 1940;
-    text("dexterslab", 40, 400, "#b6c4d7");
+    y = 465;
+    text(JOURNAL_TITLE, 74, 600, ink, 66);
+    text(site.name, 34, 400, ink, 18);
+    text("University of the Philippines Cebu", 27, 400, "#c9d2df");
+    y = 1290;
+    text("dexterslab", 26, 400, "#b6c4d7");
   } else {
-    text(page === "abstract" ? "SCIENTIFIC & COMPUTATIONAL RESEARCH" : "OVERVIEW & METHODS", 27, 600, "#65738a", 0);
+    text(page === "abstract" ? `SCIENTIFIC RESEARCH · ${study.domain.toUpperCase()}` : "METHODS & HIGHLIGHTS", 18, 600, "#65738a", 0);
     rule();
     if (page === "abstract") {
-      text(study.title, study.title.length > 200 ? 54 : 68, 600, ink, 42);
-      text(site.name, 42, 600, ink, 8);
-      text("University of the Philippines Cebu", 35, 400, "#596b82", 78);
-      text("Abstract", 58, 600, ink, 12);
-      text("[Placeholder abstract]", 37, 400, "#6a788d", 16);
-      text(ABSTRACT_PLACEHOLDER, 45, 400, "#65738a", 66);
-      text("Keywords", 44, 600, ink, 14);
-      text(study.tags.join("; "), 38, 400, "#596b82");
+      text(study.title, study.title.length > 200 ? 36 : 44, 600, ink, 28);
+      text(site.name, 28, 600, ink, 6);
+      text("University of the Philippines Cebu", 23, 400, "#596b82", 52);
+      text("Study Overview", 38, 600, ink, 14);
+      text(study.summary, 30, 400, "#314157", 44);
+      text("Modality & Keywords", 28, 600, ink, 10);
+      text(`${study.modality} · ${study.tags.join("; ")}`, 25, 400, "#596b82");
     } else {
-      text("Study overview", 61, 600, ink, 22);
-      text(study.summary, 44, 400, ink, 58);
       for (const highlight of study.highlights) {
-        text(highlight.heading, 47, 600, ink, 16);
-        text(highlight.detail, 43, 400, ink, 54);
+        text(highlight.heading, 31, 600, ink, 10);
+        text(highlight.detail, 28, 400, "#314157", 36);
       }
     }
-    y = 2055;
+    y = 1370;
     rule();
-    ctx.font = `30px ${font}`;
+    ctx.font = `20px ${font}`;
     ctx.fillStyle = "#65738a";
-    ctx.fillText(study.shortName, margin, 2110);
+    ctx.fillText(study.shortName, margin, 1406);
     ctx.textAlign = "right";
-    ctx.fillText(page === "abstract" ? "1" : "2", width - margin, 2110);
+    ctx.fillText(page === "abstract" ? "1" : "2", width - margin, 1406);
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 8;
+  texture.anisotropy = 4;
   return texture;
 }
 
@@ -129,27 +125,28 @@ export function ResearchDeskCanvas(props: Props) {
       renderer.toneMappingExposure = 1.15;
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.shadowMap.autoUpdate = false;
       host.appendChild(renderer.domElement);
       renderer.domElement.setAttribute("aria-label", "3D research journal on a laboratory desk");
       renderer.domElement.style.imageRendering = "auto";
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0x172940);
       scene.fog = new THREE.Fog(0x172940, 15, 34);
-      const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 60);
+      const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 60);
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
-      controls.dampingFactor = 0.09;
+      controls.dampingFactor = 0.085;
       controls.enableZoom = false;
       controls.enablePan = true;
-      controls.minDistance = 3.2;
-      controls.maxDistance = 15;
-      controls.maxPolarAngle = Math.PI * 0.82;
+      controls.minDistance = 2.8;
+      controls.maxDistance = 13;
+      controls.maxPolarAngle = Math.PI * 0.46;
       const coarse = matchMedia("(pointer: coarse)").matches;
       if (coarse) { controls.enableRotate = false; controls.enablePan = false; renderer.domElement.style.touchAction = "pan-y"; }
       const reset = () => {
         const narrow = host.clientWidth < 768;
-        camera.position.set(narrow ? 0 : 0.3, narrow ? 7.8 : 6.4, narrow ? 8.6 : 6.6);
-        controls.target.set(0, 0.85, 0.15);
+        camera.position.set(narrow ? 0 : 0.18, narrow ? 5.2 : 4.35, narrow ? 5.8 : 4.55);
+        controls.target.set(0, 0.96, 0.28);
         controls.update();
       };
       reset();
@@ -231,44 +228,71 @@ export function ResearchDeskCanvas(props: Props) {
       let lastStudy = "";
       let coverAngle = latest.current.open ? Math.PI : 0;
       let turnStarted = -1000;
-      let textures: THREE.Texture[] = [];
+      let shadowDirty = true;
+      const pageCache = new Map<string, [THREE.Texture, THREE.Texture]>();
+      const getPages = (study: ResearchEntry): [THREE.Texture, THREE.Texture] => {
+        const cached = pageCache.get(study.id);
+        if (cached) return cached;
+        const pair: [THREE.Texture, THREE.Texture] = [
+          manuscriptTexture(study, "abstract", family),
+          manuscriptTexture(study, "methods", family),
+        ];
+        pageCache.set(study.id, pair);
+        return pair;
+      };
       const refresh = () => {
         const current = latest.current;
         controls.enableDamping = !calm();
         binding.scale.x = current.open ? 1 : 0.5;
         binding.position.x = current.open ? 0 : 0.895;
-        leftStack.visible = leftPage.visible = current.open;
         if (current.study.id !== lastStudy) {
           const oldRight = methodsMat.map;
-          const nextTextures = [manuscriptTexture(current.study, "abstract", family), manuscriptTexture(current.study, "methods", family)];
+          const nextTextures = getPages(current.study);
           abstractMat.map = nextTextures[0]; methodsMat.map = nextTextures[1];
           abstractMat.needsUpdate = methodsMat.needsUpdate = true;
           if (lastStudy && !calm()) {
-            turnMat.map?.dispose(); turnMat.map = oldRight?.clone() ?? nextTextures[1].clone(); turnMat.needsUpdate = true;
+            turnMat.map = oldRight ?? nextTextures[1];
+            turnMat.needsUpdate = true;
             turnStarted = performance.now();
           }
-          textures.forEach((texture) => texture.dispose()); textures = nextTextures;
           lastStudy = current.study.id;
         }
         if (calm()) coverAngle = current.open ? Math.PI : 0;
+        shadowDirty = true;
         wake();
       };
       syncRef.current = refresh;
 
       let frame = 0; let visible = true; let lastTime = performance.now(); let contextLost = false;
+      const prevCamPos = new THREE.Vector3();
+      const prevTarget = new THREE.Vector3();
       const draw = (now: number) => {
         frame = 0;
         if (contextLost || disposed) return;
         const dt = Math.min(0.08, (now - lastTime) / 1000); lastTime = now;
         const targetAngle = latest.current.open ? Math.PI : 0;
+        const prevAngle = coverAngle;
         coverAngle += (targetAngle - coverAngle) * (calm() ? 1 : 1 - Math.exp(-dt * 9));
+        if (Math.abs(targetAngle - coverAngle) <= 0.001) coverAngle = targetAngle;
         coverPivot.rotation.z = coverAngle;
+        leftStack.visible = leftPage.visible = coverAngle > 0.15;
         const turn = (now - turnStarted) / 650;
-        turnPivot.visible = !calm() && turn >= 0 && turn < 1;
+        const turning = !calm() && turn >= 0 && turn < 1;
+        turnPivot.visible = turning;
         turnPivot.rotation.z = Math.PI * Math.max(0, Math.min(1, turn));
+        prevCamPos.copy(camera.position);
+        prevTarget.copy(controls.target);
         controls.update();
+        if (shadowDirty || Math.abs(coverAngle - prevAngle) > 0.0005) {
+          renderer.shadowMap.needsUpdate = true;
+          shadowDirty = false;
+        }
         renderer.render(scene, camera);
-        if (visible && !document.hidden && (!calm() || Math.abs(coverAngle - targetAngle) > 0.001)) frame = requestAnimationFrame(draw);
+        const camMoving = prevCamPos.distanceToSquared(camera.position) > 1e-7 || prevTarget.distanceToSquared(controls.target) > 1e-7;
+        const coverMoving = Math.abs(coverAngle - targetAngle) > 0.001;
+        if (visible && !document.hidden && (camMoving || coverMoving || turning || drag !== null)) {
+          frame = requestAnimationFrame(draw);
+        }
       };
       const wake = () => { if (!frame && visible && !document.hidden && !contextLost && !disposed) { lastTime = performance.now(); frame = requestAnimationFrame(draw); } };
       const resize = () => { camera.aspect = host.clientWidth / Math.max(1, host.clientHeight); camera.updateProjectionMatrix(); renderer.setSize(host.clientWidth, host.clientHeight); wake(); };
@@ -305,6 +329,7 @@ export function ResearchDeskCanvas(props: Props) {
         if (drag.moved < 5 || !raycaster.ray.intersectPlane(plane, intersection)) return;
         book.position.x = THREE.MathUtils.clamp(intersection.x - drag.offset.x, -1.7, 1.7);
         book.position.z = THREE.MathUtils.clamp(intersection.z - drag.offset.z, -0.85, 1.05);
+        shadowDirty = true;
         wake();
       };
       const up = (event: PointerEvent) => {
@@ -324,11 +349,12 @@ export function ResearchDeskCanvas(props: Props) {
       renderer.domElement.addEventListener("webglcontextlost", onContextLost);
       renderer.domElement.addEventListener("webglcontextrestored", onContextRestored);
       props.api.current = {
-        reset: () => { book.position.set(0, 0.94, 0.25); reset(); wake(); },
-        zoom: (direction) => { const offset = camera.position.clone().sub(controls.target).multiplyScalar(direction > 0 ? 0.82 : 1.22); if (offset.length() >= 3.2 && offset.length() <= 15) camera.position.copy(controls.target).add(offset); controls.update(); wake(); },
+        reset: () => { book.position.set(0, 0.94, 0.25); shadowDirty = true; reset(); wake(); },
+        zoom: (direction) => { const offset = camera.position.clone().sub(controls.target).multiplyScalar(direction > 0 ? 0.82 : 1.22); if (offset.length() >= 2.8 && offset.length() <= 13) camera.position.copy(controls.target).add(offset); controls.update(); wake(); },
         rotate: (direction) => { const offset = camera.position.clone().sub(controls.target).applyAxisAngle(new THREE.Vector3(0, 1, 0), direction * Math.PI / 8); camera.position.copy(controls.target).add(offset); controls.update(); wake(); },
       };
       refresh();
+      renderer.shadowMap.needsUpdate = true;
       renderer.render(scene, camera);
       latest.current.onReady();
       disposeScene = () => {
@@ -339,7 +365,7 @@ export function ResearchDeskCanvas(props: Props) {
         const geometries = new Set<THREE.BufferGeometry>(); const materials = new Set<THREE.Material>();
         scene.traverse((object) => { if (object instanceof THREE.Mesh) { geometries.add(object.geometry); (Array.isArray(object.material) ? object.material : [object.material]).forEach((mat) => materials.add(mat)); } });
         geometries.forEach((geometry) => geometry.dispose()); materials.forEach((mat) => mat.dispose());
-        textures.forEach((texture) => texture.dispose()); coverMat.map?.dispose(); turnMat.map?.dispose(); key.shadow.map?.dispose();
+        pageCache.forEach(([a, b]) => { a.dispose(); b.dispose(); }); pageCache.clear(); coverMat.map?.dispose(); turnMat.map?.dispose(); key.shadow.map?.dispose();
         renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove();
       };
     };

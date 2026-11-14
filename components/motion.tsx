@@ -37,7 +37,7 @@ export function PageMotion() {
       if (!next) return;
       const cleanups: VoidFunction[] = [];
       const finePointer = matchMedia("(hover: hover) and (pointer: fine)");
-      const surfaceSelector = ".about-focus-item, .exp-card, .work-case-stage-link, .gh-repo-card, .finding-item, .contact-channel-block";
+      const surfaceSelector = ".about-focus-item, .exp-card, .finding-item, .contact-channel-block";
       let activeSurface: HTMLElement | null = null;
       let bounds: DOMRect | null = null;
       let frame = 0;

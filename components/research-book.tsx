@@ -33,15 +33,14 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
   const select = (index: number) => { setSelected(index); setOpen(true); };
 
   const manuscript = (titleId: string) => <article className="research-manuscript">
-    <p className="research-manuscript-imprint">Computational &amp; Experimental Biology</p>
+    <p className="research-manuscript-imprint">Computational &amp; Experimental Biology · {study.domain}</p>
     <h3 id={titleId}>{study.title}</h3>
     <p className="research-manuscript-author">{site.name}</p>
     <p className="research-manuscript-affiliation">University of the Philippines Cebu</p>
-    <section className="research-abstract"><h4>Abstract <span>Placeholder</span></h4>
-      <p>Abstract to be provided. This space is reserved for the research question, methodology, principal findings, and conclusions.</p>
+    <section className="research-abstract"><h4>Overview <span>{study.modality}</span></h4>
+      <p>{study.summary}</p>
     </section>
     <p className="research-manuscript-keywords"><strong>Keywords:</strong> {study.tags.join("; ")}</p>
-    <section><h4>Study overview</h4><p>{study.summary}</p></section>
     {study.highlights.map((highlight) => <section key={highlight.heading}><h4>{highlight.heading}</h4><p>{highlight.detail}</p></section>)}
   </article>;
 
