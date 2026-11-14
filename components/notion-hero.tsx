@@ -11,7 +11,16 @@ import { site } from "@/lib/site";
 
 const Lab3DCanvas = dynamic(() => import("@/components/lab-3d-canvas").then((mod) => mod.Lab3DCanvas), {
   ssr: false,
-  loading: () => <div className="lab-loading" role="status">Setting up the lab…</div>,
+  loading: () => (
+    <Image
+      src="/lab-preview.png"
+      className="hero-lab-preview"
+      alt="3D laboratory preview"
+      fill
+      sizes="100vw"
+      priority
+    />
+  ),
 });
 
 const STATIONS: Array<{ id: StationId; label: string }> = [
@@ -45,7 +54,6 @@ export function NotionHero() {
   const [view, setView] = useState<ViewId>("whoami");
   const [station, setStation] = useState<StationId>("overview");
   const [zoomed, setZoomed] = useState(false);
-  const [labActive, setLabActive] = useState(false);
 
   useEffect(() => {
     if (!zoomed) return;
@@ -63,9 +71,7 @@ export function NotionHero() {
   return (
     <div className={`hero-3d-shell ${zoomed ? "is-zoomed" : ""} ${station !== "overview" ? "is-focused" : ""}`}>
       {/* The whole hero is the lab: the canvas fills the section and the copy sits on top of it. */}
-      {labActive
-        ? <Lab3DCanvas station={station} onStationChange={setStation} zoomed={zoomed} onZoomChange={setZoomed} />
-        : <Image src="/lab-preview.png" className="hero-lab-preview" alt="Christmas laboratory with a decorated tree, warm fairy lights, and a computer terminal." fill sizes="100vw" preload />}
+      <Lab3DCanvas station={station} onStationChange={setStation} zoomed={zoomed} onZoomChange={setZoomed} />
 
       <div className="wrap hero-3d-hud">
         <div className="hero-3d-top">
@@ -91,12 +97,12 @@ export function NotionHero() {
             </div>
           </div>
 
-          {labActive && <p className="hero-3d-cue">Drag to look around. Scroll to zoom. Click the equipment.</p>}
+          <p className="hero-3d-cue">Drag to look around. Scroll to zoom. Click the equipment.</p>
         </div>
 
         <div className="hero-3d-bottom">
           <div className="lab-3d-controls" role="group" aria-label="Fly to a lab station">
-            {!labActive ? <button type="button" className="ndev-specimen-btn" onClick={() => setLabActive(true)}>Explore in 3D</button> : STATIONS.map((item) => (
+            {STATIONS.map((item) => (
               <button
                 key={item.id}
                 type="button"
