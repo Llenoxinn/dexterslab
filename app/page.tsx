@@ -2,6 +2,7 @@ import { AchievementsSection } from "@/components/achievements-section";
 import { ContactSection } from "@/components/contact-section";
 import { ExperienceSection } from "@/components/experience-section";
 import { GitHubSection } from "@/components/github-section";
+import { LabInterlude } from "@/components/lab-interlude";
 import { MethodSection } from "@/components/method-section";
 import { PageMotion } from "@/components/motion";
 import { NotionHero } from "@/components/notion-hero";
@@ -23,6 +24,8 @@ export default function Home() {
         <div className="hero on-ink">
           <NotionHero />
         </div>
+
+        <LabInterlude />
 
         <div data-sheet className="sheet rails">
           <PixelEdge />
