@@ -24,10 +24,15 @@ export function ProjectSlotMachine<T extends { slug: string; name: string }>({
   const timers = useRef<number[]>([]);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
+  if (count === 0) return null;
+
   const active = position % count;
   const next = items[(active + 1) % count];
 
   const land = (pos: number) => {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+    setPulled(false);
     setRolling(false);
     if (pos >= 2 * count) {
       setAnimate(false);
@@ -42,7 +47,7 @@ export function ProjectSlotMachine<T extends { slug: string; name: string }>({
     const target = position + 1;
     setPulled(true);
     timers.current.push(window.setTimeout(() => setPulled(false), 340));
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.labFx === "calm";
     setRolling(!reduce);
     setPosition(target);
     if (reduce) land(target);
@@ -62,6 +67,9 @@ export function ProjectSlotMachine<T extends { slug: string; name: string }>({
         </div>
         <div
           className="reel-track"
+          onTransitionEnd={(event) => {
+            if (event.target === event.currentTarget && event.propertyName === "transform" && rolling) land(position);
+          }}
           style={{
             height: `${cards.length * 100}%`,
             gridTemplateRows: `repeat(${cards.length}, 1fr)`,
@@ -81,6 +89,7 @@ export function ProjectSlotMachine<T extends { slug: string; name: string }>({
         type="button"
         className={`slot-lever ${pulled ? "is-pulled" : ""}`}
         onClick={pull}
+        aria-disabled={rolling || count < 2}
         aria-label={`Pull the lever to show ${next.name}`}
       >
         <span className="slot-lever-stick" aria-hidden="true">
