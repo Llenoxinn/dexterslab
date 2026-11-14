@@ -87,42 +87,38 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
   const manuscript = (entry: ResearchEntry, titleId: string, index: number) => (
     <article className="research-manuscript">
       <header className="research-manuscript-head">
-        <div className="research-manuscript-meta-row">
-          <span className="research-manuscript-modality">{entry.modality}</span>
-          <span className="research-manuscript-domain">{entry.domain}</span>
-        </div>
+        <p className="research-manuscript-domain">{entry.domain}</p>
         <h3 id={titleId}>{entry.title}</h3>
-        <p className="research-manuscript-byline">
-          <strong>{site.name}</strong>
+        <div className="research-manuscript-byline">
+          <span>{site.name}</span>
+          <span aria-hidden="true">·</span>
           <span>University of the Philippines Cebu</span>
-        </p>
+          <span aria-hidden="true">·</span>
+          <span>{entry.modality}</span>
+        </div>
       </header>
 
-      <section className="research-abstract">
-        <h4>Study Overview</h4>
-        <p>{entry.summary}</p>
-      </section>
+      <div className="research-manuscript-columns">
+        <div className="research-manuscript-aside">
+          <section className="research-abstract">
+            <h4>Overview</h4>
+            <p>{entry.summary}</p>
+          </section>
+          <section className="research-keywords-block" aria-label="Keywords">
+            <h4>Keywords</h4>
+            <p className="research-keywords-list">{entry.tags.join(" · ")}</p>
+          </section>
+        </div>
 
-      <div className="research-highlights-grid">
-        {entry.highlights.map((highlight, idx) => (
-          <section key={highlight.heading} className="research-highlight-card">
-            <span className="research-highlight-index">0{idx + 1}</span>
-            <div>
+        <div className="research-manuscript-main">
+          {entry.highlights.map((highlight) => (
+            <section key={highlight.heading} className="research-highlight-item">
               <h4>{highlight.heading}</h4>
               <p>{highlight.detail}</p>
-            </div>
-          </section>
-        ))}
-      </div>
-
-      <section className="research-keywords-block" aria-label="Keywords">
-        <h4>Keywords</h4>
-        <ul className="research-keyword-chips">
-          {entry.tags.map((tag) => (
-            <li key={tag}>{tag}</li>
+            </section>
           ))}
-        </ul>
-      </section>
+        </div>
+      </div>
       <span className="sr-only">Study {index + 1} of {studies.length}</span>
     </article>
   );
