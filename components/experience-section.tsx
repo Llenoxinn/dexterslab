@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { education, experience, formatDuration } from "@/lib/content";
 
 const ORG_FOCUS: Record<string, string> = {
@@ -20,14 +19,7 @@ function orgSpanLabel(roles: (typeof experience)[number]["roles"]) {
 }
 
 export function ExperienceSection() {
-  const [filter, setFilter] = useState<"all" | "active">("all");
-
-  const entries = experience
-    .map((org) => ({
-      ...org,
-      roles: filter === "active" ? org.roles.filter((r) => r.end === "present") : org.roles,
-    }))
-    .filter((org) => org.roles.length > 0);
+  const entries = experience;
 
   return (
     <section id="experience" className="wrap lab-section" aria-labelledby="experience-title">
@@ -39,24 +31,6 @@ export function ExperienceSection() {
           <p className="section-intro">
             Org roles at UP Cebu: technical, creative and leadership.
           </p>
-        </div>
-        <div className="exp-tabs" role="group" aria-label="Filter experience">
-          <button
-            type="button"
-            className={`exp-tab ${filter === "all" ? "is-active" : ""}`}
-            aria-pressed={filter === "all"}
-            onClick={() => setFilter("all")}
-          >
-            All ({experience.length})
-          </button>
-          <button
-            type="button"
-            className={`exp-tab ${filter === "active" ? "is-active" : ""}`}
-            aria-pressed={filter === "active"}
-            onClick={() => setFilter("active")}
-          >
-            Active
-          </button>
         </div>
       </div>
 

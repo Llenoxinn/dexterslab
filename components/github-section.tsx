@@ -17,7 +17,6 @@ export function GitHubSection() {
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [attempt, setAttempt] = useState(0);
   const readoutRef = useRef<HTMLParagraphElement>(null);
-  const [filter, setFilter] = useState<"all" | "shipped" | "in progress">("all");
   const [inView, setInView] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
 
@@ -69,10 +68,7 @@ export function GitHubSection() {
     if (readoutRef.current) readoutRef.current.textContent = `${day.count} contributions on ${day.date}`;
   };
 
-  const visibleProjects =
-    filter === "all"
-      ? githubProjects
-      : githubProjects.filter((item) => item.status === filter);
+  const visibleProjects = githubProjects;
 
   return (
     <section
@@ -87,7 +83,7 @@ export function GitHubSection() {
             More from GitHub
           </h2>
           <p className="section-intro">
-            Daily commits, mathematical playgrounds, bioinformatics visualizers, and systems in progress on{" "}
+            Smaller experiments, visualizers and tools, all on{" "}
             <a className="btn-inline-link" href={site.github} target="_blank" rel="noreferrer">
               @{GITHUB_USER}
             </a>
@@ -95,32 +91,6 @@ export function GitHubSection() {
           </p>
         </div>
 
-        <div className="filter-pills" role="group" aria-label="Filter GitHub projects by status">
-          <button
-            type="button"
-            className={`filter-pill ${filter === "all" ? "is-active" : ""}`}
-            aria-pressed={filter === "all"}
-            onClick={() => setFilter("all")}
-          >
-            All ({githubProjects.length})
-          </button>
-          <button
-            type="button"
-            className={`filter-pill ${filter === "shipped" ? "is-active" : ""}`}
-            aria-pressed={filter === "shipped"}
-            onClick={() => setFilter("shipped")}
-          >
-            Shipped
-          </button>
-          <button
-            type="button"
-            className={`filter-pill ${filter === "in progress" ? "is-active" : ""}`}
-            aria-pressed={filter === "in progress"}
-            onClick={() => setFilter("in progress")}
-          >
-            Work in progress
-          </button>
-        </div>
       </div>
 
       <div className="gh-card" aria-busy={loadState === "loading"}>
@@ -130,7 +100,6 @@ export function GitHubSection() {
               : loadState === "loading" ? "Loading GitHub activity…" : "GitHub activity is unavailable"}
           </p>
           {loadState === "ready" && <p ref={readoutRef} className="gh-hover-readout">
-            Hover or tap a cell to inspect
           </p>}
         </div>
         {loadState === "ready" ? <div className="gh-graph-scroll" role="group" aria-label="GitHub contributions. Use arrow keys to inspect days."
@@ -228,13 +197,7 @@ export function GitHubSection() {
                     </span>
                     <span className="gh-showcase-path">{repo.repoName}</span>
                   </div>
-                  <span
-                    className={`spec-status ${
-                      repo.status === "in progress" ? "spec-status--in-progress" : "spec-status--shipped"
-                    }`}
-                  >
-                    {repo.status === "in progress" ? "Work in progress" : "Shipped"}
-                  </span>
+                  {repo.status === "in progress" && <span className="gh-repo-wip">In progress</span>}
                 </div>
 
                 <p className="gh-repo-desc">{repo.description}</p>

@@ -321,16 +321,6 @@ export function ContactSection() {
             onClick={triggerJump}
             aria-hidden="true"
           >
-            <div className="contact-stage-topbar">
-              <span className="contact-stage-dots">
-                <span />
-                <span />
-                <span />
-              </span>
-              <span className="contact-stage-title">lab://courier-bench</span>
-              <span className={`contact-stage-led ${firstError ? "is-alert" : "is-ready"}`} />
-            </div>
-
             <div className="contact-stage-viewport">
               <div
                 key={bubbleText}
@@ -408,10 +398,6 @@ export function ContactSection() {
               <div className="contact-bench-floor" />
             </div>
 
-            <div className="contact-stage-foot">
-              <span>Click bench to test</span>
-              <span>{firstError ? "Status: awaiting input" : sentState === "sent" ? "Status: draft ready" : "Status: standing by"}</span>
-            </div>
           </div>
         </aside>
       </div>
