@@ -6,6 +6,9 @@ import { Modal } from "@/components/modal";
 import type { ResearchEntry } from "@/lib/content";
 import { site } from "@/lib/site";
 
+// Keep in sync with FLIP_MID in research-desk-canvas.tsx (not imported to keep three.js out of this chunk).
+const FLIP_MID = 0.225;
+
 const ResearchDeskCanvas = dynamic(
   () => import("@/components/research-desk-canvas").then((module) => module.ResearchDeskCanvas),
   { ssr: false },
@@ -70,7 +73,7 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
       if (scrollable <= 0) return;
       const clamped = Math.max(0, Math.min(studies.length - 1, index));
       const readingT = (clamped + 0.35) / Math.max(1, studies.length);
-      const targetP = 0.14 + readingT * (0.90 - 0.14);
+      const targetP = 0.14 + readingT * (0.94 - 0.14);
       const trackTop = track.getBoundingClientRect().top + window.scrollY;
       window.scrollTo({ top: trackTop + targetP * scrollable, behavior: "smooth" });
     },
@@ -79,47 +82,51 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
 
   if (!studies.length) return null;
 
-  const readingT = Math.min(0.999, Math.max(0, (progress - 0.14) / (0.90 - 0.14)));
-  const activeIndex = Math.min(studies.length - 1, Math.floor(readingT * studies.length));
+  const readingT = Math.min(0.999, Math.max(0, (progress - 0.14) / (0.94 - 0.14)));
+  const activeIndex = Math.min(studies.length - 1, Math.floor(readingT * studies.length + FLIP_MID));
   const modalIndex = readingIndex ?? activeIndex;
   const modalStudy = studies[modalIndex] ?? studies[0];
 
   const manuscript = (entry: ResearchEntry, titleId: string, index: number) => (
-    <article className="research-manuscript">
-      <header className="research-manuscript-head">
-        <p className="research-manuscript-domain">{entry.domain}</p>
-        <h3 id={titleId}>{entry.title}</h3>
-        <div className="research-manuscript-byline">
-          <span>{site.name}</span>
-          <span aria-hidden="true">·</span>
-          <span>University of the Philippines Cebu</span>
-          <span aria-hidden="true">·</span>
-          <span>{entry.modality}</span>
+    <article className="nb-entry">
+      <header className="nb-head">
+        <div className="nb-meta">
+          <span className="nb-stamp">{entry.modality}</span>
+          <span className="nb-domain">{entry.domain}</span>
         </div>
+        <h3 id={titleId} className="nb-title">
+          {entry.shortName}
+        </h3>
+        <p className="nb-fulltitle">{entry.title}</p>
+        <p className="nb-byline">
+          {site.name} · University of the Philippines Cebu
+        </p>
       </header>
 
-      <div className="research-manuscript-columns">
-        <div className="research-manuscript-aside">
-          <section className="research-abstract">
-            <h4>Overview</h4>
-            <p>{entry.summary}</p>
-          </section>
-          <section className="research-keywords-block" aria-label="Keywords">
-            <h4>Keywords</h4>
-            <p className="research-keywords-list">{entry.tags.join(" · ")}</p>
-          </section>
-        </div>
+      <p className="nb-lead">{entry.summary}</p>
 
-        <div className="research-manuscript-main">
-          {entry.highlights.map((highlight) => (
-            <section key={highlight.heading} className="research-highlight-item">
+      <ol className="nb-steps" aria-label="Methods and findings">
+        {entry.highlights.map((highlight, step) => (
+          <li key={highlight.heading} className="nb-step">
+            <span className="nb-step-num" aria-hidden="true">
+              {String(step + 1).padStart(2, "0")}
+            </span>
+            <div>
               <h4>{highlight.heading}</h4>
               <p>{highlight.detail}</p>
-            </section>
-          ))}
-        </div>
-      </div>
-      <span className="sr-only">Study {index + 1} of {studies.length}</span>
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      <ul className="nb-tags" aria-label="Keywords">
+        {entry.tags.map((tag) => (
+          <li key={tag}>{tag}</li>
+        ))}
+      </ul>
+      <span className="sr-only">
+        Entry {index + 1} of {studies.length}
+      </span>
     </article>
   );
 
@@ -166,42 +173,51 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
         {!unsupported && (
           <div className="wrap research-desk-hud">
             <div className="research-hud-dock">
-              <nav className="research-study-tabs" aria-label="Jump to research study">
+              <div className="research-hud-now">
+                <span className="research-hud-entry">
+                  Entry {String(activeIndex + 1).padStart(2, "0")}/{String(studies.length).padStart(2, "0")}
+                </span>
+                <span className="research-hud-title" aria-live="polite">
+                  {studies[activeIndex].shortName}
+                </span>
+              </div>
+
+              <nav className="research-hud-jump" aria-label="Jump to research entry">
+                <button
+                  type="button"
+                  className="research-hud-arrow"
+                  aria-label="Previous entry"
+                  disabled={activeIndex === 0}
+                  onClick={() => scrollToStudy(activeIndex - 1)}
+                >
+                  ‹
+                </button>
                 {studies.map((paper, index) => (
                   <button
                     key={paper.id}
                     type="button"
-                    aria-pressed={activeIndex === index}
-                    className={activeIndex === index ? "is-selected" : ""}
+                    className="research-hud-pip"
+                    aria-label={paper.shortName}
+                    aria-current={activeIndex === index ? "true" : undefined}
                     onClick={() => scrollToStudy(index)}
-                  >
-                    {paper.shortName}
-                  </button>
+                  />
                 ))}
+                <button
+                  type="button"
+                  className="research-hud-arrow"
+                  aria-label="Next entry"
+                  disabled={activeIndex === studies.length - 1}
+                  onClick={() => scrollToStudy(activeIndex + 1)}
+                >
+                  ›
+                </button>
               </nav>
 
-              <span className="research-hud-divider" aria-hidden="true" />
-
-              <div className="research-hud-progress" aria-label={`Study ${activeIndex + 1} of ${studies.length}`}>
-                <span role="status">
-                  {activeIndex + 1}/{studies.length}
-                </span>
-                <div className="research-scroll-meter" aria-hidden="true">
-                  <span style={{ transform: `scaleX(${progress})` }} />
-                </div>
-              </div>
-
-              <span className="research-hud-divider" aria-hidden="true" />
-
-              <button
-                type="button"
-                className="research-read-button"
-                onClick={() => setReadingIndex(activeIndex)}
-              >
-                Read manuscript
+              <button type="button" className="research-read-button" onClick={() => setReadingIndex(activeIndex)}>
+                Read entry
               </button>
             </div>
-            <p className="research-desk-hint">Scroll to open and turn pages · Click the book to read</p>
+            <p className="research-desk-hint">Scroll to turn the pages · Click the notebook to read</p>
           </div>
         )}
       </div>
@@ -212,40 +228,50 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
           labelledBy="research-manuscript-title"
           onClose={() => setReadingIndex(null)}
         >
-          <div className="research-reader-shell">
+          <div
+            className="research-reader-shell"
+            onKeyDown={(event) => {
+              // Arrow keys page through entries, like turning the notebook.
+              if (event.key === "ArrowRight") setReadingIndex((modalIndex + 1) % studies.length);
+              if (event.key === "ArrowLeft") setReadingIndex((modalIndex + studies.length - 1) % studies.length);
+            }}
+          >
             <div className="research-reader-topbar">
               <span className="research-reader-counter">
-                Research Monograph · Study 0{modalIndex + 1} / 0{studies.length}
+                Lab notebook · Entry {String(modalIndex + 1).padStart(2, "0")}/{String(studies.length).padStart(2, "0")}
               </span>
               <button
                 type="button"
                 className="research-reader-close"
                 onClick={() => setReadingIndex(null)}
-                aria-label="Close research paper"
+                aria-label="Close entry"
               >
-                Close ×
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M3.5 3.5l9 9m0-9l-9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="square" />
+                </svg>
               </button>
             </div>
-            <div className="research-reader-body">
+            <div className="research-reader-body" key={modalStudy.id}>
               {manuscript(modalStudy, "research-manuscript-title", modalIndex)}
             </div>
-            <nav className="research-reader-pagination" aria-label="Read another study">
-              <button
-                type="button"
-                onClick={() => setReadingIndex((modalIndex + studies.length - 1) % studies.length)}
-              >
-                ← Previous study
-              </button>
-              <span>
-                {modalIndex + 1} / {studies.length}
-              </span>
-              <button
-                type="button"
-                onClick={() => setReadingIndex((modalIndex + 1) % studies.length)}
-              >
-                Next study →
-              </button>
-            </nav>
+            {studies.length > 1 && (
+              <nav className="research-reader-pagination" aria-label="Other entries">
+                <button type="button" onClick={() => setReadingIndex((modalIndex + studies.length - 1) % studies.length)}>
+                  <span aria-hidden="true">←</span>
+                  <span className="research-reader-page-label">
+                    <small>Previous</small>
+                    {studies[(modalIndex + studies.length - 1) % studies.length].shortName}
+                  </span>
+                </button>
+                <button type="button" className="is-next" onClick={() => setReadingIndex((modalIndex + 1) % studies.length)}>
+                  <span className="research-reader-page-label">
+                    <small>Next</small>
+                    {studies[(modalIndex + 1) % studies.length].shortName}
+                  </span>
+                  <span aria-hidden="true">→</span>
+                </button>
+              </nav>
+            )}
           </div>
         </Modal>
       )}

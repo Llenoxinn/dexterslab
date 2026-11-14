@@ -14,244 +14,378 @@ type Props = {
   onUnsupported: () => void;
 };
 
-const JOURNAL_TITLE = "Computational & Experimental Biology";
+/* ── Scroll choreography (shared with research-book.tsx) ───────────────── */
+const OPEN_END = 0.14;
+const READ_END = 0.94;
+/** Within each study's scroll slot the leaf turns over local 0.55 → 1; past its midpoint the next study is "current". */
+const FLIP_START = 0.55;
+const FLIP_MID = 1 - (1 + FLIP_START) / 2;
 
-function smoothstep(edge0: number, edge1: number, x: number) {
-  const t = THREE.MathUtils.clamp((x - edge0) / (edge1 - edge0), 0, 1);
+/* ── Book dimensions (world units) ─────────────────────────────────────── */
+const PAGE_W = 1.72; // page width, spine → fore-edge (x)
+const PAGE_D = 2.36; // page height on the desk (z)
+const BOARD_W = 1.8;
+const BOARD_D = 2.48;
+const BOARD_T = 0.04;
+const BLOCK_T = 0.06; // paper block thickness per side
+const SEG = 32;
+
+/* ── Palette: Dexter's-lab night blues, warm spotlight, parol accents ──── */
+const BG = 0x0a0f33;
+const CLOTH = 0x1a1f8c;
+const PAPER = "#f5f0e3";
+const GRID = "rgba(70, 92, 190, 0.13)";
+const INK = "#1313ba";
+const TEXT = "#1a1f3d";
+const MUTED = "#535a7a";
+
+const smoothstep = (a: number, b: number, x: number) => {
+  const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1);
   return t * t * (3 - 2 * t);
+};
+
+/** Height profile of an open page: dips into the gutter, swells, then settles at the fore-edge. */
+const bulge = (raw: number) => { const u = THREE.MathUtils.clamp(raw, 0, 1); return 0.05 * Math.sin(Math.PI * Math.pow(u, 0.55)) * (1 - 0.3 * u) - 0.022 * Math.pow(1 - u, 6); };
+const bulgeSlope = (u: number) => {
+  const h = 1 / SEG;
+  return Math.atan((bulge(Math.min(1, u + h)) - bulge(Math.max(0, u - h))) / (2 * h * PAGE_W));
+};
+
+/* ── Canvas typesetting ────────────────────────────────────────────────── */
+type Fonts = { body: string; heading: string; pixel: string };
+
+function paperCanvas() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1200;
+  canvas.height = 1646; // matches PAGE_W : PAGE_D
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas 2D is unavailable.");
+  return { canvas, ctx };
 }
 
-/** Typeset real manuscript content onto a physical page using the portfolio's loaded fonts. */
-function manuscriptTexture(
+function graphPaper(ctx: CanvasRenderingContext2D, side: "left" | "right") {
+  const { width, height } = ctx.canvas;
+  ctx.fillStyle = PAPER;
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = GRID;
+  ctx.lineWidth = 1.5;
+  for (let x = 40; x < width; x += 40) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  for (let y = 40; y < height; y += 40) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+  // Gutter shade so the spread reads as bound paper, not two tiles.
+  const gx = side === "left" ? width : 0;
+  const gutter = ctx.createLinearGradient(gx, 0, side === "left" ? width - 150 : 150, 0);
+  gutter.addColorStop(0, "rgba(20, 24, 60, 0.22)");
+  gutter.addColorStop(1, "rgba(20, 24, 60, 0)");
+  ctx.fillStyle = gutter;
+  ctx.fillRect(side === "left" ? width - 150 : 0, 0, 150, height);
+}
+
+function writer(ctx: CanvasRenderingContext2D, x: number, maxWidth: number) {
+  let y = 0;
+  return {
+    get y() {
+      return y;
+    },
+    set y(v: number) {
+      y = v;
+    },
+    text(value: string, size: number, weight: number, family: string, colour: string, lineHeight = 1.42, after = 0) {
+      ctx.font = `${weight} ${size}px ${family}`;
+      ctx.fillStyle = colour;
+      ctx.textBaseline = "alphabetic";
+      let line = "";
+      for (const word of value.split(/\s+/)) {
+        const next = line ? `${line} ${word}` : word;
+        if (line && ctx.measureText(next).width > maxWidth) {
+          y += size;
+          ctx.fillText(line, x, y);
+          y += size * (lineHeight - 1);
+          line = word;
+        } else line = next;
+      }
+      if (line) {
+        y += size;
+        ctx.fillText(line, x, y);
+        y += size * (lineHeight - 1);
+      }
+      y += after;
+    },
+    rule(colour: string, width = 2, after = 28) {
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + maxWidth, y);
+      ctx.stroke();
+      y += after;
+    },
+  };
+}
+
+function toTexture(canvas: HTMLCanvasElement, renderer: THREE.WebGLRenderer) {
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return texture;
+}
+
+function pageTexture(
   study: ResearchEntry,
-  page: "abstract" | "methods" | "cover",
-  headingFont: string,
-  bodyFont: string,
+  index: number,
+  total: number,
+  side: "left" | "right",
+  fonts: Fonts,
+  renderer: THREE.WebGLRenderer,
 ) {
+  const { canvas, ctx } = paperCanvas();
+  graphPaper(ctx, side);
+  const margin = side === "left" ? 104 : 124;
+  const w = writer(ctx, margin, canvas.width - 228);
+
+  // Running head
+  w.y = 70;
+  ctx.font = `600 22px ${fonts.body}`;
+  ctx.fillStyle = MUTED;
+  ctx.fillText(side === "left" ? `LAB NOTEBOOK · ENTRY 0${index + 1}` : "METHODS & FINDINGS", margin, 96);
+  ctx.textAlign = "right";
+  ctx.fillText(`0${index + 1} / 0${total}`, canvas.width - 104, 96);
+  ctx.textAlign = "left";
+  w.y = 124;
+  w.rule("rgba(19, 19, 186, 0.35)", 2, 48);
+
+  if (side === "left") {
+    // Modality stamp
+    ctx.font = `600 22px ${fonts.body}`;
+    const stamp = study.modality.toUpperCase();
+    const sw = ctx.measureText(stamp).width + 32;
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(margin, w.y, sw, 42);
+    ctx.fillStyle = INK;
+    ctx.fillText(stamp, margin + 16, w.y + 29);
+    w.y += 76;
+
+    w.text(study.shortName, 62, 700, fonts.heading, INK, 1.12, 22);
+    w.text(study.title, study.title.length > 160 ? 25 : 29, 600, fonts.body, TEXT, 1.4, 34);
+    w.rule("rgba(26, 31, 61, 0.2)", 2, 38);
+    w.text("OVERVIEW", 22, 700, fonts.body, INK, 1.2, 14);
+    w.text(study.summary, 31, 400, fonts.body, TEXT, 1.5, 38);
+    w.text("KEYWORDS", 22, 700, fonts.body, INK, 1.2, 14);
+    w.text(study.tags.join(" · "), 25, 500, fonts.body, MUTED, 1.5, 0);
+  } else {
+    study.highlights.forEach((highlight, i) => {
+      w.text(`${String(i + 1).padStart(2, "0")}  ${highlight.heading}`, 34, 700, fonts.heading, INK, 1.25, 16);
+      w.text(highlight.detail, 30, 400, fonts.body, TEXT, 1.52, 46);
+    });
+    // A hand-drawn margin note in the lab-notebook spirit.
+    if (w.y < 1300) {
+      w.y = Math.max(w.y, 1240);
+      w.rule("rgba(26, 31, 61, 0.2)", 2, 34);
+      w.text(`${site.name} · UP Cebu`, 24, 600, fonts.body, MUTED, 1.3, 6);
+      w.text("Click the notebook to read the full entry.", 24, 400, fonts.body, MUTED, 1.3, 0);
+    }
+  }
+
+  // Folio
+  ctx.font = `500 22px ${fonts.body}`;
+  ctx.fillStyle = MUTED;
+  ctx.textAlign = side === "left" ? "left" : "right";
+  ctx.fillText(String(index * 2 + (side === "left" ? 1 : 2)), side === "left" ? margin : canvas.width - 104, 1586);
+  ctx.textAlign = "left";
+  return toTexture(canvas, renderer);
+}
+
+function coverTexture(fonts: Fonts, renderer: THREE.WebGLRenderer) {
   const canvas = document.createElement("canvas");
   canvas.width = 1024;
-  canvas.height = 1448;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("The manuscript could not be drawn.");
-
-  const width = canvas.width;
-  const height = canvas.height;
-  const margin = 84;
-  const contentWidth = width - margin * 2;
-  let y = 84;
-
-  const isCover = page === "cover";
-  ctx.fillStyle = isCover ? "#121f38" : "#f3efe6";
-  ctx.fillRect(0, 0, width, height);
-
-  if (isCover) {
-    ctx.strokeStyle = "#cfa95e";
-    ctx.lineWidth = 3.5;
-    ctx.strokeRect(48, 48, width - 96, height - 96);
-    ctx.strokeStyle = "rgba(207, 169, 94, 0.35)";
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(64, 64, width - 128, height - 128);
-  } else {
-    // Subtle inner-gutter shadow so the two pages feel bound into a real spine.
-    const gutter = ctx.createLinearGradient(
-      page === "abstract" ? width - 88 : 0,
-      0,
-      page === "abstract" ? width : 88,
-      0,
-    );
-    if (page === "abstract") {
-      gutter.addColorStop(0, "rgba(15, 24, 42, 0)");
-      gutter.addColorStop(1, "rgba(15, 24, 42, 0.10)");
-      ctx.fillStyle = gutter;
-      ctx.fillRect(width - 88, 0, 88, height);
-    } else {
-      gutter.addColorStop(0, "rgba(15, 24, 42, 0.10)");
-      gutter.addColorStop(1, "rgba(15, 24, 42, 0)");
-      ctx.fillStyle = gutter;
-      ctx.fillRect(0, 0, 88, height);
-    }
+  canvas.height = 1411;
+  const ctx = canvas.getContext("2d")!;
+  // Book cloth with a faint woven grain.
+  ctx.fillStyle = "#1a1f8c";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < canvas.height; y += 3) {
+    ctx.fillStyle = y % 6 === 0 ? "rgba(255,255,255,0.025)" : "rgba(0,0,30,0.05)";
+    ctx.fillRect(0, y, canvas.width, 1);
   }
+  // Composition-style paper label.
+  const lx = 150;
+  const ly = 330;
+  const lw = canvas.width - 300;
+  const lh = 470;
+  ctx.fillStyle = PAPER;
+  ctx.beginPath();
+  ctx.roundRect(lx, ly, lw, lh, 22);
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.roundRect(lx + 18, ly + 18, lw - 36, lh - 36, 12);
+  ctx.stroke();
 
-  const drawWrapped = (
-    value: string,
-    size: number,
-    weight: number,
-    fontFamily: string,
-    colour: string,
-    lineHeight = 1.44,
-    gapAfter = 0,
-  ) => {
-    ctx.font = `${weight} ${size}px ${fontFamily}`;
-    ctx.fillStyle = colour;
-    const words = value.split(/\s+/);
-    let line = "";
-    for (const word of words) {
-      const next = line ? `${line} ${word}` : word;
-      if (ctx.measureText(next).width > contentWidth && line) {
-        ctx.fillText(line, margin, y);
-        y += size * lineHeight;
-        line = word;
-      } else {
-        line = next;
-      }
-    }
-    if (line) {
-      ctx.fillText(line, margin, y);
-      y += size * lineHeight;
-    }
-    y += gapAfter;
-  };
+  ctx.textAlign = "center";
+  ctx.fillStyle = INK;
+  ctx.font = `700 88px ${fonts.pixel}`;
+  ctx.fillText("LAB", canvas.width / 2, ly + 150);
+  ctx.fillText("NOTEBOOK", canvas.width / 2, ly + 240);
+  ctx.font = `600 30px ${fonts.body}`;
+  ctx.fillStyle = TEXT;
+  ctx.fillText("Computational & Experimental Biology", canvas.width / 2, ly + 320);
+  ctx.strokeStyle = "rgba(19,19,186,0.3)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(lx + 90, ly + 360);
+  ctx.lineTo(lx + lw - 90, ly + 360);
+  ctx.stroke();
+  ctx.font = `500 28px ${fonts.body}`;
+  ctx.fillStyle = MUTED;
+  ctx.fillText(`${site.name} · Vol. 01`, canvas.width / 2, ly + 410);
 
-  const drawRule = (color = isCover ? "#cfa95e" : "#c5bfb2", thickness = isCover ? 2 : 1.5, gap = 38) => {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = thickness;
-    ctx.beginPath();
-    ctx.moveTo(margin, y);
-    ctx.lineTo(width - margin, y);
-    ctx.stroke();
-    y += gap;
-  };
-
-  if (isCover) {
-    y = 148;
-    drawWrapped("RESEARCH MONOGRAPH", 22, 600, bodyFont, "#dfc07c", 1.3, 24);
-    drawRule("#cfa95e", 2, 48);
-    y = 430;
-    drawWrapped(JOURNAL_TITLE, 68, 700, headingFont, "#f6ebd0", 1.16, 48);
-    drawWrapped(site.name, 30, 600, bodyFont, "#e6edf9", 1.35, 10);
-    drawWrapped("University of the Philippines Cebu", 24, 400, bodyFont, "#9fb3d1", 1.35, 0);
-    y = 1288;
-    drawRule("rgba(207, 169, 94, 0.45)", 1.5, 34);
-    drawWrapped("VOL. I · DEXTER'S LAB", 20, 600, bodyFont, "#dfc07c", 1.2, 0);
-  } else {
-    const ink = "#0f172a";
-    const muted = "#475569";
-    const accent = "#1313ba";
-
-    // Running header
-    ctx.font = `600 18px ${bodyFont}`;
-    ctx.fillStyle = muted;
-    ctx.fillText(
-      page === "abstract" ? `RESEARCH · ${study.domain.toUpperCase()}` : "METHODS & EXPERIMENTAL HIGHLIGHTS",
-      margin,
-      y,
-    );
-    y += 22;
-    drawRule("#cbc4b6", 1.5, 42);
-
-    if (page === "abstract") {
-      // Modality badge
-      ctx.font = `600 18px ${bodyFont}`;
-      const badgeText = study.modality.toUpperCase();
-      const badgeW = ctx.measureText(badgeText).width + 26;
-      ctx.fillStyle = "rgba(19, 19, 186, 0.08)";
-      ctx.fillRect(margin, y - 22, badgeW, 34);
-      ctx.strokeStyle = "rgba(19, 19, 186, 0.35)";
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(margin, y - 22, badgeW, 34);
-      ctx.fillStyle = accent;
-      ctx.fillText(badgeText, margin + 13, y + 1);
-      y += 46;
-
-      drawWrapped(
-        study.title,
-        study.title.length > 180 ? 34 : 40,
-        700,
-        headingFont,
-        ink,
-        1.25,
-        24,
-      );
-      drawWrapped(site.name, 26, 600, bodyFont, ink, 1.35, 4);
-      drawWrapped("University of the Philippines Cebu", 22, 400, bodyFont, muted, 1.35, 36);
-
-      drawRule("#cbc4b6", 1.5, 38);
-
-      drawWrapped("STUDY OVERVIEW", 20, 700, bodyFont, accent, 1.3, 14);
-      drawWrapped(study.summary, 28, 400, bodyFont, "#1e293b", 1.52, 34);
-
-      drawWrapped("KEYWORDS", 18, 700, bodyFont, muted, 1.3, 12);
-      drawWrapped(study.tags.join("  ·  "), 22, 500, bodyFont, "#334155", 1.45, 0);
-    } else {
-      for (let i = 0; i < study.highlights.length; i++) {
-        const highlight = study.highlights[i];
-        drawWrapped(`0${i + 1} · ${highlight.heading.toUpperCase()}`, 22, 700, bodyFont, accent, 1.3, 14);
-        drawWrapped(highlight.detail, 28, 400, bodyFont, "#1e293b", 1.52, 42);
-      }
-
-      if (y < 1180) {
-        y = Math.max(y + 12, 1080);
-        drawRule("#cbc4b6", 1.5, 34);
-        drawWrapped("LABORATORY CONTEXT", 18, 700, bodyFont, muted, 1.3, 12);
-        drawWrapped(
-          `Prepared as part of computational and wet-lab research at ${site.name}'s UP Cebu portfolio.`,
-          23,
-          400,
-          bodyFont,
-          "#334155",
-          1.48,
-          0,
-        );
-      }
-    }
-
-    // Running footer
-    y = 1356;
-    drawRule("#cbc4b6", 1.5, 34);
-    ctx.font = `500 19px ${bodyFont}`;
-    ctx.fillStyle = muted;
-    ctx.fillText(study.shortName, margin, 1396);
-    ctx.textAlign = "right";
-    ctx.fillText(page === "abstract" ? "01" : "02", width - margin, 1396);
-    ctx.textAlign = "left";
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
-  return texture;
+  // Pixel flask emblem.
+  const px = 16;
+  const flask = ["..XXX..", "..X.X..", "..X.X..", ".X...X.", "X.OOO.X", "XOOOOOX", "XXXXXXX"];
+  const fx = canvas.width / 2 - (flask[0].length * px) / 2;
+  const fy = 1000;
+  flask.forEach((row, r) =>
+    [...row].forEach((cell, c) => {
+      if (cell === ".") return;
+      ctx.fillStyle = cell === "X" ? "#f5f0e3" : "#7cf0dc";
+      ctx.fillRect(fx + c * px, fy + r * px, px, px);
+    }),
+  );
+  ctx.font = `700 30px ${fonts.pixel}`;
+  ctx.fillStyle = "#cbcbef";
+  ctx.fillText("DEXTERSLAB", canvas.width / 2, 1240);
+  ctx.textAlign = "left";
+  return toTexture(canvas, renderer);
 }
 
-/** Fine horizontal page-stack striations for the book block edges. */
-function pageEdgeTexture() {
+function edgeTexture() {
   const canvas = document.createElement("canvas");
-  canvas.width = 64;
-  canvas.height = 128;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  ctx.fillStyle = "#ece6da";
-  ctx.fillRect(0, 0, 64, 128);
-  for (let y = 0; y < 128; y += 4) {
-    ctx.fillStyle = y % 8 === 0 ? "rgba(71, 85, 105, 0.16)" : "rgba(255, 255, 255, 0.3)";
-    ctx.fillRect(0, y, 64, 1.5);
+  canvas.width = 8;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#ece5d3";
+  ctx.fillRect(0, 0, 8, 64);
+  for (let y = 0; y < 64; y += 2) {
+    ctx.fillStyle = y % 4 === 0 ? "rgba(90,80,60,0.18)" : "rgba(255,255,255,0.35)";
+    ctx.fillRect(0, y, 8, 1);
   }
   const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(4, 2);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
 
-/** Deform a subdivided page plane into a realistic arched page-turn curve. */
-function deformTurnPage(
-  geo: THREE.PlaneGeometry,
-  basePos: Float32Array,
-  angle: number,
-  pageWidth: number,
-) {
-  const pos = geo.attributes.position as THREE.BufferAttribute;
-  const arch = Math.sin(angle);
-  for (let i = 0; i < pos.count; i++) {
-    const bx = basePos[i * 3];
-    const by = basePos[i * 3 + 1];
-    const u = THREE.MathUtils.clamp((bx + pageWidth / 2) / pageWidth, 0, 1);
-    const curl = Math.sin(u * Math.PI) * 0.22 * arch + u * u * 0.05 * Math.sin(angle * 2);
-    pos.setXYZ(i, bx, by, curl);
-  }
-  pos.needsUpdate = true;
-  geo.computeVertexNormals();
+function checkerTexture(renderer: THREE.WebGLRenderer) {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 256;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#131b58";
+  ctx.fillRect(0, 0, 256, 256);
+  ctx.fillStyle = "#18226b";
+  ctx.fillRect(0, 0, 128, 128);
+  ctx.fillRect(128, 128, 128, 128);
+  ctx.strokeStyle = "rgba(10, 15, 51, 0.6)";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(0, 0, 128, 128);
+  ctx.strokeRect(128, 128, 128, 128);
+  ctx.strokeRect(128, 0, 128, 128);
+  ctx.strokeRect(0, 128, 128, 128);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(20, 20);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return texture;
 }
+
+/* ── Geometry builders ─────────────────────────────────────────────────── */
+
+/** A paper block whose top surface follows the open-page profile; `swell` blends flat (closed) → curved (open). */
+function paperBlock(pageMat: THREE.Material, edgeMat: THREE.Material, mirrored = false) {
+  const group = new THREE.Group();
+  const top = new THREE.PlaneGeometry(PAGE_W, PAGE_D, SEG, 1);
+  if (mirrored) {
+    // The parent is scaled x = -1, so pre-flip U to keep the typesetting readable.
+    const uv = top.attributes.uv as THREE.BufferAttribute;
+    for (let i = 0; i < uv.count; i++) uv.setX(i, 1 - uv.getX(i));
+  }
+  top.rotateX(-Math.PI / 2);
+  top.translate(PAGE_W / 2, 0, 0);
+  const topMesh = new THREE.Mesh(top, pageMat);
+  topMesh.receiveShadow = true;
+  topMesh.castShadow = true;
+
+  // Head, tail and fore-edge walls share one geometry.
+  const cols = SEG + 1;
+  const wallPos = new Float32Array((cols * 4 + 4) * 3);
+  const wallUv = new Float32Array((cols * 4 + 4) * 2);
+  const idx: number[] = [];
+  for (const [w, z] of [
+    [0, PAGE_D / 2],
+    [1, -PAGE_D / 2],
+  ] as const) {
+    for (let i = 0; i < cols; i++) {
+      const base = (w * cols * 2 + i * 2) * 3;
+      wallPos.set([(i / SEG) * PAGE_W, 0, z, (i / SEG) * PAGE_W, BLOCK_T, z], base);
+      const uvBase = (w * cols * 2 + i * 2) * 2;
+      wallUv.set([i / SEG, 0, i / SEG, 1], uvBase);
+      if (i < SEG) {
+        const a = w * cols * 2 + i * 2;
+        if (w === 0) idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+        else idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+      }
+    }
+  }
+  const f = cols * 4;
+  wallPos.set([PAGE_W, 0, PAGE_D / 2, PAGE_W, BLOCK_T, PAGE_D / 2, PAGE_W, 0, -PAGE_D / 2, PAGE_W, BLOCK_T, -PAGE_D / 2], f * 3);
+  wallUv.set([0, 0, 0, 1, 1, 0, 1, 1], f * 2);
+  idx.push(f, f + 2, f + 1, f + 1, f + 2, f + 3);
+  const walls = new THREE.BufferGeometry();
+  walls.setAttribute("position", new THREE.BufferAttribute(wallPos, 3));
+  walls.setAttribute("uv", new THREE.BufferAttribute(wallUv, 2));
+  walls.setIndex(idx);
+  const wallMesh = new THREE.Mesh(walls, edgeMat);
+  wallMesh.castShadow = true;
+  wallMesh.receiveShadow = true;
+
+  group.add(topMesh, wallMesh);
+
+  let current = -1;
+  const setSwell = (swell: number) => {
+    if (Math.abs(swell - current) < 0.002) return;
+    current = swell;
+    const tp = top.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < tp.count; i++) tp.setY(i, BLOCK_T + swell * bulge(tp.getX(i) / PAGE_W));
+    tp.needsUpdate = true;
+    top.computeVertexNormals();
+    const wp = walls.attributes.position as THREE.BufferAttribute;
+    for (let w = 0; w < 2; w++)
+      for (let i = 0; i < cols; i++) wp.setY(w * cols * 2 + i * 2 + 1, BLOCK_T + swell * bulge(i / SEG));
+    wp.setY(f + 1, BLOCK_T + swell * bulge(1));
+    wp.setY(f + 3, BLOCK_T + swell * bulge(1));
+    wp.needsUpdate = true;
+    walls.computeVertexNormals();
+  };
+  setSwell(0);
+  return { group, setSwell };
+}
+
+function lathe(points: [number, number][], material: THREE.Material, segments = 40) {
+  return new THREE.Mesh(new THREE.LatheGeometry(points.map(([x, y]) => new THREE.Vector2(x, y)), segments), material);
+}
+
+/* ── Component ─────────────────────────────────────────────────────────── */
 
 export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsupported }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -268,12 +402,14 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
     let disposeScene = () => {};
 
     const start = async () => {
-      // Resolve the actual loaded Next.js font families from the DOM so canvas text matches the site.
-      const bodyStyle = getComputedStyle(document.body);
-      const h2El = document.querySelector("#research-title");
-      const headingFont = (h2El ? getComputedStyle(h2El).fontFamily : bodyStyle.fontFamily) || "Inter, sans-serif";
-      const bodyFont = bodyStyle.fontFamily || "Inter, sans-serif";
-
+      const rootStyle = getComputedStyle(document.documentElement);
+      const bodyFamily = getComputedStyle(document.body).fontFamily || "sans-serif";
+      const heading = document.querySelector("#research-title");
+      const fonts: Fonts = {
+        body: bodyFamily,
+        heading: (heading && getComputedStyle(heading).fontFamily) || bodyFamily,
+        pixel: rootStyle.getPropertyValue("--font-pixel").trim() || bodyFamily,
+      };
       try {
         await document.fonts.ready;
       } catch {}
@@ -281,316 +417,491 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
 
       let renderer: THREE.WebGLRenderer;
       try {
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "default" });
+        renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "default" });
       } catch {
         latest.current.onUnsupported();
         return;
       }
-
-      renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
+      renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 0.96;
+      renderer.toneMappingExposure = 1.05;
       renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.shadowMap.type = THREE.PCFShadowMap;
       renderer.shadowMap.autoUpdate = false;
       host.appendChild(renderer.domElement);
-      renderer.domElement.setAttribute("aria-label", "3D scroll-driven research journal");
+      renderer.domElement.setAttribute("role", "img");
+      renderer.domElement.setAttribute(
+        "aria-label",
+        "An open lab notebook on a checkered lab bench under a spotlight. Its pages summarise each research study.",
+      );
 
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x0f1c30);
-      scene.fog = new THREE.Fog(0x0f1c30, 12, 24);
-
+      scene.background = new THREE.Color(BG);
+      scene.fog = new THREE.Fog(BG, 8.6, 17);
       const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 40);
 
-      // Calibrated studio lighting so pages stay crisp and high-contrast without overexposure.
-      scene.add(new THREE.HemisphereLight(0xdce7fa, 0x132036, 1.35));
-      const key = new THREE.DirectionalLight(0xfff0db, 1.9);
-      key.position.set(-2.6, 7.2, 3.8);
-      key.castShadow = true;
-      key.shadow.mapSize.set(1024, 1024);
-      key.shadow.camera.left = -4.2;
-      key.shadow.camera.right = 4.2;
-      key.shadow.camera.top = 4.2;
-      key.shadow.camera.bottom = -4.2;
-      key.shadow.normalBias = 0.02;
-      scene.add(key);
+      /* Lighting: a cool lab ambience and one warm spotlight pooling on the notebook. */
+      scene.add(new THREE.HemisphereLight(0x8ea2ff, 0x0a0f33, 0.55));
+      const spot = new THREE.SpotLight(0xffe0a6, 120, 16, 0.42, 0.7, 1.5);
+      spot.position.set(0.3, 7.4, 1.4);
+      spot.target.position.set(0, 0, -0.1);
+      spot.castShadow = true;
+      spot.shadow.mapSize.set(1536, 1536);
+      spot.shadow.bias = -0.0004;
+      spot.shadow.normalBias = 0.015;
+      scene.add(spot, spot.target);
+      const fill = new THREE.DirectionalLight(0xa9b8ff, 0.35);
+      fill.position.set(-4, 3, 5);
+      scene.add(fill);
 
-      const rim = new THREE.PointLight(0x7ca9eb, 8, 14);
-      rim.position.set(4.0, 3.8, -3.0);
-      scene.add(rim);
+      const disposables: { dispose(): void }[] = [];
+      const std = (params: THREE.MeshStandardMaterialParameters) => new THREE.MeshStandardMaterial(params);
 
-      const mat = (color: number, extra: THREE.MeshStandardMaterialParameters = {}) =>
-        new THREE.MeshStandardMaterial({ color, roughness: 0.78, ...extra });
+      /* Bench: checkered lab floor tiles that dissolve into the fog. */
+      const checker = checkerTexture(renderer);
+      disposables.push(checker);
+      const bench = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), std({ map: checker, roughness: 0.62, metalness: 0.05 }));
+      bench.rotation.x = -Math.PI / 2;
+      bench.receiveShadow = true;
+      scene.add(bench);
 
-      const clothNavy = mat(0x132440, { roughness: 0.84, metalness: 0.05 });
-      const brass = mat(0xcfa95e, { metalness: 0.8, roughness: 0.28 });
-      const paperEdgeTex = pageEdgeTexture();
-      const paperBlockMat = mat(0xece6da, { roughness: 0.92, map: paperEdgeTex ?? undefined });
-      const deskMat = mat(0x122238, { roughness: 0.9, metalness: 0.04 });
-      const deskPadMat = mat(0x0c1729, { roughness: 0.88 });
+      /* Notebook */
+      const edgeTex = edgeTexture();
+      disposables.push(edgeTex);
+      const edgeMat = std({ map: edgeTex, roughness: 0.95 });
+      const clothMat = std({ color: CLOTH, roughness: 0.85 });
+      const leftPageMat = std({ roughness: 0.92 });
+      const rightPageMat = std({ roughness: 0.92 });
 
-      const addMesh = (
-        parent: THREE.Object3D,
-        geometry: THREE.BufferGeometry,
-        material: THREE.Material,
-        x: number,
-        y: number,
-        z: number,
-      ) => {
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(x, y, z);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+      const book = new THREE.Group();
+      scene.add(book);
+
+      const board = (parent: THREE.Object3D, x: number, y: number) => {
+        const mesh = new THREE.Mesh(new RoundedBoxGeometry(BOARD_W, BOARD_T, BOARD_D, 2, 0.012), clothMat);
+        mesh.position.set(x, y, 0);
+        mesh.castShadow = mesh.receiveShadow = true;
         parent.add(mesh);
         return mesh;
       };
 
-      const box = (
-        parent: THREE.Object3D,
-        material: THREE.Material,
-        w: number,
-        h: number,
-        d: number,
-        x: number,
-        y: number,
-        z: number,
-      ) => addMesh(parent, new RoundedBoxGeometry(w, h, d, 2, Math.min(w, h, d) * 0.16), material, x, y, z);
+      // Right half (static): back board + right paper block.
+      board(book, BOARD_W / 2 - 0.02, BOARD_T / 2);
+      const rightBlock = paperBlock(rightPageMat, edgeMat);
+      rightBlock.group.position.set(0, BOARD_T, 0);
+      book.add(rightBlock.group);
 
-      // Grounded reading surface + subtle desk blotter pad.
-      const desk = addMesh(scene, new THREE.PlaneGeometry(28, 22), deskMat, 0, 0, 0);
-      desk.rotation.x = -Math.PI / 2;
-      desk.castShadow = false;
-      const deskPad = box(scene, deskPadMat, 4.6, 0.015, 3.2, 0, 0.006, 0);
-      deskPad.castShadow = false;
+      // Elastic band and ribbon — small details that sell "notebook".
+      const band = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.004, BOARD_D + 0.01), std({ color: 0xff7a3d, roughness: 0.6 }));
+      band.position.set(BOARD_W - 0.22, 0.002, 0);
+      book.add(band);
+      const ribbon = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.006, 0.26), std({ color: 0xe0457b, roughness: 0.7 }));
+      ribbon.position.set(0.5, 0.004, PAGE_D / 2 + 0.12);
+      ribbon.receiveShadow = true;
+      book.add(ribbon);
 
-      // Book assembly centered at (0, 0.02, 0).
-      const book = new THREE.Group();
-      book.position.set(0, 0.02, 0);
-      scene.add(book);
+      // Front cover + left block hinge together. The pivot sits at the spine, at block-top height, so
+      // the closed book is an exact mirror of the open spread (no interpenetration mid-swing).
+      const hingeY = BOARD_T + BLOCK_T;
+      const pivot = new THREE.Group();
+      pivot.position.set(0, hingeY, 0);
+      book.add(pivot);
+      const leftHalf = new THREE.Group(); // authored in "open, lying left" pose
+      leftHalf.position.set(0, -hingeY, 0);
+      const inner = new THREE.Group();
+      inner.rotation.z = Math.PI; // pre-flip so pivot.rotation.z = π lands it in the open pose
+      pivot.add(inner);
+      inner.add(leftHalf);
+      // Authored in mirrored space: mirrored x so content lies on the left when open.
+      const mirror = new THREE.Group();
+      mirror.scale.x = -1;
+      leftHalf.add(mirror);
+      // inner (π) + pivot (π) = identity, so leftHalf is authored directly in its open pose; at θ = 0 the
+      // same content is mirrored through the hinge onto the right block, i.e. a closed book.
+      board(mirror, BOARD_W / 2 - 0.02, BOARD_T / 2);
+      const leftBlock = paperBlock(leftPageMat, edgeMat, true);
+      leftBlock.group.position.set(0, BOARD_T, 0);
+      mirror.add(leftBlock.group);
 
-      const pageWidth = 1.66;
-      const pageHeight = 2.34;
+      const coverMat = std({ roughness: 0.82 });
+      const coverFace = new THREE.Mesh(new THREE.PlaneGeometry(BOARD_W - 0.04, BOARD_D - 0.04), coverMat);
+      // Outside of the front cover faces down in the open pose (it rests on the bench).
+      coverFace.rotation.x = Math.PI / 2;
+      coverFace.rotation.z = Math.PI;
+      coverFace.position.set(BOARD_W / 2 - 0.02, -0.001, 0);
+      coverFace.scale.x = -1; // undo the parent mirror so the label reads correctly
+      mirror.add(coverFace);
 
-      // Back cover board (right half, rests on desk).
-      box(book, clothNavy, 1.76, 0.052, 2.48, 0.88, 0.026, 0);
-      box(book, brass, 0.11, 0.058, 0.11, 1.71, 0.026, -1.19);
-      box(book, brass, 0.11, 0.058, 0.11, 1.71, 0.026, 1.19);
+      // Spine: a soft rounded cylinder under the gutter.
+      const spine = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, BOARD_D, 20, 1, false, Math.PI, Math.PI), clothMat);
+      spine.rotation.x = Math.PI / 2;
+      spine.position.set(0, 0.05, 0);
+      book.add(spine);
 
-      // Rounded spine with brass bands.
-      const spineGroup = new THREE.Group();
-      book.add(spineGroup);
-      const spineCyl = addMesh(spineGroup, new THREE.CylinderGeometry(0.058, 0.058, 2.48, 20), clothNavy, 0, 0.04, 0);
-      spineCyl.rotation.x = Math.PI / 2;
-      for (const rz of [-0.92, -0.32, 0.32, 0.92]) {
-        const rib = addMesh(spineGroup, new THREE.CylinderGeometry(0.064, 0.064, 0.032, 16), brass, 0, 0.04, rz);
-        rib.rotation.x = Math.PI / 2;
-      }
-
-      // Right paper block (sits on top of back cover board at y = 0.052).
-      box(book, paperBlockMat, pageWidth, 0.11, pageHeight, 0.85, 0.107, 0);
-
-      // Crimson silk ribbon bookmark.
-      const ribbon = box(book, mat(0xa8434e, { roughness: 0.72 }), 0.085, 0.01, 0.34, 0.42, 0.052, 1.24);
-      ribbon.castShadow = false;
-
-      // Static right reading surface (y = 0.164, cleanly above the 0.162 stack top).
-      const leftPageMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, side: THREE.FrontSide });
-      const rightPageMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, side: THREE.FrontSide });
-      const rightPage = addMesh(book, new THREE.PlaneGeometry(pageWidth, pageHeight), rightPageMat, 0.85, 0.164, 0);
-      rightPage.rotation.x = -Math.PI / 2;
-      rightPage.castShadow = false;
-
-      // Front hardcover pivot: starts at y = 0.188 when closed, and drops to y = 0.026 when fully open
-      // so it lies flat on the desk. Left stack + left page are mounted on its inner face so they
-      // swing open with the cover and never intersect it mid-turn.
-      const coverPivot = new THREE.Group();
-      coverPivot.position.set(0, 0.188, 0);
-      book.add(coverPivot);
-      box(coverPivot, clothNavy, 1.76, 0.052, 2.48, 0.88, 0, 0);
-      box(coverPivot, brass, 0.11, 0.058, 0.11, 1.71, 0, -1.19);
-      box(coverPivot, brass, 0.11, 0.058, 0.11, 1.71, 0, 1.19);
-
-      const coverMat = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0.06 });
-      const coverFace = addMesh(coverPivot, new THREE.PlaneGeometry(1.72, 2.44), coverMat, 0.88, 0.028, 0);
-      coverFace.rotation.x = -Math.PI / 2;
-      coverMat.map = manuscriptTexture(latest.current.studies[0], "cover", headingFont, bodyFont);
-
-      const leftStack = box(coverPivot, paperBlockMat, pageWidth, 0.11, pageHeight, 0.85, -0.081, 0);
-      const leftPage = addMesh(coverPivot, new THREE.PlaneGeometry(pageWidth, pageHeight), leftPageMat, 0.85, -0.138, 0);
-      leftPage.rotateX(-Math.PI / 2);
-      leftPage.rotateY(Math.PI);
-      leftPage.castShadow = false;
-
-      // Curved 3D turning page pivot.
-      const turnPivot = new THREE.Group();
-      turnPivot.position.set(0, 0.168, 0);
-      book.add(turnPivot);
-
-      const turnFrontGeo = new THREE.PlaneGeometry(pageWidth, pageHeight, 24, 1);
-      const turnBackGeo = new THREE.PlaneGeometry(pageWidth, pageHeight, 24, 1);
+      /* Turning leaf: one strip, two faces, bent along its length every frame. */
+      const turnGeo = new THREE.PlaneGeometry(PAGE_W, PAGE_D, SEG, 1);
+      turnGeo.rotateX(-Math.PI / 2);
+      turnGeo.translate(PAGE_W / 2, 0, 0);
+      const turnFrontMat = std({ roughness: 0.92, side: THREE.FrontSide });
+      const turnBackMat = std({ roughness: 0.92, side: THREE.BackSide });
+      const turnBackGeo = turnGeo.clone();
       const backUv = turnBackGeo.attributes.uv as THREE.BufferAttribute;
-      for (let i = 0; i < backUv.count; i++) {
-        backUv.setX(i, 1 - backUv.getX(i));
+      for (let i = 0; i < backUv.count; i++) backUv.setX(i, 1 - backUv.getX(i));
+      const turnFront = new THREE.Mesh(turnGeo, turnFrontMat);
+      const turnBack = new THREE.Mesh(turnBackGeo, turnBackMat);
+      turnFront.castShadow = turnBack.castShadow = true;
+      const leaf = new THREE.Group();
+      leaf.add(turnFront, turnBack);
+      leaf.visible = false;
+      book.add(leaf);
+
+      const columnX = new Float32Array(SEG + 1);
+      const columnY = new Float32Array(SEG + 1);
+      const bendLeaf = (theta: number) => {
+        // Arc-length integration: each segment's angle blends the right-page profile into the mirrored
+        // left-page profile, minus a lag that makes the free edge trail the hinge (a real paper curl).
+        const t = theta / Math.PI;
+        const lag = 0.95 * Math.sin(theta);
+        const ds = PAGE_W / SEG;
+        let x = 0;
+        let y = BOARD_T + BLOCK_T + bulge(0) + 0.004;
+        columnX[0] = x;
+        columnY[0] = y;
+        for (let i = 1; i <= SEG; i++) {
+          const u = (i - 0.5) / SEG;
+          const rest = bulgeSlope(u);
+          const phi = (1 - t) * rest + t * (Math.PI - rest) - lag * u * u * 1.3 + lag * u * 0.4;
+          x += Math.cos(phi) * ds;
+          y += Math.sin(phi) * ds;
+          columnX[i] = x;
+          columnY[i] = y + 0.004 * Math.sin(Math.PI * t);
+        }
+        for (const geo of [turnGeo, turnBackGeo]) {
+          const pos = geo.attributes.position as THREE.BufferAttribute;
+          for (let i = 0; i < pos.count; i++) {
+            const col = i % (SEG + 1);
+            pos.setX(i, columnX[col]);
+            pos.setY(i, columnY[col]);
+          }
+          pos.needsUpdate = true;
+          geo.computeVertexNormals();
+        }
+      };
+
+      /* Props from the lab bench. */
+      const props = new THREE.Group();
+      scene.add(props);
+      const glass = std({ color: 0xdff1ff, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.38, depthWrite: false });
+      const glow = (color: number, intensity = 1.6) =>
+        std({ color, emissive: color, emissiveIntensity: intensity, roughness: 0.3, transparent: true, opacity: 0.92 });
+
+      // Erlenmeyer flask with luminous teal reagent.
+      const flask = new THREE.Group();
+      flask.position.set(-2.65, 0, -0.25);
+      const flaskProfile: [number, number][] = [
+        [0, 0], [0.42, 0], [0.46, 0.04], [0.16, 0.66], [0.13, 0.7], [0.13, 0.95], [0.155, 0.98],
+      ];
+      flask.add(lathe(flaskProfile, glass));
+      const lip = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.018, 8, 28), std({ color: 0xe8f4ff, roughness: 0.2 }));
+      lip.rotation.x = Math.PI / 2;
+      lip.position.y = 0.98;
+      flask.add(lip);
+      const reagent = lathe([[0, 0.015], [0.4, 0.015], [0.43, 0.05], [0.27, 0.36], [0, 0.36]], glow(0x34e3c9, 0.55));
+      flask.add(reagent);
+      const flaskLight = new THREE.PointLight(0x34e3c9, 3.2, 3.2, 1.6);
+      flaskLight.position.set(0, 0.35, 0);
+      flask.add(flaskLight);
+      const bubbleMat = std({ color: 0xc9fff5, emissive: 0x7affea, emissiveIntensity: 0.9, transparent: true, opacity: 0.8 });
+      const bubbleGeo = new THREE.SphereGeometry(1, 10, 8);
+      const bubbles = Array.from({ length: 7 }, (_, i) => {
+        const b = new THREE.Mesh(bubbleGeo, bubbleMat);
+        b.userData.seed = i / 7;
+        flask.add(b);
+        return b;
+      });
+      // The reagent is alive: a little slime specimen that watches the cursor and blinks.
+      const eyes = new THREE.Group();
+      eyes.position.set(0, 0.2, 0.3);
+      const eyeWhite = std({ color: 0xffffff, roughness: 0.3 });
+      const pupilMat = std({ color: 0x0a0f33, roughness: 0.2 });
+      const eyeGeo = new THREE.SphereGeometry(0.075, 18, 14);
+      const pupilGeo = new THREE.SphereGeometry(0.038, 14, 10);
+      const pupils: THREE.Mesh[] = [];
+      for (const side of [-1, 1]) {
+        const eye = new THREE.Group();
+        eye.position.x = side * 0.1;
+        eye.add(new THREE.Mesh(eyeGeo, eyeWhite));
+        const pupil = new THREE.Mesh(pupilGeo, pupilMat);
+        pupil.position.z = 0.05;
+        eye.add(pupil);
+        pupils.push(pupil);
+        eyes.add(eye);
       }
-      backUv.needsUpdate = true;
-      const baseTurnPositions = new Float32Array((turnFrontGeo.attributes.position as THREE.BufferAttribute).array);
+      const blush = std({ color: 0xff7aa8, emissive: 0xff7aa8, emissiveIntensity: 0.4, transparent: true, opacity: 0.7 });
+      for (const side of [-1, 1]) {
+        const cheek = new THREE.Mesh(new THREE.CircleGeometry(0.03, 16), blush);
+        cheek.position.set(side * 0.19, -0.07, 0.03);
+        cheek.rotation.y = side * 0.5;
+        eyes.add(cheek);
+      }
+      flask.add(eyes);
+      let nextBlink = 2.5;
+      props.add(flask);
 
-      const turnFrontMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, side: THREE.FrontSide });
-      const turnBackMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, side: THREE.BackSide });
+      // Test-tube rack with parol-coloured samples.
+      const rack = new THREE.Group();
+      rack.position.set(2.45, 0, -1.2);
+      rack.rotation.y = -0.12;
+      const rackMat = std({ color: 0xdfe5f5, roughness: 0.5 });
+      const shelf = new RoundedBoxGeometry(1.0, 0.06, 0.3, 2, 0.02);
+      for (const y of [0.04, 0.42]) {
+        const s = new THREE.Mesh(shelf, rackMat);
+        s.position.y = y;
+        s.castShadow = true;
+        rack.add(s);
+      }
+      for (const x of [-0.46, 0.46]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.46, 0.28), rackMat);
+        leg.position.set(x, 0.23, 0);
+        leg.castShadow = true;
+        rack.add(leg);
+      }
+      [0xff8a3d, 0x4ade80, 0xff5fb8, 0xffd23f].forEach((color, i) => {
+        const x = -0.3 + i * 0.2;
+        const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.7, 18, 1, true), glass);
+        tube.position.set(x, 0.42, 0);
+        const fluid = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.28 + (i % 2) * 0.1, 18), glow(color, 0.9));
+        fluid.position.set(x, 0.22 + (i % 2) * 0.05, 0);
+        rack.add(tube, fluid);
+      });
+      props.add(rack);
 
-      const turnFrontMesh = new THREE.Mesh(turnFrontGeo, turnFrontMat);
-      turnFrontMesh.rotation.x = -Math.PI / 2;
-      turnFrontMesh.position.set(0.85, 0.002, 0);
-      turnFrontMesh.castShadow = true;
-      turnFrontMesh.receiveShadow = true;
+      // Pencil resting beside the spread.
+      const pencil = new THREE.Group();
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.3, 6), std({ color: 0xffc83d, roughness: 0.55 }));
+      shaft.rotation.z = Math.PI / 2;
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.14, 6), std({ color: 0xf1d6b0, roughness: 0.8 }));
+      tip.rotation.z = -Math.PI / 2;
+      tip.position.x = 0.72;
+      const eraser = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.1, 12), std({ color: 0xff7a93, roughness: 0.8 }));
+      eraser.rotation.z = Math.PI / 2;
+      eraser.position.x = -0.7;
+      pencil.add(shaft, tip, eraser);
+      pencil.position.set(2.25, 0.035, 0.55);
+      pencil.rotation.y = 0.9;
+      pencil.traverse((o) => (o.castShadow = true));
+      props.add(pencil);
 
-      const turnBackMesh = new THREE.Mesh(turnBackGeo, turnBackMat);
-      turnBackMesh.rotation.x = -Math.PI / 2;
-      turnBackMesh.position.set(0.85, 0.001, 0);
-      turnBackMesh.castShadow = true;
-      turnBackMesh.receiveShadow = true;
+      // Coffee mug — the lab runs on it.
+      const mug = new THREE.Group();
+      mug.position.set(-2.2, 0, 1.25);
+      const mugBody = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.18, 0.36, 28), std({ color: 0xff8a3d, roughness: 0.5 }));
+      mugBody.position.y = 0.18;
+      const coffee = new THREE.Mesh(new THREE.CircleGeometry(0.18, 24), std({ color: 0x3b2314, roughness: 0.3 }));
+      coffee.rotation.x = -Math.PI / 2;
+      coffee.position.y = 0.33;
+      const handle = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.025, 8, 20), std({ color: 0xff8a3d, roughness: 0.5 }));
+      handle.position.set(0.21, 0.19, 0);
+      mug.add(mugBody, coffee, handle);
+      mug.traverse((o) => (o.castShadow = true));
+      props.add(mug);
 
-      turnPivot.add(turnFrontMesh, turnBackMesh);
-      turnPivot.visible = false;
+      // Round reading glasses, folded and set down beside the notebook.
+      const specs = new THREE.Group();
+      const frameMat = std({ color: 0x14185a, roughness: 0.35, metalness: 0.3 });
+      const lensMat = std({ color: 0xbfe6ff, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.35, depthWrite: false });
+      const rimGeo = new THREE.TorusGeometry(0.17, 0.02, 10, 40);
+      for (const side of [-1, 1]) {
+        const rim = new THREE.Mesh(rimGeo, frameMat);
+        rim.position.x = side * 0.21;
+        const lens = new THREE.Mesh(new THREE.CircleGeometry(0.165, 32), lensMat);
+        lens.position.x = side * 0.21;
+        // Folded temple arm tucked behind the lenses.
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.018, 0.018), frameMat);
+        arm.position.set(side * 0.2, 0.0, -0.06 - (side > 0 ? 0.03 : 0));
+        arm.rotation.y = side * 0.12;
+        specs.add(rim, lens, arm);
+      }
+      const bridge = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.016, 8, 16, Math.PI), frameMat);
+      bridge.position.y = 0.04;
+      specs.add(bridge);
+      // Lying on the bench, lenses tilted slightly up as real folded glasses rest on their arms.
+      specs.rotation.set(-Math.PI / 2 + 0.28, 0, 0);
+      const specsRig = new THREE.Group();
+      specsRig.position.set(2.0, 0.17, 1.5);
+      specsRig.rotation.y = -0.35;
+      specsRig.add(specs);
+      specsRig.traverse((o) => (o.castShadow = true));
+      props.add(specsRig);
 
-      // Pre-render & cache page textures per study.
+      // A petri dish with colourful colonies — tiny parol-coloured dots of life.
+      const dish = new THREE.Group();
+      dish.position.set(-2.35, 0, -1.55);
+      const dishWall = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.08, 40, 1, true), glass);
+      dishWall.position.y = 0.04;
+      const agar = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.035, 40), std({ color: 0xf2d98a, roughness: 0.4, transparent: true, opacity: 0.85 }));
+      agar.position.y = 0.02;
+      dish.add(dishWall, agar);
+      const colonyGeo = new THREE.SphereGeometry(1, 10, 6);
+      const colonyColors = [0xff8a3d, 0x4ade80, 0xff5fb8, 0x7cf0dc, 0xffffff];
+      for (let i = 0; i < 14; i++) {
+        const a = i * 2.39996;
+        const r = 0.08 + ((i * 37) % 100) / 100 * 0.27;
+        const colony = new THREE.Mesh(colonyGeo, std({ color: colonyColors[i % colonyColors.length], roughness: 0.5 }));
+        const size = 0.018 + (i % 4) * 0.008;
+        colony.scale.set(size, size * 0.5, size);
+        colony.position.set(Math.cos(a) * r, 0.04, Math.sin(a) * r);
+        dish.add(colony);
+      }
+      props.add(dish);
+
+      /* Page textures, cached per study. */
       const pageCache = new Map<string, [THREE.Texture, THREE.Texture]>();
-      const getPages = (study: ResearchEntry): [THREE.Texture, THREE.Texture] => {
+      const pages = (index: number): [THREE.Texture, THREE.Texture] => {
+        const list = latest.current.studies;
+        const study = list[index];
         const cached = pageCache.get(study.id);
         if (cached) return cached;
         const pair: [THREE.Texture, THREE.Texture] = [
-          manuscriptTexture(study, "abstract", headingFont, bodyFont),
-          manuscriptTexture(study, "methods", headingFont, bodyFont),
+          pageTexture(study, index, list.length, "left", fonts, renderer),
+          pageTexture(study, index, list.length, "right", fonts, renderer),
         ];
         pageCache.set(study.id, pair);
         return pair;
       };
-      latest.current.studies.forEach(getPages);
+      coverMat.map = coverTexture(fonts, renderer);
+      latest.current.studies.forEach((_, i) => pages(i));
+
+      const setMap = (material: THREE.MeshStandardMaterial, map: THREE.Texture) => {
+        if (material.map === map) return;
+        material.map = map;
+        material.needsUpdate = true;
+      };
 
       const motion = matchMedia("(prefers-reduced-motion: reduce)");
       const calm = () => motion.matches || document.documentElement.dataset.labFx === "calm";
 
-      let currentProgress = targetProgressRef.current;
+      let current = targetProgressRef.current;
       let pointerX = 0;
       let pointerY = 0;
-      let smoothPointerX = 0;
-      let smoothPointerY = 0;
+      let smoothX = 0;
+      let smoothY = 0;
       let frame = 0;
       let visible = true;
       let contextLost = false;
       let lastTime = performance.now();
-      let lastCoverAngle = -1;
-      let lastFlipAngle = -1;
+      let shadowKey = "";
+      const elapsed = { t: 0 };
+
+      const frameCamera = () => {
+        const aspect = host.clientWidth / Math.max(1, host.clientHeight);
+        const tanHalf = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+        // Fit the full spread (~3.9 units wide) and keep the heading/HUD clear.
+        // Portrait frames just the spread; landscape leaves room for the bench props.
+        const distance = Math.max(7.6, (aspect < 0.9 ? 1.98 : 3.1) / (tanHalf * aspect));
+        const elevation = THREE.MathUtils.degToRad(aspect < 0.9 ? 64 : 56);
+        // Fog follows the camera so a far-back portrait framing doesn't fog out the notebook.
+        const fog = scene.fog as THREE.Fog;
+        fog.near = distance + 1.4;
+        fog.far = distance + 9.5;
+        camera.position.set(
+          smoothX * 0.18,
+          Math.sin(elevation) * distance + smoothY * -0.08,
+          Math.cos(elevation) * distance,
+        );
+        camera.lookAt(0, 0, aspect < 0.9 ? 0.1 : -0.18);
+      };
 
       const applyState = (p: number) => {
         const list = latest.current.studies;
         const count = list.length;
 
-        // 0.00 -> 0.14: cover opens. 0.90 -> 1.00: cover gently closes.
-        const openEase = smoothstep(0.01, 0.14, p);
-        const closeEase = smoothstep(0.90, 0.99, p);
-        const openAmount = openEase * (1 - closeEase);
-        const coverAngle = openAmount * Math.PI;
+        const openEase = smoothstep(0.01, OPEN_END, p);
+        // The notebook stays open through the end of the track, so the frame never empties as it scrolls away.
+        const open = openEase;
+        const coverAngle = open * Math.PI;
+        pivot.rotation.z = coverAngle;
+        // Pages swell only once the cover is well past vertical, so mirrored blocks never collide.
+        const swell = smoothstep(0.55, 0.95, open);
+        leftBlock.setSwell(swell);
+        rightBlock.setSwell(swell);
 
-        coverPivot.rotation.z = coverAngle;
-        coverPivot.position.y = THREE.MathUtils.lerp(0.188, 0.026, openAmount);
+        // Closed: centred on the right half and slightly askew. Open: spread centred on the spine.
+        book.position.x = THREE.MathUtils.lerp(-BOARD_W / 2, 0, open);
+        book.position.z = THREE.MathUtils.lerp(0.15, 0, open);
+        book.rotation.y = THREE.MathUtils.lerp(-0.18, 0, openEase) + smoothX * 0.035;
 
-        const isOpened = coverAngle > 0.05;
-        leftStack.visible = isOpened;
-        leftPage.visible = isOpened;
+        const readingT = THREE.MathUtils.clamp((p - OPEN_END) / (READ_END - OPEN_END), 0, 1);
+        const scaled = readingT * count;
+        const base = Math.min(count - 1, Math.floor(scaled));
+        const local = scaled - base;
+        const canFlip = base < count - 1 && open > 0.98;
+        let flip = canFlip ? smoothstep(FLIP_START, 1, local) : 0;
+        if (calm()) flip = flip > 0.5 ? 1 : 0;
 
-        // Center closed book at x = 0; center open spread spine at x = 0.
-        book.position.x = THREE.MathUtils.lerp(-0.88, 0, openEase) + THREE.MathUtils.lerp(0, -0.88, closeEase);
-        book.rotation.y =
-          THREE.MathUtils.lerp(-0.22, 0, openEase) +
-          THREE.MathUtils.lerp(0, 0.18, closeEase) +
-          smoothPointerX * 0.04;
-        book.rotation.x = smoothPointerY * 0.03;
-
-        // Map middle scroll (0.14 -> 0.90) across studies with generous flip window.
-        const readingT = THREE.MathUtils.clamp((p - 0.14) / (0.90 - 0.14), 0, 1);
-        const scaled = readingT * Math.max(1, count);
-        const baseIndex = Math.min(count - 1, Math.floor(scaled));
-        const local = scaled - baseIndex;
-
-        const flipStart = 0.60;
-        const canFlip = baseIndex < count - 1 && isOpened && !calm();
-        const flipT = canFlip && local > flipStart ? smoothstep(flipStart, 1, local) : 0;
-
-        if (flipT > 0.001 && flipT < 0.999) {
-          const [curLeft, curRight] = getPages(list[baseIndex]);
-          const [nextLeft, nextRight] = getPages(list[baseIndex + 1]);
-          if (leftPageMat.map !== curLeft) { leftPageMat.map = curLeft; leftPageMat.needsUpdate = true; }
-          if (rightPageMat.map !== nextRight) { rightPageMat.map = nextRight; rightPageMat.needsUpdate = true; }
-          if (turnFrontMat.map !== curRight) { turnFrontMat.map = curRight; turnFrontMat.needsUpdate = true; }
-          if (turnBackMat.map !== nextLeft) { turnBackMat.map = nextLeft; turnBackMat.needsUpdate = true; }
-
-          const flipAngle = flipT * Math.PI;
-          turnPivot.visible = true;
-          turnPivot.rotation.z = flipAngle;
-          deformTurnPage(turnFrontGeo, baseTurnPositions, flipAngle, pageWidth);
-          deformTurnPage(turnBackGeo, baseTurnPositions, flipAngle, pageWidth);
-          if (Math.abs(flipAngle - lastFlipAngle) > 0.03) {
-            renderer.shadowMap.needsUpdate = true;
-            lastFlipAngle = flipAngle;
-          }
+        if (flip > 0.001 && flip < 0.999) {
+          const [curL, curR] = pages(base);
+          const [nextL, nextR] = pages(base + 1);
+          setMap(leftPageMat, curL);
+          setMap(rightPageMat, nextR);
+          setMap(turnFrontMat, curR);
+          setMap(turnBackMat, nextL);
+          leaf.visible = true;
+          bendLeaf(flip * Math.PI);
         } else {
-          turnPivot.visible = false;
-          const activeIdx = flipT >= 0.999 ? Math.min(count - 1, baseIndex + 1) : baseIndex;
-          const [pLeft, pRight] = getPages(list[activeIdx]);
-          if (leftPageMat.map !== pLeft) { leftPageMat.map = pLeft; leftPageMat.needsUpdate = true; }
-          if (rightPageMat.map !== pRight) { rightPageMat.map = pRight; rightPageMat.needsUpdate = true; }
-          if (lastFlipAngle !== -1) {
-            renderer.shadowMap.needsUpdate = true;
-            lastFlipAngle = -1;
-          }
+          leaf.visible = false;
+          const [l, r] = pages(flip >= 0.999 ? Math.min(count - 1, base + 1) : base);
+          setMap(leftPageMat, l);
+          setMap(rightPageMat, r);
         }
 
-        if (Math.abs(coverAngle - lastCoverAngle) > 0.03) {
+        const key = `${coverAngle.toFixed(2)}|${leaf.visible ? flip.toFixed(2) : "-"}|${book.position.x.toFixed(2)}`;
+        if (key !== shadowKey) {
+          shadowKey = key;
           renderer.shadowMap.needsUpdate = true;
-          lastCoverAngle = coverAngle;
         }
+        frameCamera();
+      };
 
-        // Frame the entire book with generous breathing room above (heading, even at 90° page flip) and below (HUD).
-        const narrow = host.clientWidth < 768;
-        const baseY = narrow ? 6.4 : 5.4;
-        const baseZ = narrow ? 5.6 : 4.85;
-        camera.position.set(
-          smoothPointerX * 0.12,
-          THREE.MathUtils.lerp(baseY + 0.3, baseY, openAmount),
-          THREE.MathUtils.lerp(baseZ + 0.4, baseZ, openAmount),
-        );
-        camera.lookAt(0, 0.15, 0.0);
+      const animateProps = (dt: number) => {
+        elapsed.t += dt;
+        for (const b of bubbles) {
+          const phase = (elapsed.t * 0.35 + b.userData.seed) % 1;
+          const angle = b.userData.seed * Math.PI * 2;
+          const radius = 0.22 * (1 - phase * 0.5);
+          b.position.set(Math.cos(angle) * radius * 0.6, 0.06 + phase * 0.3, Math.sin(angle) * radius * 0.6);
+          b.scale.setScalar(0.018 + 0.012 * Math.sin(phase * Math.PI));
+        }
+        flaskLight.intensity = 3 + Math.sin(elapsed.t * 2.2) * 0.4;
+        // Slime: a gentle wobble, eyes that follow the pointer, and an occasional double blink.
+        reagent.scale.set(1 + Math.sin(elapsed.t * 3) * 0.02, 1 + Math.sin(elapsed.t * 3 + 1.5) * 0.03, 1);
+        for (const pupil of pupils) pupil.position.set(smoothX * 0.025, -smoothY * 0.02, 0.05);
+        if (elapsed.t > nextBlink) nextBlink = elapsed.t + 2.8 + Math.random() * 3.2;
+        const sinceBlink = nextBlink - elapsed.t;
+        const closing = sinceBlink < 0.14 ? Math.sin((sinceBlink / 0.14) * Math.PI) : 0;
+        eyes.scale.y = 1 - closing * 0.9;
       };
 
       const draw = (now: number) => {
         frame = 0;
         if (contextLost || disposed) return;
-        const dt = Math.min(0.08, (now - lastTime) / 1000);
+        const dt = Math.min(0.05, (now - lastTime) / 1000);
         lastTime = now;
+        const still = calm();
+        const target = targetProgressRef.current;
+        current += (target - current) * (still ? 1 : 1 - Math.exp(-dt * 9));
+        if (Math.abs(target - current) < 0.0003) current = target;
+        const k = still ? 1 : 1 - Math.exp(-dt * 6);
+        smoothX += (pointerX - smoothX) * k;
+        smoothY += (pointerY - smoothY) * k;
 
-        const targetP = targetProgressRef.current;
-        const ease = calm() ? 1 : 1 - Math.exp(-dt * 18);
-        currentProgress += (targetP - currentProgress) * ease;
-        if (Math.abs(targetP - currentProgress) < 0.0004) currentProgress = targetP;
-
-        const ptrEase = calm() ? 1 : 1 - Math.exp(-dt * 10);
-        smoothPointerX += (pointerX - smoothPointerX) * ptrEase;
-        smoothPointerY += (pointerY - smoothPointerY) * ptrEase;
-        if (Math.abs(pointerX - smoothPointerX) < 0.0005) smoothPointerX = pointerX;
-        if (Math.abs(pointerY - smoothPointerY) < 0.0005) smoothPointerY = pointerY;
-
-        applyState(currentProgress);
+        if (!still) animateProps(dt);
+        applyState(current);
         renderer.render(scene, camera);
 
+        // Bubbles keep the loop alive while on screen; otherwise render only while settling.
         const settling =
-          Math.abs(targetP - currentProgress) > 0.0005 ||
-          Math.abs(pointerX - smoothPointerX) > 0.0008 ||
-          Math.abs(pointerY - smoothPointerY) > 0.0008;
-
-        if (visible && !document.hidden && settling) {
-          frame = requestAnimationFrame(draw);
-        }
+          Math.abs(target - current) > 0.0003 || Math.abs(pointerX - smoothX) > 0.001 || Math.abs(pointerY - smoothY) > 0.001;
+        if (visible && !document.hidden && (settling || !still)) frame = requestAnimationFrame(draw);
       };
 
       const wake = () => {
@@ -605,58 +916,75 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         camera.aspect = host.clientWidth / Math.max(1, host.clientHeight);
         camera.updateProjectionMatrix();
         renderer.setSize(host.clientWidth, host.clientHeight);
-        applyState(currentProgress);
+        applyState(current);
         renderer.render(scene, camera);
       };
       const resizeObserver = new ResizeObserver(resize);
       resizeObserver.observe(host);
-
-      const observer = new IntersectionObserver(([entry]) => {
+      const io = new IntersectionObserver(([entry]) => {
         visible = entry.isIntersecting;
         if (visible) wake();
+        else if (frame) {
+          cancelAnimationFrame(frame);
+          frame = 0;
+        }
       });
-      observer.observe(host);
+      io.observe(host);
 
-      const onPointerMove = (e: PointerEvent) => {
-        if (calm() || e.pointerType === "touch") return;
+      const raycaster = new THREE.Raycaster();
+      const ndc = new THREE.Vector2();
+      const hitsBook = (e: PointerEvent | MouseEvent) => {
         const rect = host.getBoundingClientRect();
-        pointerX = ((e.clientX - rect.left) / Math.max(1, rect.width) - 0.5) * 2;
-        pointerY = ((e.clientY - rect.top) / Math.max(1, rect.height) - 0.5) * 2;
+        ndc.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+        raycaster.setFromCamera(ndc, camera);
+        return raycaster.intersectObject(book, true).length > 0;
+      };
+      const onPointerMove = (e: PointerEvent) => {
+        if (e.pointerType === "touch") return;
+        host.style.cursor = hitsBook(e) ? "pointer" : "";
+        if (calm()) return;
+        const rect = host.getBoundingClientRect();
+        pointerX = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+        pointerY = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
         wake();
       };
       const onPointerLeave = () => {
-        pointerX = 0;
-        pointerY = 0;
+        pointerX = pointerY = 0;
+        host.style.cursor = "";
         wake();
       };
-      const onClick = () => {
+      const onClick = (e: MouseEvent) => {
+        if (!hitsBook(e)) return;
         const list = latest.current.studies;
-        const readingT = THREE.MathUtils.clamp((currentProgress - 0.14) / (0.90 - 0.14), 0, 0.999);
-        const idx = Math.min(list.length - 1, Math.floor(readingT * list.length));
-        latest.current.onRead(idx);
+        const readingT = THREE.MathUtils.clamp((current - OPEN_END) / (READ_END - OPEN_END), 0, 0.999);
+        latest.current.onRead(Math.min(list.length - 1, Math.floor(readingT * list.length + FLIP_MID)));
       };
-
       host.addEventListener("pointermove", onPointerMove, { passive: true });
       host.addEventListener("pointerleave", onPointerLeave);
       host.addEventListener("click", onClick);
       document.addEventListener("visibilitychange", wake);
       motion.addEventListener("change", wake);
       window.addEventListener("lab:preferences", wake);
-
-      const onContextLost = (event: Event) => { event.preventDefault(); contextLost = true; };
-      const onContextRestored = () => { contextLost = false; wake(); };
-      renderer.domElement.addEventListener("webglcontextlost", onContextLost);
-      renderer.domElement.addEventListener("webglcontextrestored", onContextRestored);
+      const onLost = (event: Event) => {
+        event.preventDefault();
+        contextLost = true;
+      };
+      const onRestored = () => {
+        contextLost = false;
+        renderer.shadowMap.needsUpdate = true;
+        wake();
+      };
+      renderer.domElement.addEventListener("webglcontextlost", onLost);
+      renderer.domElement.addEventListener("webglcontextrestored", onRestored);
 
       resize();
-      renderer.shadowMap.needsUpdate = true;
-      renderer.render(scene, camera);
       latest.current.onReady();
+      wake();
 
       disposeScene = () => {
         cancelAnimationFrame(frame);
         wakeRef.current = null;
-        observer.disconnect();
+        io.disconnect();
         resizeObserver.disconnect();
         host.removeEventListener("pointermove", onPointerMove);
         host.removeEventListener("pointerleave", onPointerLeave);
@@ -664,9 +992,8 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         document.removeEventListener("visibilitychange", wake);
         motion.removeEventListener("change", wake);
         window.removeEventListener("lab:preferences", wake);
-        renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
-        renderer.domElement.removeEventListener("webglcontextrestored", onContextRestored);
-
+        renderer.domElement.removeEventListener("webglcontextlost", onLost);
+        renderer.domElement.removeEventListener("webglcontextrestored", onRestored);
         const geometries = new Set<THREE.BufferGeometry>();
         const materials = new Set<THREE.Material>();
         scene.traverse((object) => {
@@ -677,11 +1004,13 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         });
         geometries.forEach((g) => g.dispose());
         materials.forEach((m) => m.dispose());
-        pageCache.forEach(([a, b]) => { a.dispose(); b.dispose(); });
-        pageCache.clear();
+        pageCache.forEach(([a, b]) => {
+          a.dispose();
+          b.dispose();
+        });
         coverMat.map?.dispose();
-        paperEdgeTex?.dispose();
-        key.shadow.map?.dispose();
+        disposables.forEach((d) => d.dispose());
+        spot.shadow.map?.dispose();
         renderer.dispose();
         renderer.forceContextLoss();
         renderer.domElement.remove();
@@ -691,7 +1020,6 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
     void start().catch(() => {
       if (!disposed) latest.current.onUnsupported();
     });
-
     return () => {
       disposed = true;
       disposeScene();
