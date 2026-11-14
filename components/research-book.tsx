@@ -1,92 +1,227 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Modal } from "@/components/modal";
 import type { ResearchEntry } from "@/lib/content";
-import type { ResearchDeskApi } from "@/components/research-desk-canvas";
 import { site } from "@/lib/site";
 
-const ResearchDeskCanvas = dynamic(() => import("@/components/research-desk-canvas").then((module) => module.ResearchDeskCanvas), { ssr: false });
+const ResearchDeskCanvas = dynamic(
+  () => import("@/components/research-desk-canvas").then((module) => module.ResearchDeskCanvas),
+  { ssr: false },
+);
 
 export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
-  const [selected, setSelected] = useState(0);
-  const [open, setOpen] = useState(true);
+  const [progress, setProgress] = useState(0);
   const [active, setActive] = useState(false);
   const [ready, setReady] = useState(false);
-  const [reading, setReading] = useState(false);
+  const [readingIndex, setReadingIndex] = useState<number | null>(null);
   const [unsupported, setUnsupported] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const api = useRef<ResearchDeskApi | null>(null);
-  const study = studies[selected];
+  const trackRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) { setActive(true); observer.disconnect(); }
-    }, { rootMargin: "400px" });
-    observer.observe(root);
+    const track = trackRef.current;
+    if (!track) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setActive(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "450px" },
+    );
+    observer.observe(track);
     return () => observer.disconnect();
   }, []);
-  if (!study) return null;
-  const select = (index: number) => { setSelected(index); setOpen(true); };
 
-  const manuscript = (titleId: string) => <article className="research-manuscript">
-    <p className="research-manuscript-imprint">Computational &amp; Experimental Biology · {study.domain}</p>
-    <h3 id={titleId}>{study.title}</h3>
-    <p className="research-manuscript-author">{site.name}</p>
-    <p className="research-manuscript-affiliation">University of the Philippines Cebu</p>
-    <section className="research-abstract"><h4>Overview <span>{study.modality}</span></h4>
-      <p>{study.summary}</p>
-    </section>
-    <p className="research-manuscript-keywords"><strong>Keywords:</strong> {study.tags.join("; ")}</p>
-    {study.highlights.map((highlight) => <section key={highlight.heading}><h4>{highlight.heading}</h4><p>{highlight.detail}</p></section>)}
-  </article>;
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    let raf = 0;
+
+    const measure = () => {
+      raf = 0;
+      const rect = track.getBoundingClientRect();
+      const scrollable = track.offsetHeight - window.innerHeight;
+      const next = scrollable > 0 ? Math.min(1, Math.max(0, -rect.top / scrollable)) : 0;
+      setProgress((prev) => (Math.abs(prev - next) > 0.0005 ? next : prev));
+    };
+
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(measure);
+    };
+
+    measure();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, []);
+
+  const scrollToStudy = useCallback(
+    (index: number) => {
+      const track = trackRef.current;
+      if (!track) return;
+      const scrollable = track.offsetHeight - window.innerHeight;
+      if (scrollable <= 0) return;
+      const clamped = Math.max(0, Math.min(studies.length - 1, index));
+      const readingT = (clamped + 0.35) / Math.max(1, studies.length);
+      const targetP = 0.16 + readingT * (0.90 - 0.16);
+      const trackTop = track.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo({ top: trackTop + targetP * scrollable, behavior: "smooth" });
+    },
+    [studies.length],
+  );
+
+  if (!studies.length) return null;
+
+  const readingT = Math.min(0.999, Math.max(0, (progress - 0.16) / (0.90 - 0.16)));
+  const activeIndex = Math.min(studies.length - 1, Math.floor(readingT * studies.length));
+  const modalIndex = readingIndex ?? activeIndex;
+  const modalStudy = studies[modalIndex] ?? studies[0];
+
+  const manuscript = (entry: ResearchEntry, titleId: string) => (
+    <article className="research-manuscript">
+      <p className="research-manuscript-imprint">Computational &amp; Experimental Biology · {entry.domain}</p>
+      <h3 id={titleId}>{entry.title}</h3>
+      <p className="research-manuscript-author">{site.name}</p>
+      <p className="research-manuscript-affiliation">University of the Philippines Cebu</p>
+      <section className="research-abstract">
+        <h4>
+          Overview <span>{entry.modality}</span>
+        </h4>
+        <p>{entry.summary}</p>
+      </section>
+      <p className="research-manuscript-keywords">
+        <strong>Keywords:</strong> {entry.tags.join("; ")}
+      </p>
+      {entry.highlights.map((highlight) => (
+        <section key={highlight.heading}>
+          <h4>{highlight.heading}</h4>
+          <p>{highlight.detail}</p>
+        </section>
+      ))}
+    </article>
+  );
+
+  const trackHeight = `${100 + studies.length * 105}vh`;
 
   return (
-    <div ref={rootRef} className="research-desk-experience">
-      {active && !unsupported && <ResearchDeskCanvas study={study} open={open} api={api}
-        onOpen={() => setOpen(true)} onRead={() => setReading(true)}
-        onReady={() => setReady(true)} onUnsupported={() => { setUnsupported(true); setReady(true); }} />}
-      {!ready && <div className="research-desk-loading" role="status"><span aria-hidden="true" />Preparing the reading desk…</div>}
-      {unsupported && <div className="research-desk-fallback">{manuscript("research-fallback-title")}</div>}
-
-      <div className="wrap research-desk-hud">
-        <nav className="research-study-tabs" aria-label="Choose research study">
-          {studies.map((paper, index) => <button key={paper.id} type="button" aria-pressed={selected === index}
-            className={selected === index ? "is-selected" : ""} onClick={() => select(index)}>{paper.shortName}</button>)}
-        </nav>
-        <div className="research-desk-toolbar">
-          <div className="research-study-controls">
-            <button type="button" aria-label="Previous research paper" onClick={() => select((selected + studies.length - 1) % studies.length)}>←</button>
-            <span role="status">Study {selected + 1} of {studies.length}</span>
-            <button type="button" aria-label="Next research paper" onClick={() => select((selected + 1) % studies.length)}>→</button>
-            <button type="button" onClick={() => setOpen((value) => !value)}>{open ? "Close journal" : "Open journal"}</button>
-            <button type="button" className="research-read-button" onClick={() => setReading(true)}>Read study</button>
-          </div>
-          <div className="research-camera-controls" role="group" aria-label="Research desk camera controls">
-            <button type="button" aria-label="Rotate research desk left" onClick={() => api.current?.rotate(-1)}>↶</button>
-            <button type="button" aria-label="Rotate research desk right" onClick={() => api.current?.rotate(1)}>↷</button>
-            <button type="button" aria-label="Zoom research journal out" onClick={() => api.current?.zoom(-1)}>−</button>
-            <button type="button" aria-label="Zoom research journal in" onClick={() => api.current?.zoom(1)}>+</button>
-            <button type="button" onClick={() => api.current?.reset()}>Reset view</button>
-          </div>
+    <div
+      ref={trackRef}
+      className="research-scroll-track"
+      style={unsupported ? undefined : { minHeight: trackHeight }}
+    >
+      <div className={unsupported ? "research-sticky-stage is-static" : "research-sticky-stage"}>
+        <div className="wrap research-scene-heading">
+          <h2 id="research-title" className="section-title">
+            Scientific &amp; Computational Research
+          </h2>
+          <p>Molecular docking, computational pharmacology, and natural product bioassays.</p>
         </div>
-        <p className="research-desk-hint">Drag the journal to move it. Drag the desk to orbit. Use Read study for the manuscript.</p>
+
+        {active && !unsupported && (
+          <ResearchDeskCanvas
+            studies={studies}
+            progress={progress}
+            onRead={(idx) => setReadingIndex(idx)}
+            onReady={() => setReady(true)}
+            onUnsupported={() => {
+              setUnsupported(true);
+              setReady(true);
+            }}
+          />
+        )}
+
+        {!ready && (
+          <div className="research-desk-loading" role="status">
+            <span aria-hidden="true" />
+            Preparing the 3D monograph…
+          </div>
+        )}
+
+        {unsupported && (
+          <div className="research-desk-fallback">{manuscript(studies[activeIndex], "research-fallback-title")}</div>
+        )}
+
+        {!unsupported && (
+          <div className="wrap research-desk-hud">
+            <nav className="research-study-tabs" aria-label="Jump to research study">
+              {studies.map((paper, index) => (
+                <button
+                  key={paper.id}
+                  type="button"
+                  aria-pressed={activeIndex === index}
+                  className={activeIndex === index ? "is-selected" : ""}
+                  onClick={() => scrollToStudy(index)}
+                >
+                  {paper.shortName}
+                </button>
+              ))}
+            </nav>
+
+            <div className="research-desk-toolbar">
+              <div className="research-study-controls">
+                <span role="status">
+                  Study {activeIndex + 1} of {studies.length}
+                </span>
+                <div className="research-scroll-meter" aria-hidden="true">
+                  <span style={{ transform: `scaleX(${progress})` }} />
+                </div>
+                <button
+                  type="button"
+                  className="research-read-button"
+                  onClick={() => setReadingIndex(activeIndex)}
+                >
+                  Read full manuscript
+                </button>
+              </div>
+              <p className="research-desk-hint">Scroll down to open and turn pages · Click the book to read</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      {reading && <Modal className="research-reader-backdrop" labelledBy="research-manuscript-title" onClose={() => setReading(false)}>
-        <div className="research-reader-shell">
-          <button type="button" className="research-reader-close" onClick={() => setReading(false)} aria-label="Close research paper">Close ×</button>
-          {manuscript("research-manuscript-title")}
-          <nav className="research-reader-pagination" aria-label="Read another study">
-            <button type="button" onClick={() => select((selected + studies.length - 1) % studies.length)}>← Previous study</button>
-            <span>{selected + 1} / {studies.length}</span>
-            <button type="button" onClick={() => select((selected + 1) % studies.length)}>Next study →</button>
-          </nav>
-        </div>
-      </Modal>}
+      {readingIndex !== null && (
+        <Modal
+          className="research-reader-backdrop"
+          labelledBy="research-manuscript-title"
+          onClose={() => setReadingIndex(null)}
+        >
+          <div className="research-reader-shell">
+            <button
+              type="button"
+              className="research-reader-close"
+              onClick={() => setReadingIndex(null)}
+              aria-label="Close research paper"
+            >
+              Close ×
+            </button>
+            {manuscript(modalStudy, "research-manuscript-title")}
+            <nav className="research-reader-pagination" aria-label="Read another study">
+              <button
+                type="button"
+                onClick={() => setReadingIndex((modalIndex + studies.length - 1) % studies.length)}
+              >
+                ← Previous study
+              </button>
+              <span>
+                {modalIndex + 1} / {studies.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => setReadingIndex((modalIndex + 1) % studies.length)}
+              >
+                Next study →
+              </button>
+            </nav>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
