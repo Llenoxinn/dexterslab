@@ -87,6 +87,12 @@ export function ContactSection() {
   const [activeField, setActiveField] = useState<ActiveField>(null);
   const [hoveredSocial, setHoveredSocial] = useState<string | null>(null);
   const [jumping, setJumping] = useState(false);
+  // The section opens as just a heading and two choices; the form or the links appear on request.
+  const [panel, setPanel] = useState<"message" | "links" | null>(null);
+  const togglePanel = (next: "message" | "links") => {
+    setPanel((prev) => (prev === next ? null : next));
+    setCaptchaToken(""); // the captcha widget remounts with the form
+  };
 
   const firstError = errors.name ?? errors.email ?? errors.message ?? errors.captcha;
   const clearError = (field: FieldName) =>
@@ -167,18 +173,37 @@ export function ContactSection() {
       aria-labelledby="contact-heading"
       className="wrap lab-section contact-section"
     >
-      <div className="section-head">
-        <div className="section-head-titles">
-          <h2 id="contact-heading" className="section-title">
-            Get in touch
-          </h2>
-          <p className="section-intro">
-            Have a project, an internship opening, or a CTF team that needs one more? Write to me.
-          </p>
+      <div className="contact-hero">
+        <h2 id="contact-heading" className="section-title contact-hero-title">
+          Get in touch
+        </h2>
+        <p className="section-intro">
+          Have a project, an internship opening, or a CTF team that needs one more?
+        </p>
+        <div className="contact-hero-actions">
+          <button
+            type="button"
+            className={`btn ${panel === "message" ? "btn-solid" : "btn-ghost"}`}
+            aria-expanded={panel === "message"}
+            aria-controls="contact-panel"
+            onClick={() => togglePanel("message")}
+          >
+            Write me a message
+          </button>
+          <button
+            type="button"
+            className={`btn ${panel === "links" ? "btn-solid" : "btn-ghost"}`}
+            aria-expanded={panel === "links"}
+            aria-controls="contact-panel"
+            onClick={() => togglePanel("links")}
+          >
+            Find me online
+          </button>
         </div>
       </div>
 
-      <div className="contact-split">
+      <div id="contact-panel" className={`contact-panel-area ${panel ? `is-${panel}` : ""}`}>
+        {panel === "message" && (
         <form className="contact-form-card" onSubmit={handleSubmit} noValidate aria-busy={sentState === "sending"}>
           {/* Honeypot: hidden from people and assistive tech; bots tend to fill every field. */}
           <input
@@ -348,7 +373,9 @@ export function ContactSection() {
             </p>
           </div>
         </form>
+        )}
 
+        {panel === "links" && (
         <aside className="contact-side-stack" aria-label="Direct contact channels">
           <div className="contact-channel-block">
             <button
@@ -472,6 +499,7 @@ export function ContactSection() {
 
           </div>
         </aside>
+        )}
       </div>
     </section>
   );
