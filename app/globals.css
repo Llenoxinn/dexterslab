@@ -9933,3 +9933,33 @@ html:has(dialog:modal) { overflow: hidden; }
 .about-focus-item:nth-child(-n+2) { border-top:0 !important; padding-top:0 !important; }
 @media (max-width:767px) { .about-focus-item:nth-child(2) { border-top:1px solid #e2e2f3 !important; padding-top:18px !important; } }
 .about-focus-icon { display:none; }
+
+/* Contact form: honeypot stays off-screen; error hint reads as an error. */
+.contact-honeypot { position:absolute; left:-9999px; width:1px; height:1px; opacity:0; pointer-events:none; }
+.contact-form-hint.is-error { color:#b42335; }
+.contact-form-hint a { text-decoration:underline; }
+.contact-submit-btn:disabled { opacity:.7; cursor:progress; }
+.contact-captcha { display:grid; gap:6px; min-height:78px; }
+
+/* ============================================================================
+ * Clay hero: the lab renders as a white model on a pale table, so the copy goes dark.
+ * ========================================================================== */
+.hero-3d-shell {
+  background: #eef0f6;
+  color: var(--color-ink-deep);
+}
+.hero-3d-shell::after { display: none; }
+.hero-lab-loading { background: #eef0f6; }
+.hero-3d-shell .ndev-title { color: var(--color-ink-deep); }
+.hero-3d-shell .ndev-subtitle { color: rgb(10 10 93 / 0.72); }
+.hero-3d-shell .hero-3d-cue { color: rgb(10 10 93 / 0.6); text-shadow: none; }
+
+/* Scroll debris: the lab's pieces drift over the page; clicks pass straight through. */
+.lab-debris {
+  position: fixed;
+  left: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+.lab-debris canvas { display: block; opacity: 1; }
+.hero-3d-shell .btn-ghost { color: var(--color-ink-deep); border-color: rgb(10 10 93 / 0.28); }
