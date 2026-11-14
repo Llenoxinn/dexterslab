@@ -12,7 +12,10 @@ import {
   GAME_FLASK,
   GAME_TUBES,
 } from "@/lib/pixel-art";
+import { mailtoDraft, sendContactMessage } from "@/lib/contact-delivery";
 import { site } from "@/lib/site";
+
+const WEB3FORMS_KEY = process.env.NEXT_PUBLIC_WEB3FORMS_KEY ?? "";
 
 const WAVE_W = DEXTER_WAVE_A[0].length;
 const WAVE_H = DEXTER_WAVE_A.length;
@@ -74,7 +77,9 @@ export function ContactSection() {
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
-  const [sentState, setSentState] = useState<"idle" | "sent">("idle");
+  // idle → sending → sent | error. "draft" is the no-key fallback that opens the email app.
+  const [sentState, setSentState] = useState<"idle" | "sending" | "sent" | "draft" | "error">("idle");
+  const [botcheck, setBotcheck] = useState("");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [activeField, setActiveField] = useState<ActiveField>(null);
   const [hoveredSocial, setHoveredSocial] = useState<string | null>(null);
@@ -86,13 +91,16 @@ export function ContactSection() {
 
   const spriteMode: "error" | "jump" | "wave" = firstError
     ? "error"
-    : sentState === "sent" || jumping
+    : sentState === "sent" || sentState === "draft" || jumping
       ? "jump"
       : "wave";
 
   const bubbleText = (() => {
     if (firstError) return firstError;
-    if (sentState === "sent") return "Draft ready. Send it from your email app.";
+    if (sentState === "sending") return "Sending it over to my inbox…";
+    if (sentState === "sent") return `Got it! I'll reply to ${email.trim()}.`;
+    if (sentState === "draft") return "Draft ready. Send it from your email app.";
+    if (sentState === "error") return "Hmm, that didn't go through. Try again?";
     if (copied) return "Email address copied to clipboard!";
     if (hoveredSocial && SOCIAL_BUBBLES[hoveredSocial]) return SOCIAL_BUBBLES[hoveredSocial];
     if (activeField === "name") return name.trim() ? `Nice to meet you, ${name.trim().split(" ")[0]}!` : "Who is writing? Add your name.";
@@ -111,7 +119,7 @@ export function ContactSection() {
 
   const handleCopy = () => copy(site.email);
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
     const found = validate(name, email, message);
@@ -121,19 +129,29 @@ export function ContactSection() {
       (form.elements.namedItem(firstInvalid) as HTMLElement | null)?.focus();
       return;
     }
-    const cleanSubject = subject.trim() || "Hello from your portfolio";
-    const cleanName = name.trim() || "Visitor";
-    const cleanEmail = email.trim() || "not provided";
-    const fullBody = `${message.trim()}\n\n--\nFrom: ${cleanName}\nReply-To: ${cleanEmail}`;
+    const input = { name, email, subject, message, botcheck };
 
-    const mailtoUrl = `mailto:${site.email}?subject=${encodeURIComponent(
-      `[Portfolio] ${cleanSubject} (${cleanName})`
-    )}&body=${encodeURIComponent(fullBody)}`;
+    // No key configured (e.g. local dev): fall back to a pre-filled draft in the visitor's email app.
+    if (!WEB3FORMS_KEY) {
+      window.location.href = mailtoDraft(site.email, input);
+      setSentState("draft");
+      clearTimeout(draftTimer.current);
+      draftTimer.current = setTimeout(() => setSentState("idle"), 4000);
+      return;
+    }
 
-    window.location.href = mailtoUrl;
-    setSentState("sent");
-    clearTimeout(draftTimer.current);
-    draftTimer.current = setTimeout(() => setSentState("idle"), 4000);
+    setSentState("sending");
+    const result = await sendContactMessage(WEB3FORMS_KEY, input);
+    if (result.ok || result.reason === "spam") {
+      setSentState("sent");
+      clearTimeout(draftTimer.current);
+      draftTimer.current = setTimeout(() => setSentState("idle"), 8000);
+      setName("");
+      setSubject("");
+      setMessage("");
+      return;
+    }
+    setSentState("error");
   };
 
   return (
@@ -154,7 +172,18 @@ export function ContactSection() {
       </div>
 
       <div className="contact-split">
-        <form className="contact-form-card" onSubmit={handleSubmit} noValidate>
+        <form className="contact-form-card" onSubmit={handleSubmit} noValidate aria-busy={sentState === "sending"}>
+          {/* Honeypot: hidden from people and assistive tech; bots tend to fill every field. */}
+          <input
+            type="text"
+            name="botcheck"
+            tabIndex={-1}
+            autoComplete="off"
+            aria-hidden="true"
+            className="contact-honeypot"
+            value={botcheck}
+            onChange={(e) => setBotcheck(e.target.value)}
+          />
           <div className="contact-form-row">
             <div className="contact-field">
               <label className="contact-field-label" htmlFor="contact-name">Your name</label>
@@ -256,8 +285,14 @@ export function ContactSection() {
           </div>
 
           <div className="contact-form-actions">
-            <button type="submit" className={`contact-submit-btn ${sentState === "sent" ? "is-sent" : ""}`}>
-              <span>{sentState === "sent" ? "Draft ready" : "Send message"}</span>
+            <button
+              type="submit"
+              className={`contact-submit-btn ${sentState === "sent" || sentState === "draft" ? "is-sent" : ""}`}
+              disabled={sentState === "sending"}
+            >
+              <span>
+                {sentState === "sending" ? "Sending…" : sentState === "sent" ? "Sent" : sentState === "draft" ? "Draft ready" : "Send message"}
+              </span>
               <svg
                 width="14"
                 height="14"
@@ -273,7 +308,17 @@ export function ContactSection() {
                 <path d="M22 2L15 22L11 13L2 9L22 2Z" />
               </svg>
             </button>
-            <p className="contact-form-hint" role="status">{sentState === "sent" ? "Send the draft from your email app. If it did not open, email me directly." : "Opens your email app with this message filled in."}</p>
+            <p className={`contact-form-hint ${sentState === "error" ? "is-error" : ""}`} role="status">
+              {sentState === "sent"
+                ? "Message sent. I usually reply within a day or two."
+                : sentState === "error"
+                  ? <>It didn&apos;t send. Try again, or email me at <a href={`mailto:${site.email}`}>{site.email}</a>.</>
+                  : sentState === "draft"
+                    ? "Send the draft from your email app. If it did not open, email me directly."
+                    : WEB3FORMS_KEY
+                      ? "Goes straight to my inbox."
+                      : "Opens your email app with this message filled in."}
+            </p>
           </div>
         </form>
 
@@ -325,7 +370,7 @@ export function ContactSection() {
               <div
                 key={bubbleText}
                 className={`contact-dexter-bubble ${firstError ? "is-error" : ""} ${
-                  sentState === "sent" || copied ? "is-success" : ""
+                  sentState === "sent" || sentState === "draft" || copied ? "is-success" : ""
                 }`}
               >
                 {bubbleText}
