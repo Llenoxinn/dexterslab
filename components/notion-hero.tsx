@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { FlaskIcon } from "@/components/icons";
 import type { StationId } from "@/components/lab-3d-canvas";
 import { Modal } from "@/components/modal";
@@ -44,6 +44,12 @@ const LINKS = [
   { label: "LinkedIn", value: site.linkedin.replace("https://www.", "").replace(/\/$/, ""), href: site.linkedin },
 ] as const;
 
+const STATEMENT = [
+  { lead: "I build ", mark: "web tools", tail: ",", glyph: "</>" },
+  { lead: "crack ", mark: "CTFs", tail: " &", glyph: "{ }" },
+  { lead: "visualize ", mark: "bio data", tail: ".", glyph: "◎" },
+] as const;
+
 const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function NotionHero() {
@@ -72,9 +78,23 @@ export function NotionHero() {
       <div className="wrap hero-3d-hud">
         <div className="hero-3d-top">
           <div className="hero-3d-intro" inert={station !== "overview"}>
+            <p className="hero-kicker">
+              <span className="hero-kicker-dot" aria-hidden="true" />
+              Computer science · UP Cebu
+            </p>
             <h1 className="ndev-title">/dev/dexter</h1>
-            <p className="ndev-subtitle">
-              Computer science at UP Cebu. I build web tools, solve CTFs, and visualize biological data.
+            {/* A billboard statement: each line rises out of a mask, then its keyword gets a highlighter swipe. */}
+            <p className="ndev-subtitle hero-statement">
+              <span className="sr-only">Computer science at UP Cebu. I build web tools, solve CTFs, and visualize biological data.</span>
+              {STATEMENT.map((line, i) => (
+                <span className="hero-statement-line" key={line.mark} aria-hidden="true" style={{ "--line": i } as CSSProperties}>
+                  <span className="hero-statement-inner">
+                    {line.lead}
+                    <mark className="hero-statement-mark" data-glyph={line.glyph}>{line.mark}</mark>
+                    {line.tail}
+                  </span>
+                </span>
+              ))}
             </p>
             <div className="hero-split-ctas">
               <button

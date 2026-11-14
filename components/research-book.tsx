@@ -107,7 +107,20 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
         ))}
       </div>
 
+      <section className="paper-abstract">
+        <h4>Abstract</h4>
+        {entry.abstract.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+      </section>
+
       <dl className="paper-facts">
+        <div className="paper-facts-wide">
+          <dt>Proponents</dt>
+          <dd>{entry.authors.join(" · ")}</dd>
+        </div>
+        <div className="paper-facts-wide">
+          <dt>Institution{entry.date ? " & date" : ""}</dt>
+          <dd>{entry.institution}{entry.date ? ` · ${entry.date}` : ""}</dd>
+        </div>
         <div>
           <dt>Approach</dt>
           <dd>{entry.modality}</dd>

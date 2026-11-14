@@ -11,7 +11,7 @@ import { createFilipinoLab, narraTexture, sawaliTexture, signTexture } from "@/l
 import { createChristmasDecor } from "@/lib/christmas-lab";
 import { ASSEMBLE_SECONDS, STAGES, STAGE_OPACITY, createJourney } from "@/lib/lab-journey";
 import { addLabProps } from "@/lib/lab-props";
-import { CONTACT_WORD_COLUMNS, type ContactChoreography } from "@/lib/contact-choreography";
+import { CONTACT_SPIRAL_SECONDS, CONTACT_WORD_COLUMNS, type ContactChoreography } from "@/lib/contact-choreography";
 import { createStudioWindows, STUDIO_BACK_WINDOW, STUDIO_SUN_DIRECTION } from "@/lib/studio-daylight";
 
 export type FocusStation = "terminal" | "core" | "tank" | "bench" | "rack";
@@ -48,7 +48,9 @@ const BACKDROP = 0xeef0f6;
 
 type Preset = { target: [number, number, number]; theta: number; phi: number; radius: number };
 
-const OVERVIEW: Preset = { target: [2.6, 1.5, 2.4], theta: 8 * DEG, phi: 58 * DEG, radius: 33 };
+// Three-quarter corner view, like a diorama on a table: from the front-right and above, so the
+// back and left walls meet in a V and the floor reads as a lozenge.
+const OVERVIEW: Preset = { target: [2.6, 1.4, 2.4], theta: 38 * DEG, phi: 56 * DEG, radius: 37 };
 
 const PRESETS: Record<FocusStation, Preset> = {
   terminal: { target: [0.75, 1.75, -3.3], theta: 14 * DEG, phi: 80 * DEG, radius: 4.6 },
@@ -229,7 +231,9 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
 
   // ---------- Shell: a cutaway diorama. A floor slab, the back wall and the left wall; the
   // front and right stay open so the camera looks in from outside, like a model on a table. ----------
-  put(root, box(ROOM_WIDTH, 0.4, ROOM_DEPTH), M.floor, ROOM_CENTER_X, -0.2, ROOM_CENTER_Z).castShadow = false;
+  const floor = put(root, box(ROOM_WIDTH, 0.4, ROOM_DEPTH), M.floor, ROOM_CENTER_X, -0.2, ROOM_CENTER_Z);
+  floor.castShadow = false;
+  floor.userData.buildRole = "floor";
   const daylight = createStudioWindows(root, M.wall, M.sideWall);
   put(root, box(0.06, 0.2, ROOM_DEPTH), M.deep, -6.97, 0.1, ROOM_CENTER_Z, false);
   put(root, box(0.05, 0.1, ROOM_DEPTH), M.mid, -6.975, 4.6, ROOM_CENTER_Z, false);
@@ -692,7 +696,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       return;
     }
     delete host.dataset.webgl;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    const roomy = ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) > 4;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, roomy ? 2 : 1.5));
     renderer.setClearColor(0x000000, 0);
     renderer.toneMapping = THREE.NeutralToneMapping;
     renderer.toneMappingExposure = 1;
@@ -705,32 +710,29 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
 
     // Daylight on a white model: a soft sky fill, and one low sun through the window doing the drawing.
     scene.background = new THREE.Color(BACKDROP);
-    scene.add(new THREE.HemisphereLight(0xf0f5ff, 0xc9ccd8, 0.85));
+    scene.add(new THREE.HemisphereLight(0xf0f5ff, 0xd9d9e4, 1.25));
     const SUN_DIR = STUDIO_SUN_DIRECTION;
     const SUN_AT = new THREE.Vector3(ROOM_CENTER_X, 0, ROOM_CENTER_Z);
-    const key = new THREE.DirectionalLight(0xfff1d9, 3.0);
+    const key = new THREE.DirectionalLight(0xfff1e2, 2.7);
     key.position.copy(SUN_AT).addScaledVector(SUN_DIR, 26);
     key.target.position.copy(SUN_AT);
     key.castShadow = true;
-    // The shadow frustum is fitted to the room, so every texel lands on something visible:
-    // about 110 texels per metre on roomy devices, which keeps the blinds' stripes crisp.
-    const roomy = ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) > 4;
-    key.shadow.mapSize.setScalar(roomy ? 3072 : 2048);
+    // Keep small props and window slats crisp; cap the map for smaller GPUs.
+    key.shadow.mapSize.setScalar(Math.min(renderer.capabilities.maxTextureSize, roomy ? 4096 : 2048));
     key.shadow.camera.left = -13.5;
     key.shadow.camera.right = 13.5;
     key.shadow.camera.top = 11;
     key.shadow.camera.bottom = -11;
     key.shadow.camera.near = 8;
     key.shadow.camera.far = 46;
-    key.shadow.bias = -0.0003;
-    key.shadow.normalBias = 0.02;
+    key.shadow.bias = -0.00012;
+    key.shadow.normalBias = 0.012;
     // A slightly soft edge and a touch of fill inside the shadow: sunlit, not cut out.
-    key.shadow.radius = 2.2;
-    key.shadow.blurSamples = 12;
-    key.shadow.intensity = 0.82;
+    key.shadow.radius = roomy ? 3 : 1.5;
+    key.shadow.intensity = 0.76;
     scene.add(key, key.target);
     // A shadowless fill from the viewer's side keeps the inside of the walls white, not grey.
-    const fill = new THREE.DirectionalLight(0xf2f4ff, 0.45);
+    const fill = new THREE.DirectionalLight(0xe9efff, 0.7);
     fill.position.set(10, 6, 14);
     scene.add(fill);
 
@@ -749,15 +751,16 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     );
     composer.addPass(new RenderPass(scene, camera));
     const gtao = new GTAOPass(scene, camera, 1, 1);
-    gtao.blendIntensity = 0.9;
-    gtao.updateGtaoMaterial({ radius: 0.7, distanceExponent: 1.4, thickness: 1.2, scale: 1.1, samples: 8 });
+    gtao.blendIntensity = 0.72;
+    gtao.updateGtaoMaterial({ radius: 0.48, distanceExponent: 1.6, thickness: 0.5, scale: 1, samples: roomy ? 16 : 8 });
+    gtao.updatePdMaterial({ radius: 6, lumaPhi: 10, depthPhi: 1, normalPhi: 4, samples: 16 });
     // Glass and the light shaft would otherwise cast AO onto whatever sits behind them.
     const gtaoVis = gtao as unknown as { _overrideVisibility: () => void; _visibilityCache: THREE.Object3D[] };
     const hideBase = gtaoVis._overrideVisibility.bind(gtao);
     gtaoVis._overrideVisibility = () => {
       hideBase();
       scene.traverse((o) => {
-        if (o instanceof THREE.Mesh && o.visible && (o.material as THREE.Material).transparent) {
+        if (o instanceof THREE.Mesh && o.visible && (Array.isArray(o.material) ? o.material : [o.material]).every((material) => material.transparent)) {
           o.visible = false;
           gtaoVis._visibilityCache.push(o);
         }
@@ -785,6 +788,9 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     const sunShaft = scene.getObjectByName("sun-shaft");
     let journeyWasOn = false;
     let journalEl: HTMLElement | null = null;
+    const interludeEl = document.getElementById("interlude");
+    let interludeTop = 0;
+    let interludeSpan = 1;
     let smoothY = window.scrollY;
     const heroShell = host.closest(".hero-3d-shell");
     let stageOpacity = 1;
@@ -813,12 +819,13 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         const el = document.getElementById(id);
         return el ? el.getBoundingClientRect().top + window.scrollY : fallback;
       };
+      interludeTop = top("interlude", vh);
+      interludeSpan = Math.max(1, (interludeEl?.offsetHeight ?? vh) - vh);
       const keys = [
         0,
         vh * 0.9,
-        // The rings finish forming most of a screen into the pinned interlude: the organizing
-        // happens in front of the headline, driven by the scroll.
-        top("interlude", vh) + vh * 0.95,
+        // Form the rings during the first title, then keep them through the four beats.
+        interludeTop + vh * 0.25,
         top("method", vh * 3) - vh * 0.25,
         top("experience", vh * 2) - vh * 0.5,
         top("achievements", vh * 4) - vh * 0.6,
@@ -913,11 +920,11 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         Math.min(cur.target.z + r * sinPhi * Math.cos(theta), ROOM.zFront),
       );
       camera.lookAt(cur.target);
-      // The overview leaves room for the hero copy: beside it on wide screens, below it on narrow ones.
+      // The overview leaves room for the hero copy: the room sits left of it on wide screens, below it on narrow ones.
       const wide = width >= 900;
-      // The diorama sits centred and low, under the copy, like a model on a table.
-      const dx = 0;
-      const dy = (wide ? -0.09 : -0.14) * height * cur.shift;
+      // A positive x offset slides the view window right, so the diorama lands in the left of the frame.
+      const dx = (wide ? 0.16 : 0) * width * cur.shift;
+      const dy = (wide ? -0.04 : -0.14) * height * cur.shift;
       camera.setViewOffset(width, height, dx, dy, width, height);
     };
 
@@ -1157,6 +1164,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       if (contactEl) {
         const ready = !calm && STAGES[from] === "frame" && contactPose.message > .12;
         if ((contactEl.dataset.wordReady === "true") !== ready) contactEl.dataset.wordReady = String(ready);
+        const linksPing = !calm && STAGES[from] === "frame" && contactMode === "links" && linksSeconds >= CONTACT_SPIRAL_SECONDS + 2.5;
+        if ((contactEl.dataset.linksPing === "true") !== linksPing) contactEl.dataset.linksPing = String(linksPing);
       }
       // Reduced motion: no journey, the lab just fades as you leave the hero.
       const eased = mix * mix * (3 - 2 * mix);
@@ -1174,6 +1183,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         camera,
         time: animT,
         scroll: scrolled,
+        interlude: clamp((scrolled - interludeTop) / interludeSpan, 0, 1),
         contentEdge,
         pointer: pointerOn ? pointerNdc : null,
         contact: contactPose,
@@ -1194,7 +1204,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       }
 
       // Shadows follow every frame while pieces are landing or leaving the floor.
-      if (shadowFrame % (journeyOn && from === 0 ? 1 : 4) === 0) renderer.shadowMap.needsUpdate = true;
+      if (shadowFrame % (from === 0 ? 1 : 4) === 0) renderer.shadowMap.needsUpdate = true;
       shadowFrame += 1;
       // The journal is a full-screen scene of its own with an opaque backdrop. While it covers the
       // viewport this layer is invisible, so it stops drawing and leaves the GPU to the journal.
@@ -1247,7 +1257,10 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       io.disconnect();
       coverObserver.disconnect();
       contactObserver.disconnect();
-      if (contactEl) delete contactEl.dataset.wordReady;
+      if (contactEl) {
+        delete contactEl.dataset.wordReady;
+        delete contactEl.dataset.linksPing;
+      }
       ro.disconnect();
       pageObserver.disconnect();
       document.removeEventListener("visibilitychange", wake);

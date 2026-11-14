@@ -9912,12 +9912,12 @@ html:has(dialog:modal) { overflow: hidden; }
 .reel-slot { min-height:0; }
 .reel-slot > .work-case, .reel-sizer .work-case { height:100%; margin:0; border:0; border-radius:0; box-shadow:none; }
 .reel > .slot-lever { position:absolute; top:50%; left:100%; translate:0 -50%; }
-/* Pixel lever: pull it and the knob drops, then springs back. */
+/* Smooth machined lever: pull it and the knob drops, then springs back. */
 .slot-lever { position:relative; align-self:center; justify-self:center; width:46px; height:150px; padding:0; border:0; background:none; cursor:pointer; }
-.slot-lever-stick { position:absolute; left:28px; bottom:46px; width:8px; height:92px; translate:-50% 0; background:#cbcbef; transform-origin:bottom center; transition:transform 260ms cubic-bezier(.34,1.56,.64,1); }
-.slot-lever-knob { position:absolute; left:50%; top:-14px; width:22px; height:22px; translate:-50% 0; background:#1313ba; clip-path:polygon(30% 0,70% 0,70% 10%,90% 10%,90% 30%,100% 30%,100% 70%,90% 70%,90% 90%,70% 90%,70% 100%,30% 100%,30% 90%,10% 90%,10% 70%,0 70%,0 30%,10% 30%,10% 10%,30% 10%); }
-.slot-lever-base { position:absolute; left:10px; bottom:0; width:36px; height:52px; background:#1313ba; }
-.slot-lever-base::before { content:""; position:absolute; left:-10px; top:6px; width:10px; height:40px; background:#1313ba; }
+.slot-lever-stick { position:absolute; left:28px; bottom:46px; width:8px; height:92px; translate:-50% 0; border-radius:999px; background:linear-gradient(90deg,#b8b8e6,#e4e4fa 45%,#a5a5de); transform-origin:bottom center; transition:transform 260ms cubic-bezier(.34,1.56,.64,1); }
+.slot-lever-knob { position:absolute; left:50%; top:-14px; width:22px; height:22px; translate:-50% 0; border-radius:50%; background:radial-gradient(circle at 35% 30%,#4d4df5,#1313ba 68%,#0a0a7a); box-shadow:0 4px 10px rgb(19 19 186 / .28); }
+.slot-lever-base { position:absolute; left:10px; bottom:0; width:36px; height:52px; border-radius:0 12px 12px 0; background:linear-gradient(180deg,#1a1ad0,#1313ba 60%,#0c0c8a); }
+.slot-lever-base::before { content:""; position:absolute; left:-10px; top:6px; width:10px; height:40px; border-radius:6px 0 0 6px; background:#0f0f99; }
 .slot-lever.is-pulled .slot-lever-stick { transform:scaleY(-.55); transition:transform 140ms cubic-bezier(.55,0,1,.45); }
 .slot-lever:focus-visible { outline:2px solid #1313ba; outline-offset:4px; }
 @media (hover:hover) and (pointer:fine) {
@@ -10076,85 +10076,62 @@ body { background: var(--color-paper); }
   from { opacity: 0; transform: translateY(10px); }
 }
 
-/* Interlude: one loud line between the hero and the page, ringed by the lab's debris. */
+/* Four scroll-scrubbed title beats, framed by the lab's orbiting pieces. */
 .lab-interlude { position: relative; z-index: 1; }
 .lab-interlude-pin {
   display: grid;
   place-content: center;
   justify-items: center;
-  gap: 20px;
-  min-height: 100dvh;
-  padding: 0 var(--gutter);
+  gap: clamp(20px, 4vh, 36px);
+  min-height: 100svh;
+  padding: 72px var(--gutter) 40px;
   text-align: center;
 }
-/* The line stays pinned for an extra screen and a bit, so the rings have time to form and turn. */
-@media (prefers-reduced-motion: no-preference) {
-  .lab-interlude { height: 230dvh; }
-  .lab-interlude-pin { position: sticky; top: 0; height: 100dvh; }
+.lab-interlude-eyebrow {
+  font-family: var(--font-mono);
+  font-size: clamp(.625rem, 1.2vw, .75rem);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--color-ink);
+  opacity: .58;
 }
 .lab-interlude-title {
-  font-family: var(--font-heading);
-  font-size: clamp(2.75rem, 9vw, 7.5rem);
-  font-weight: 700;
-  line-height: 0.98;
-  letter-spacing: -0.045em;
+  display: grid;
+  width: 100%;
+  font-family: var(--font-chakra), sans-serif;
+  font-size: clamp(2rem, 8.4vw, 7rem);
+  font-weight: 600;
+  line-height: .98;
+  letter-spacing: -.065em;
   color: var(--color-ink-deep);
 }
-.lab-interlude-line { display: block; overflow: hidden; padding-block: 0.04em 0.1em; }
-.lab-interlude-rise { display: inline-block; white-space: nowrap; }
-/* Each cell is exactly as wide as its real letter, so CODE keeps natural letter spacing. */
-.lab-interlude-cell { position: relative; display: inline-block; }
-.lab-interlude-cell.is-noise .lab-interlude-cell-real { visibility: hidden; }
-.lab-interlude-cell-noise {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: var(--color-neon);
-  opacity: 0.55;
-}
-.lab-interlude-caret {
-  display: inline-block;
-  width: 0.09em;
-  height: 0.78em;
-  margin-left: 0.08em;
-  background: var(--color-neon);
-  vertical-align: -0.04em;
-}
-.lab-interlude-flap { display: inline-block; color: var(--color-neon); perspective: 600px; }
-.lab-interlude-flap-cell { display: inline-block; transform-origin: 50% 60%; backface-visibility: hidden; }
-.lab-interlude-sub {
-  max-width: 40ch;
-  font-size: clamp(1rem, 1.6vw, 1.25rem);
-  font-weight: 500;
-  color: rgb(10 10 93 / 0.72);
-}
+.lab-interlude-beat { grid-area: 1 / 1; min-width: 0; }
+.lab-interlude-beat:not(:first-child) { visibility: hidden; }
+.lab-interlude[data-motion="full"] .lab-interlude-beat { visibility: visible; }
+.lab-interlude-line { display: block; overflow: hidden; padding-block: .08em .14em; white-space: nowrap; perspective: 900px; }
+.lab-interlude-line > span { display: inline-block; transform-origin: 50% 65%; backface-visibility: hidden; }
+.lab-interlude-accent { color: var(--color-neon); }
+.lab-interlude-accent-2 { color: var(--color-ink); }
+.lab-interlude-accent-3 { color: var(--color-ink); }
+.lab-interlude-timeline { width: min(400px, 78vw); }
+.lab-interlude-meter { height: 2px; background: rgb(19 19 186 / .12); overflow: hidden; }
+.lab-interlude-meter-fill { display: block; height: 100%; background: var(--color-ink); transform: scaleX(0); transform-origin: left; }
+.lab-interlude-steps { display: flex; justify-content: space-between; gap: 12px; padding-top: 14px; }
+.lab-interlude-step { font-size: .6875rem; color: var(--color-ink); opacity: .35; transition: opacity 180ms ease; }
+.lab-interlude-step > span { font-variant-numeric: tabular-nums; margin-right: 4px; }
+.lab-interlude-step[data-active="true"] { opacity: 1; }
+.lab-interlude-sub { font-size: .75rem; color: var(--color-ink-deep); opacity: .6; }
 @media (prefers-reduced-motion: no-preference) {
-  .lab-interlude-rise {
-    transform: translateY(110%) rotate(7deg);
-    transform-origin: 0 100%;
-    transition: transform 760ms cubic-bezier(0.23, 1, 0.32, 1);
-  }
-  .lab-interlude.is-inview .lab-interlude-rise { transform: none; }
-  /* A letter snaps in when it finishes decoding. */
-  .lab-interlude-cell.is-locked { animation: cell-lock 260ms cubic-bezier(0.23, 1, 0.32, 1); }
-  .lab-interlude-caret { animation: caret-blink 1.05s steps(1) infinite; }
-  .lab-interlude-sub { opacity: 0; transition: opacity 500ms ease 420ms; }
-  .lab-interlude.is-inview .lab-interlude-sub { opacity: 1; }
-  /* Split-flap: a letter that changes tips over the top edge and settles with a small overshoot. */
-  .lab-interlude-flap-cell { animation: flap-in 420ms cubic-bezier(0.23, 1, 0.32, 1) backwards; }
+  .lab-interlude[data-motion="full"] { height: 360svh; }
+  .lab-interlude[data-motion="full"] .lab-interlude-pin { position: sticky; top: 0; height: 100svh; }
 }
-@keyframes cell-lock {
-  0% { transform: translateY(-0.08em) scale(1.08); color: var(--color-neon); }
-  100% { transform: none; }
-}
-@keyframes caret-blink {
-  50% { opacity: 0; }
-}
-@keyframes flap-in {
-  0% { transform: rotateX(-92deg) translateY(-0.12em); opacity: 0; }
-  60% { transform: rotateX(14deg); opacity: 1; }
-  100% { transform: rotateX(0deg); }
+/* A compact, readable sequence also works before hydration and with motion disabled. */
+.lab-interlude[data-motion="calm"] .lab-interlude-title { gap: 28px; font-size: clamp(1.75rem, 5.5vw, 3.5rem); }
+.lab-interlude[data-motion="calm"] .lab-interlude-beat { grid-area: auto; visibility: visible; }
+.lab-interlude[data-motion="calm"] :is(.lab-interlude-timeline, .lab-interlude-sub) { display: none; }
+@media (max-width: 480px) {
+  .lab-interlude-step { font-size: .625rem; }
+  .lab-interlude-step > span { display: block; margin: 0 0 4px; }
 }
 
 /* Once the lab comes apart, its station buttons and zoom controls step out of the way. */
@@ -10194,13 +10171,163 @@ body { background: var(--color-paper); }
 }
 @media (max-width: 599px) { .site-header .wordmark { font-size: 1.35rem; } }
 
-/* One deliberate ignition: letters decode, BEGIN opens, and the signal settles. */
-.lab-interlude-signal { width: 64px; height: 3px; overflow: hidden; background: var(--color-lavender); }
-.lab-interlude-signal > span { display: block; width: 100%; height: 100%; background: var(--color-ink); transform: scaleX(0); transform-origin: left; transition: transform 600ms var(--ease-in-out); }
-.lab-interlude.is-decoded .lab-interlude-signal > span { transform: scaleX(1); }
-@media (prefers-reduced-motion: no-preference) {
-  .lab-interlude-flap-cell { animation: none; opacity: 0; transform: translateY(100%) rotateX(-65deg); transition: transform 500ms var(--ease-out), opacity 220ms ease; }
-  .lab-interlude.is-decoded .lab-interlude-flap-cell { opacity: 1; transform: none; }
-  .lab-interlude.is-decoded .lab-interlude-caret { animation-iteration-count: 3; }
+
+.paper-abstract { display: grid; gap: 16px; }
+.paper-abstract h4 { font-size: 1rem; font-weight: 700; color: #1b1d33; }
+.paper-abstract p { font-size: .9375rem; line-height: 1.75; color: #474a66; text-wrap: pretty; }
+[data-lab-theme="phosphor"] .paper-abstract h4 { color: #eef0ff; }
+[data-lab-theme="phosphor"] .paper-abstract p { color: #c9cdf0; }
+
+/* ============================================================================
+ * Hero: the room sits left (camera view offset), the copy takes the right column.
+ * The subtitle is a billboard statement: lines rise out of masks, then each
+ * keyword gets an ink highlighter swipe and a small code glyph.
+ * ========================================================================== */
+.hero-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: .75rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgb(10 10 93 / .62);
 }
-[data-lab-fx="calm"] .lab-interlude :is(.lab-interlude-rise, .lab-interlude-flap-cell, .lab-interlude-sub) { transform: none; opacity: 1; transition: none; }
+.hero-kicker-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--color-neon);
+  box-shadow: 0 0 0 0 rgb(102 102 253 / .5);
+  animation: hero-kicker-ping 2.4s var(--ease-out) infinite;
+}
+@keyframes hero-kicker-ping {
+  0% { box-shadow: 0 0 0 0 rgb(102 102 253 / .5); }
+  70%, 100% { box-shadow: 0 0 0 8px rgb(102 102 253 / 0); }
+}
+
+.hero-3d-shell .ndev-title {
+  font-size: clamp(1.5rem, 2.3vw, 2.125rem);
+  letter-spacing: -.02em;
+}
+
+.hero-3d-shell .hero-statement {
+  display: grid;
+  max-width: none;
+  margin: 6px 0 14px;
+  font-family: var(--font-inter), var(--font-sans), sans-serif;
+  font-size: clamp(1.9rem, 3.1vw, 3.5rem);
+  font-weight: 700;
+  line-height: .98;
+  letter-spacing: -.045em;
+  text-transform: uppercase;
+  color: var(--color-ink-deep);
+}
+.hero-statement-line {
+  display: block;
+  overflow: hidden;
+  /* Room for the mark's padding and the glyph, which sit outside the line box. */
+  padding: .1em .35em .06em 0;
+  margin-bottom: -.04em;
+}
+.hero-statement-inner {
+  display: inline-block;
+  white-space: nowrap;
+  animation: hero-line-rise 900ms cubic-bezier(.16, 1, .3, 1) both;
+  animation-delay: calc(450ms + var(--line) * 130ms);
+}
+@keyframes hero-line-rise {
+  from { transform: translate3d(0, 110%, 0) rotate(3deg); }
+  to { transform: translate3d(0, 0, 0) rotate(0); }
+}
+
+.hero-statement-mark {
+  position: relative;
+  padding: 0 .12em;
+  margin: 0 .02em;
+  color: inherit;
+  background: linear-gradient(var(--color-ink), var(--color-ink)) no-repeat left 55% / 0% 88%;
+  border-radius: .08em;
+  animation: hero-mark-swipe 650ms cubic-bezier(.77, 0, .175, 1) both;
+  animation-delay: calc(1150ms + var(--line) * 180ms);
+}
+@keyframes hero-mark-swipe {
+  0% { background-size: 0% 88%; color: var(--color-ink-deep); }
+  60% { color: var(--color-paper); }
+  100% { background-size: 100% 88%; color: var(--color-paper); }
+}
+/* A tiny code glyph pops off the corner of each keyword once it is highlighted. */
+.hero-statement-mark::after {
+  content: attr(data-glyph);
+  position: absolute;
+  top: -.42em;
+  right: -.5em;
+  font-family: var(--font-mono);
+  font-size: .3em;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--color-neon);
+  animation: hero-glyph-pop 500ms cubic-bezier(.34, 1.56, .64, 1) both;
+  animation-delay: calc(1650ms + var(--line) * 180ms);
+}
+@keyframes hero-glyph-pop {
+  from { opacity: 0; transform: translate3d(-6px, 6px, 0) scale(.6) rotate(-12deg); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1) rotate(0); }
+}
+@media (hover: hover) and (pointer: fine) {
+  .hero-statement-mark::after { transition: transform 260ms cubic-bezier(.34, 1.56, .64, 1); }
+  .hero-statement-line:hover .hero-statement-mark::after { transform: translate3d(2px, -3px, 0) rotate(10deg) scale(1.15); }
+}
+
+/* Wide screens: the copy moves into the free space right of the diorama. */
+@media (min-width: 900px) {
+  .hero-3d-top { justify-content: flex-end; }
+  .hero-3d-intro { max-width: min(560px, 42vw); margin-top: clamp(8px, 6vh, 64px); }
+}
+
+@media (max-width: 899px) {
+  .hero-3d-shell .hero-statement { font-size: clamp(1.75rem, 7.4vw, 2.6rem); }
+}
+
+/* Still states: no rise or swipe, keywords already inked. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-statement-inner, .hero-statement-mark, .hero-statement-mark::after, .hero-kicker-dot { animation: none; }
+  .hero-statement-mark { background-size: 100% 88%; color: var(--color-paper); }
+}
+html[data-lab-fx="calm"] :is(.hero-statement-inner, .hero-statement-mark, .hero-statement-mark::after, .hero-kicker-dot) { animation: none; }
+html[data-lab-fx="calm"] .hero-statement-mark { background-size: 100% 88%; color: var(--color-paper); }
+
+/* Contact links heading: gradually morphs to "Ping me, anytime." as 3D PING words emerge. */
+.contact-links-morph {
+  display: inline-grid;
+  place-items: center;
+}
+.contact-links-from,
+.contact-links-to {
+  grid-area: 1 / 1;
+  transition:
+    opacity 950ms cubic-bezier(.22, 1, .36, 1),
+    transform 950ms cubic-bezier(.22, 1, .36, 1),
+    filter 950ms cubic-bezier(.22, 1, .36, 1);
+}
+.contact-links-to {
+  opacity: 0;
+  transform: translate3d(0, 14px, 0) scale(.96);
+  filter: blur(6px);
+  pointer-events: none;
+}
+#contact[data-links-ping="true"] .contact-links-from {
+  opacity: 0;
+  transform: translate3d(0, -14px, 0) scale(.96);
+  filter: blur(6px);
+  pointer-events: none;
+}
+#contact[data-links-ping="true"] .contact-links-to {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  filter: blur(0);
+  pointer-events: auto;
+  transition-delay: 220ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .contact-links-from, .contact-links-to { transition: none; filter: none; transform: none; }
+}
