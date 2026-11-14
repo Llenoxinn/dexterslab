@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { createCartoonLab } from "@/lib/lab-cartoon";
 import { createChristmasDecor } from "@/lib/christmas-lab";
 
 export type FocusStation = "terminal" | "core" | "tank" | "bench" | "rack";
@@ -72,7 +73,7 @@ function createFloorTexture() {
   return pixelTexture(32, 32, (ctx) => {
     for (let y = 0; y < 2; y++) {
       for (let x = 0; x < 2; x++) {
-        ctx.fillStyle = (x + y) % 2 === 0 ? "#0a0a5d" : "#0e0e78";
+        ctx.fillStyle = (x + y) % 2 === 0 ? "#3a5cc4" : "#2b44a3";
         ctx.fillRect(x * 16, y * 16, 16, 16);
       }
     }
@@ -214,7 +215,7 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
 
   const floorTex = createFloorTexture();
   floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
-  floorTex.repeat.set(7, 9);
+  floorTex.repeat.set(10, 13);
   const wallTex = createWallTexture();
   wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping;
   wallTex.repeat.set(7, 6);
@@ -226,14 +227,15 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
   textures.push(floorTex, crtTex, blueprintTex);
 
   const M = {
-    wall: std(0x263650),
-    sideWall: std(0x1b2b46),
-    floor: std(0x24364c, { roughness: 0.5 }),
-    paper: std(0xe9e7df),
-    lav: std(0xa5bac7),
-    ink: std(0x324b6e),
-    mid: std(0x4f7796),
-    deep: std(0x10233d),
+    // Cartoon secret-lab palette: royal-blue panels, periwinkle trims, a bright checker floor.
+    wall: std(0x2a3a9c),
+    sideWall: std(0x22307f),
+    floor: std(0xffffff, { roughness: 0.45, map: floorTex }),
+    paper: std(0xeef0fb),
+    lav: std(0xb9c4f2),
+    ink: std(0x2c3d96),
+    mid: std(0x5a86dc),
+    deep: std(0x151d5e),
     steel: std(0xa4b7c6, { metalness: 0.45, roughness: 0.4 }),
     neon: std(NEON, { emissive: NEON, emissiveIntensity: 1.3 }),
     glow: std(0xffe2b2, { emissive: 0xffc67d, emissiveIntensity: 0.75 }),
@@ -245,7 +247,7 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
       depthWrite: false,
     }),
     liquid: std(NEON, { emissive: NEON, emissiveIntensity: 0.9, transparent: true, opacity: 0.6, depthWrite: false }),
-    tankFluid: std(NEON, { emissive: INK, emissiveIntensity: 0.6, transparent: true, opacity: 0.22, depthWrite: false }),
+    tankFluid: std(0x3fe0d0, { emissive: 0x1bb5a8, emissiveIntensity: 0.7, transparent: true, opacity: 0.26, depthWrite: false }),
     holo: new THREE.MeshBasicMaterial({
       color: NEON,
       transparent: true,
@@ -509,7 +511,12 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
   // ---------- Patrol drone ----------
   const drone = group(root, 0, 3.4, 0);
   put(drone, box(0.42, 0.16, 0.42), M.paper, 0, 0, 0);
-  put(drone, box(0.2, 0.08, 0.03), M.neon, 0, 0, 0.22, false);
+  // Big cartoon eyes make the patrol drone a little lab buddy.
+  const droneEyes = group(drone, 0, 0.0, 0.215);
+  for (const sx of [-0.09, 0.09]) {
+    put(droneEyes, cyl(0.062, 0.062, 0.02, 20), M.paper, sx, 0, 0, false).rotation.x = Math.PI / 2;
+    put(droneEyes, cyl(0.03, 0.03, 0.022, 16), M.deep, sx, -0.005, 0.006, false).rotation.x = Math.PI / 2;
+  }
   put(drone, box(0.03, 0.18, 0.03), M.deep, 0, 0.16, -0.1, false);
   const rotors = [-1, 1].flatMap((sx) =>
     [-1, 1].map((sz) => {
@@ -517,6 +524,8 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
       return put(drone, box(0.34, 0.015, 0.05), M.ink, sx * 0.3, 0.13, sz * 0.3, false);
     }),
   );
+
+  const cartoon = createCartoonLab(root, { deep: M.deep, paper: M.paper, neon: M.neon });
 
   let lastArc = -1;
   let lastLed = -1;
@@ -566,6 +575,9 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
       }
 
       christmas.tick(t);
+      cartoon.tick(t);
+      // The drone blinks every few seconds.
+      droneEyes.scale.y = (t % 3.7) < 0.12 ? 0.15 : 1;
 
       helix.rotation.y = t * 0.32;
       for (const b of tankBubbles) {
@@ -649,10 +661,10 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     host.dataset.renderStyle = "smooth";
     host.appendChild(renderer.domElement);
 
-    scene.background = new THREE.Color(0x14253e);
-    scene.fog = new THREE.Fog(0x14253e, 19, 42);
-    scene.add(new THREE.HemisphereLight(0xd8e6ff, 0x243249, 1.9));
-    const key = new THREE.DirectionalLight(0xffe4bd, 3.2);
+    scene.background = new THREE.Color(0x101a5a);
+    scene.fog = new THREE.Fog(0x101a5a, 19, 42);
+    scene.add(new THREE.HemisphereLight(0xd8e2ff, 0x1a2266, 1.55));
+    const key = new THREE.DirectionalLight(0xffe4bd, 2.4);
     key.position.set(5, 13, 10);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
@@ -663,7 +675,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     key.shadow.camera.far = 50;
     key.shadow.bias = -0.0006;
     key.shadow.normalBias = 0.03;
-    const tankGlow = new THREE.PointLight(NEON, 14, 7);
+    const tankGlow = new THREE.PointLight(0x3fe0d0, 14, 7);
     tankGlow.position.set(4.6, 1.9, 0.3);
     const coreGlow = new THREE.PointLight(0xffc787, 14, 7);
     coreGlow.position.set(-2.4, 1.5, 0.8);
@@ -931,6 +943,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       if (shadowFrame % 4 === 0) renderer.shadowMap.needsUpdate = true;
       shadowFrame += 1;
       renderer.render(scene, camera);
+      if (!host.dataset.ready) host.dataset.ready = "true"; // fade the scene in over the loader
       if (visible && !covered && !document.hidden && !calm) raf = requestAnimationFrame(frame);
     };
     const wake = () => {

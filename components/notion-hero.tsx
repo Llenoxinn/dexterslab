@@ -1,7 +1,6 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import { FlaskIcon } from "@/components/icons";
 import type { StationId } from "@/components/lab-3d-canvas";
@@ -11,15 +10,12 @@ import { site } from "@/lib/site";
 
 const Lab3DCanvas = dynamic(() => import("@/components/lab-3d-canvas").then((mod) => mod.Lab3DCanvas), {
   ssr: false,
+  // A matching backdrop instead of a stale screenshot: the scene fades in over it on its first frame.
   loading: () => (
-    <Image
-      src="/lab-preview.png"
-      className="hero-lab-preview"
-      alt="3D laboratory preview"
-      fill
-      sizes="100vw"
-      priority
-    />
+    <div className="hero-lab-loading" role="status">
+      <span className="hero-lab-loading-flask" aria-hidden="true" />
+      <span className="sr-only">Loading the 3D laboratory</span>
+    </div>
   ),
 });
 
@@ -197,7 +193,7 @@ export function NotionHero() {
                           <a className="dev-row" href="#projects" onClick={close}>
                             <span className="dev-row-main">
                               <span className="dev-row-name">{p.name}</span>
-                              <span className="dev-row-sub">{p.summary}</span>
+                              <span className="dev-row-sub">{p.tagline}</span>
                             </span>
                             <span className="dev-row-meta">
                               <span>{sentence(p.status)}</span>

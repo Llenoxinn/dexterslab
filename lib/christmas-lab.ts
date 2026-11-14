@@ -61,6 +61,16 @@ export function createChristmasDecor(root: THREE.Group, core: THREE.Group, termi
     const radius = 0.88 * (1 - y / 3.4);
     ornaments.push(ball(tree, index % 2 ? red : gold, 0.065, Math.cos(angle) * radius, y, Math.sin(angle) * radius));
   }
+  // Star-lantern shape and paper colours shared by the parol garland.
+  const lanternShape = new THREE.Shape();
+  for (let point = 0; point < 10; point++) {
+    const angle = Math.PI / 2 + point * Math.PI / 5;
+    const radius = point % 2 ? 0.055 : 0.13;
+    if (point === 0) lanternShape.moveTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+    else lanternShape.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+  }
+  lanternShape.closePath();
+  const parolColors = [0xf2661c, 0x2fbf68, 0xf5c518, 0xece6da, 0xe8384b, 0x35cbbd].map((color) => new THREE.Color(color));
   const starShape = new THREE.Shape();
   for (let point = 0; point < 10; point++) {
     const angle = Math.PI / 2 + point * Math.PI / 5;
@@ -146,7 +156,10 @@ export function createChristmasDecor(root: THREE.Group, core: THREE.Group, termi
     box(windowFrame, bulbs[0], [0.055, 0.07, 0.012], x - 0.06, -0.9 + height / 2, 0.015);
   }
 
-  // Gentle catenary lights read as Christmas without flashing or adding many lights.
+  // A garland of little star lanterns, like the parol arches strung over Filipino streets at Christmas.
+  const garland: THREE.Group[] = [];
+  const garlandGeometry = new THREE.ExtrudeGeometry(lanternShape, { depth: 0.04, bevelEnabled: true, bevelSize: 0.015, bevelThickness: 0.02, bevelSegments: 1 });
+  const garlandMaterials = parolColors.map((color) => new THREE.MeshBasicMaterial({ color, toneMapped: false }));
   for (let span = 0; span < 3; span++) {
     const points: THREE.Vector3[] = [];
     for (let index = 0; index <= 16; index++) {
@@ -154,10 +167,15 @@ export function createChristmasDecor(root: THREE.Group, core: THREE.Group, termi
       const x = -6.6 + span * 4.4 + fraction * 4.4;
       const y = 4.9 - Math.sin(fraction * Math.PI) * 0.65;
       points.push(new THREE.Vector3(x, y, -3.72));
-      if (index % 2 === 0) {
-        mesh(decor, new THREE.CylinderGeometry(0.025, 0.025, 0.12, 8), wire, x, y - 0.06, -3.72);
-        const bulb = ball(decor, bulbs[(index / 2 + span) % bulbs.length], 0.07, x, y - 0.16, -3.72);
-        bulb.scale.y *= 1.35;
+      if (index % 2 === 1) {
+        const hanger = new THREE.Group();
+        hanger.position.set(x, y, -3.68);
+        hanger.userData.phase = span * 3 + index;
+        decor.add(hanger);
+        mesh(hanger, new THREE.CylinderGeometry(0.006, 0.006, 0.16, 4), wire, 0, -0.08, 0);
+        const lantern = mesh(hanger, garlandGeometry, garlandMaterials[(index + span * 2) % garlandMaterials.length], 0, -0.29, 0);
+        lantern.scale.setScalar(1.15);
+        garland.push(hanger);
       }
     }
     cable(decor, points);
@@ -176,10 +194,12 @@ export function createChristmasDecor(root: THREE.Group, core: THREE.Group, termi
 
   // Parols: luminous star panels, raised bamboo-like frames, and hanging tails.
   const parols: THREE.Group[] = [];
+  const chases: Array<{ mesh: THREE.InstancedMesh; colors: THREE.Color[] }> = [];
+  const chaseBulb = new THREE.SphereGeometry(0.032, 8, 6);
   for (const [x, y, scale, palette] of [
-    [-5.2, 3.95, 0.9, [0xffca75, 0xd85459]],
-    [0.0, 4.25, 1.1, [0xffdf9b, 0x71c5b7]],
-    [5.5, 4.35, 0.9, [0xffdca1, 0xe99093]],
+    [-5.2, 3.95, 0.9, [0xffb020, 0xff3d6e]],
+    [0.0, 4.25, 1.1, [0xffe066, 0x3fe0d0]],
+    [5.5, 4.35, 0.9, [0xff7a2e, 0x4ade80]],
   ] as const) {
     const lantern = new THREE.Group();
     lantern.name = "parol-lantern";
@@ -205,6 +225,27 @@ export function createChristmasDecor(root: THREE.Group, core: THREE.Group, termi
     }
     cable(lantern, [...outline, outline[0].clone()], 0.022).material = cream;
     mesh(lantern, new THREE.TorusGeometry(0.73, 0.022, 8, 64), gold, 0, 0, -0.01);
+    // Capiz-style petals between the star's points and a ring of chasing bulbs around the hoop.
+    const petalMaterial = new THREE.MeshBasicMaterial({ color: palette[1], toneMapped: false, transparent: true, opacity: 0.85 });
+    for (let point = 0; point < 5; point++) {
+      const angle = Math.PI / 2 + Math.PI / 5 + point * (Math.PI * 2) / 5;
+      const petal = mesh(lantern, sphere, petalMaterial, Math.cos(angle) * 0.47, Math.sin(angle) * 0.47, 0.03);
+      petal.scale.set(0.13, 0.07, 0.02);
+      petal.rotation.z = angle;
+    }
+    const chase = new THREE.InstancedMesh(chaseBulb, new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), 24);
+    chase.name = "parol-chase-lights";
+    for (let bulb = 0; bulb < 24; bulb++) {
+      const angle = (bulb / 24) * Math.PI * 2;
+      chase.setMatrixAt(bulb, new THREE.Matrix4().compose(
+        new THREE.Vector3(Math.cos(angle) * 0.73, Math.sin(angle) * 0.73, 0.03),
+        new THREE.Quaternion(),
+        new THREE.Vector3(1, 1, 1),
+      ));
+      chase.setColorAt(bulb, new THREE.Color(palette[bulb % 2]));
+    }
+    lantern.add(chase);
+    chases.push({ mesh: chase, colors: [new THREE.Color(palette[0]), new THREE.Color(palette[1]), new THREE.Color(0x30304a)] });
     ball(lantern, bulbs[0], 0.1, 0, 0, 0.07);
     for (const side of [-1, 1]) {
       const tail = new THREE.Group();
@@ -271,6 +312,13 @@ export function createChristmasDecor(root: THREE.Group, core: THREE.Group, termi
       tree.rotation.z = Math.sin(t * 0.45) * 0.009;
       star.rotation.y = Math.sin(t * 0.65) * 0.22;
       parols.forEach((parol, index) => { parol.rotation.z = Math.sin(t * 0.45 + index * 1.7) * 0.025; });
+      // A slow chase (about two steps a second, far below flashing thresholds) runs around each parol hoop.
+      const step = Math.floor(t * 2);
+      for (const { mesh: lights, colors } of chases) {
+        for (let bulb = 0; bulb < lights.count; bulb++) lights.setColorAt(bulb, (bulb + step) % 4 === 0 ? colors[2] : colors[bulb % 2]);
+        if (lights.instanceColor) lights.instanceColor.needsUpdate = true;
+      }
+      garland.forEach((hanger) => { hanger.rotation.z = Math.sin(t * 0.9 + (hanger.userData.phase as number)) * 0.08; });
       bulbs.forEach((bulb, index) => { bulb.emissiveIntensity = 0.7 + Math.sin(t * 0.8 + index * 1.7) * 0.14; });
       ornaments.forEach((ornament, index) => { ornament.rotation.z = Math.sin(t * 0.8 + index) * 0.08; });
       snowSeeds.forEach((seed, index) => {
