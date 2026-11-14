@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import type { ResearchEntry } from "@/lib/content";
+import { narraTexture } from "@/lib/filipino-lab";
 import { site } from "@/lib/site";
 
 type Props = {
@@ -31,7 +32,7 @@ const BLOCK_T = 0.06; // paper block thickness per side
 const SEG = 32;
 
 /* ── Palette: Dexter's-lab night blues, warm spotlight, parol accents ──── */
-const BG = 0x0a0f33;
+const BG = 0x140c09;
 const CLOTH = 0x1a1f8c;
 const PAPER = "#f5f0e3";
 const GRID = "rgba(70, 92, 190, 0.13)";
@@ -286,29 +287,6 @@ function edgeTexture() {
   return texture;
 }
 
-function checkerTexture(renderer: THREE.WebGLRenderer) {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 256;
-  const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#131b58";
-  ctx.fillRect(0, 0, 256, 256);
-  ctx.fillStyle = "#18226b";
-  ctx.fillRect(0, 0, 128, 128);
-  ctx.fillRect(128, 128, 128, 128);
-  ctx.strokeStyle = "rgba(10, 15, 51, 0.6)";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(0, 0, 128, 128);
-  ctx.strokeRect(128, 128, 128, 128);
-  ctx.strokeRect(128, 0, 128, 128);
-  ctx.strokeRect(0, 128, 128, 128);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(20, 20);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  return texture;
-}
-
 /* ── Geometry builders ─────────────────────────────────────────────────── */
 
 /** A paper block whose top surface follows the open-page profile; `swell` blends flat (closed) → curved (open). */
@@ -432,7 +410,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       renderer.domElement.setAttribute("role", "img");
       renderer.domElement.setAttribute(
         "aria-label",
-        "An open lab notebook on a checkered lab bench under a spotlight. Its pages summarise each research study.",
+        "An open lab notebook on a wooden desk under a warm lamp. Its pages summarise each research study.",
       );
 
       const scene = new THREE.Scene();
@@ -441,7 +419,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 40);
 
       /* Lighting: a cool lab ambience and one warm spotlight pooling on the notebook. */
-      scene.add(new THREE.HemisphereLight(0x8ea2ff, 0x0a0f33, 0.55));
+      scene.add(new THREE.HemisphereLight(0xffd2a8, 0x140c09, 0.5));
       const spot = new THREE.SpotLight(0xffe0a6, 120, 16, 0.42, 0.7, 1.5);
       spot.position.set(0.3, 7.4, 1.4);
       spot.target.position.set(0, 0, -0.1);
@@ -450,17 +428,18 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       spot.shadow.bias = -0.0004;
       spot.shadow.normalBias = 0.015;
       scene.add(spot, spot.target);
-      const fill = new THREE.DirectionalLight(0xa9b8ff, 0.35);
+      const fill = new THREE.DirectionalLight(0x8fa6ff, 0.4); // cool moonlight rim
       fill.position.set(-4, 3, 5);
       scene.add(fill);
 
       const disposables: { dispose(): void }[] = [];
       const std = (params: THREE.MeshStandardMaterialParameters) => new THREE.MeshStandardMaterial(params);
 
-      /* Bench: checkered lab floor tiles that dissolve into the fog. */
-      const checker = checkerTexture(renderer);
-      disposables.push(checker);
-      const bench = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), std({ map: checker, roughness: 0.62, metalness: 0.05 }));
+      /* Desk: a narra-wood tabletop that falls off into the dark. */
+      const deskWood = narraTexture([5, 5]);
+      deskWood.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      disposables.push(deskWood);
+      const bench = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), std({ map: deskWood, color: 0xb08a74, roughness: 0.5, metalness: 0.02 }));
       bench.rotation.x = -Math.PI / 2;
       bench.receiveShadow = true;
       scene.add(bench);
@@ -615,6 +594,9 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       const bubbles = Array.from({ length: 7 }, (_, i) => {
         const b = new THREE.Mesh(bubbleGeo, bubbleMat);
         b.userData.seed = i / 7;
+        // Start small and placed, so calm/reduced-motion (which never animates) shows tiny resting bubbles.
+        b.scale.setScalar(0.02);
+        b.position.set(Math.cos(i) * 0.12, 0.06 + (i / 7) * 0.25, Math.sin(i) * 0.12);
         flask.add(b);
         return b;
       });
@@ -693,7 +675,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
 
       // Coffee mug — the lab runs on it.
       const mug = new THREE.Group();
-      mug.position.set(-2.2, 0, 1.25);
+      mug.position.set(-2.15, 0, 1.6);
       const mugBody = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.18, 0.36, 28), std({ color: 0xff8a3d, roughness: 0.5 }));
       mugBody.position.y = 0.18;
       const coffee = new THREE.Mesh(new THREE.CircleGeometry(0.18, 24), std({ color: 0x3b2314, roughness: 0.3 }));
@@ -735,7 +717,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
 
       // A petri dish with colourful colonies — tiny parol-coloured dots of life.
       const dish = new THREE.Group();
-      dish.position.set(-2.35, 0, -1.55);
+      dish.position.set(-2.55, 0, 0.78);
       const dishWall = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.08, 40, 1, true), glass);
       dishWall.position.y = 0.04;
       const agar = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.035, 40), std({ color: 0xf2d98a, roughness: 0.4, transparent: true, opacity: 0.85 }));
