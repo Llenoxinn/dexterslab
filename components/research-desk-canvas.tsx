@@ -21,114 +21,188 @@ function smoothstep(edge0: number, edge1: number, x: number) {
   return t * t * (3 - 2 * t);
 }
 
-/** Typeset real manuscript content into a physical page, rather than a screenshot mockup. */
-function manuscriptTexture(study: ResearchEntry, page: "abstract" | "methods" | "cover", font: string) {
+/** Typeset real manuscript content onto a physical page using the portfolio's loaded fonts. */
+function manuscriptTexture(
+  study: ResearchEntry,
+  page: "abstract" | "methods" | "cover",
+  headingFont: string,
+  bodyFont: string,
+) {
   const canvas = document.createElement("canvas");
   canvas.width = 1024;
-  canvas.height = 1450;
+  canvas.height = 1448;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("The manuscript could not be drawn.");
+
   const width = canvas.width;
   const height = canvas.height;
-  const margin = 92;
-  let y = 88;
-  const ink = page === "cover" ? "#f4e7c8" : "#1d283a";
-  ctx.fillStyle = page === "cover" ? "#162b47" : "#f8f6f0";
+  const margin = 84;
+  const contentWidth = width - margin * 2;
+  let y = 84;
+
+  const isCover = page === "cover";
+  ctx.fillStyle = isCover ? "#121f38" : "#f3efe6";
   ctx.fillRect(0, 0, width, height);
 
-  if (page === "cover") {
-    // Subtle gold foil double border on the hardcover.
-    ctx.strokeStyle = "#c9a861";
-    ctx.lineWidth = 4;
+  if (isCover) {
+    ctx.strokeStyle = "#cfa95e";
+    ctx.lineWidth = 3.5;
     ctx.strokeRect(48, 48, width - 96, height - 96);
-    ctx.strokeStyle = "rgba(201, 168, 97, 0.45)";
+    ctx.strokeStyle = "rgba(207, 169, 94, 0.35)";
     ctx.lineWidth = 1.5;
     ctx.strokeRect(64, 64, width - 128, height - 128);
   } else {
-    // Subtle inner gutter shading for book-page depth.
+    // Subtle inner-gutter shadow so the two pages feel bound into a real spine.
     const gutter = ctx.createLinearGradient(
-      page === "abstract" ? width - 90 : 0,
+      page === "abstract" ? width - 88 : 0,
       0,
-      page === "abstract" ? width : 90,
+      page === "abstract" ? width : 88,
       0,
     );
     if (page === "abstract") {
-      gutter.addColorStop(0, "rgba(23, 41, 64, 0)");
-      gutter.addColorStop(1, "rgba(23, 41, 64, 0.08)");
+      gutter.addColorStop(0, "rgba(15, 24, 42, 0)");
+      gutter.addColorStop(1, "rgba(15, 24, 42, 0.10)");
       ctx.fillStyle = gutter;
-      ctx.fillRect(width - 90, 0, 90, height);
+      ctx.fillRect(width - 88, 0, 88, height);
     } else {
-      gutter.addColorStop(0, "rgba(23, 41, 64, 0.08)");
-      gutter.addColorStop(1, "rgba(23, 41, 64, 0)");
+      gutter.addColorStop(0, "rgba(15, 24, 42, 0.10)");
+      gutter.addColorStop(1, "rgba(15, 24, 42, 0)");
       ctx.fillStyle = gutter;
-      ctx.fillRect(0, 0, 90, height);
+      ctx.fillRect(0, 0, 88, height);
     }
   }
 
-  const text = (value: string, size: number, weight = 400, colour = ink, gap = 0) => {
-    ctx.font = `${weight} ${size}px ${font}`;
+  const drawWrapped = (
+    value: string,
+    size: number,
+    weight: number,
+    fontFamily: string,
+    colour: string,
+    lineHeight = 1.44,
+    gapAfter = 0,
+  ) => {
+    ctx.font = `${weight} ${size}px ${fontFamily}`;
     ctx.fillStyle = colour;
     const words = value.split(/\s+/);
     let line = "";
     for (const word of words) {
       const next = line ? `${line} ${word}` : word;
-      if (ctx.measureText(next).width > width - margin * 2 && line) {
+      if (ctx.measureText(next).width > contentWidth && line) {
         ctx.fillText(line, margin, y);
-        y += size * 1.48;
+        y += size * lineHeight;
         line = word;
-      } else line = next;
+      } else {
+        line = next;
+      }
     }
     if (line) {
       ctx.fillText(line, margin, y);
-      y += size * 1.48;
+      y += size * lineHeight;
     }
-    y += gap;
+    y += gapAfter;
   };
 
-  const rule = () => {
-    ctx.strokeStyle = page === "cover" ? "#c9a861" : "#b8c0cd";
-    ctx.lineWidth = page === "cover" ? 2 : 1.5;
+  const drawRule = (color = isCover ? "#cfa95e" : "#c5bfb2", thickness = isCover ? 2 : 1.5, gap = 38) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = thickness;
     ctx.beginPath();
     ctx.moveTo(margin, y);
     ctx.lineTo(width - margin, y);
     ctx.stroke();
-    y += 46;
+    y += gap;
   };
 
-  if (page === "cover") {
-    y = 158;
-    text("RESEARCH MONOGRAPH", 24, 600, "#d8be82", 30);
-    rule();
-    y = 460;
-    text(JOURNAL_TITLE, 72, 600, "#f5e9cb", 68);
-    text(site.name, 34, 400, "#e5edf8", 16);
-    text("University of the Philippines Cebu", 27, 400, "#aebfd4");
-    y = 1275;
-    text("VOL. I · DEXTER'S LAB", 24, 600, "#d8be82");
+  if (isCover) {
+    y = 148;
+    drawWrapped("RESEARCH MONOGRAPH", 22, 600, bodyFont, "#dfc07c", 1.3, 24);
+    drawRule("#cfa95e", 2, 48);
+    y = 430;
+    drawWrapped(JOURNAL_TITLE, 68, 700, headingFont, "#f6ebd0", 1.16, 48);
+    drawWrapped(site.name, 30, 600, bodyFont, "#e6edf9", 1.35, 10);
+    drawWrapped("University of the Philippines Cebu", 24, 400, bodyFont, "#9fb3d1", 1.35, 0);
+    y = 1288;
+    drawRule("rgba(207, 169, 94, 0.45)", 1.5, 34);
+    drawWrapped("VOL. I · DEXTER'S LAB", 20, 600, bodyFont, "#dfc07c", 1.2, 0);
   } else {
-    text(page === "abstract" ? `SCIENTIFIC RESEARCH · ${study.domain.toUpperCase()}` : "METHODS & HIGHLIGHTS", 18, 600, "#5e6d84", 0);
-    rule();
+    const ink = "#0f172a";
+    const muted = "#475569";
+    const accent = "#1313ba";
+
+    // Running header
+    ctx.font = `600 18px ${bodyFont}`;
+    ctx.fillStyle = muted;
+    ctx.fillText(
+      page === "abstract" ? `RESEARCH · ${study.domain.toUpperCase()}` : "METHODS & EXPERIMENTAL HIGHLIGHTS",
+      margin,
+      y,
+    );
+    y += 22;
+    drawRule("#cbc4b6", 1.5, 42);
+
     if (page === "abstract") {
-      text(study.title, study.title.length > 200 ? 35 : 43, 600, ink, 28);
-      text(site.name, 28, 600, ink, 6);
-      text("University of the Philippines Cebu", 23, 400, "#56677f", 50);
-      text("Study Overview", 36, 600, ink, 14);
-      text(study.summary, 30, 400, "#2f3e54", 44);
-      text("Modality & Keywords", 28, 600, ink, 10);
-      text(`${study.modality} · ${study.tags.join("; ")}`, 25, 400, "#56677f");
+      // Modality badge
+      ctx.font = `600 18px ${bodyFont}`;
+      const badgeText = study.modality.toUpperCase();
+      const badgeW = ctx.measureText(badgeText).width + 26;
+      ctx.fillStyle = "rgba(19, 19, 186, 0.08)";
+      ctx.fillRect(margin, y - 22, badgeW, 34);
+      ctx.strokeStyle = "rgba(19, 19, 186, 0.35)";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(margin, y - 22, badgeW, 34);
+      ctx.fillStyle = accent;
+      ctx.fillText(badgeText, margin + 13, y + 1);
+      y += 46;
+
+      drawWrapped(
+        study.title,
+        study.title.length > 180 ? 34 : 40,
+        700,
+        headingFont,
+        ink,
+        1.25,
+        24,
+      );
+      drawWrapped(site.name, 26, 600, bodyFont, ink, 1.35, 4);
+      drawWrapped("University of the Philippines Cebu", 22, 400, bodyFont, muted, 1.35, 36);
+
+      drawRule("#cbc4b6", 1.5, 38);
+
+      drawWrapped("STUDY OVERVIEW", 20, 700, bodyFont, accent, 1.3, 14);
+      drawWrapped(study.summary, 28, 400, bodyFont, "#1e293b", 1.52, 34);
+
+      drawWrapped("KEYWORDS", 18, 700, bodyFont, muted, 1.3, 12);
+      drawWrapped(study.tags.join("  ·  "), 22, 500, bodyFont, "#334155", 1.45, 0);
     } else {
-      for (const highlight of study.highlights) {
-        text(highlight.heading, 31, 600, ink, 10);
-        text(highlight.detail, 28, 400, "#2f3e54", 38);
+      for (let i = 0; i < study.highlights.length; i++) {
+        const highlight = study.highlights[i];
+        drawWrapped(`0${i + 1} · ${highlight.heading.toUpperCase()}`, 22, 700, bodyFont, accent, 1.3, 14);
+        drawWrapped(highlight.detail, 28, 400, bodyFont, "#1e293b", 1.52, 42);
+      }
+
+      if (y < 1180) {
+        y = Math.max(y + 12, 1080);
+        drawRule("#cbc4b6", 1.5, 34);
+        drawWrapped("LABORATORY CONTEXT", 18, 700, bodyFont, muted, 1.3, 12);
+        drawWrapped(
+          `Prepared as part of computational and wet-lab research at ${site.name}'s UP Cebu portfolio.`,
+          23,
+          400,
+          bodyFont,
+          "#334155",
+          1.48,
+          0,
+        );
       }
     }
-    y = 1370;
-    rule();
-    ctx.font = `20px ${font}`;
-    ctx.fillStyle = "#5e6d84";
-    ctx.fillText(study.shortName, margin, 1406);
+
+    // Running footer
+    y = 1356;
+    drawRule("#cbc4b6", 1.5, 34);
+    ctx.font = `500 19px ${bodyFont}`;
+    ctx.fillStyle = muted;
+    ctx.fillText(study.shortName, margin, 1396);
     ctx.textAlign = "right";
-    ctx.fillText(page === "abstract" ? "1" : "2", width - margin, 1406);
+    ctx.fillText(page === "abstract" ? "01" : "02", width - margin, 1396);
     ctx.textAlign = "left";
   }
 
@@ -145,10 +219,10 @@ function pageEdgeTexture() {
   canvas.height = 128;
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
-  ctx.fillStyle = "#efeae0";
+  ctx.fillStyle = "#ece6da";
   ctx.fillRect(0, 0, 64, 128);
   for (let y = 0; y < 128; y += 4) {
-    ctx.fillStyle = y % 8 === 0 ? "rgba(95, 105, 122, 0.16)" : "rgba(255, 255, 255, 0.35)";
+    ctx.fillStyle = y % 8 === 0 ? "rgba(71, 85, 105, 0.16)" : "rgba(255, 255, 255, 0.3)";
     ctx.fillRect(0, y, 64, 1.5);
   }
   const texture = new THREE.CanvasTexture(canvas);
@@ -171,10 +245,8 @@ function deformTurnPage(
   for (let i = 0; i < pos.count; i++) {
     const bx = basePos[i * 3];
     const by = basePos[i * 3 + 1];
-    // Plane is centered at +pageWidth/2 in X; normalize u from 0 (spine) to 1 (outer edge).
     const u = THREE.MathUtils.clamp((bx + pageWidth / 2) / pageWidth, 0, 1);
-    // Smooth arch lifting in the middle of the page and trailing slightly at the outer edge.
-    const curl = Math.sin(u * Math.PI) * 0.24 * arch + Math.pow(u, 2) * 0.06 * Math.sin(angle * 2);
+    const curl = Math.sin(u * Math.PI) * 0.22 * arch + u * u * 0.05 * Math.sin(angle * 2);
     pos.setXYZ(i, bx, by, curl);
   }
   pos.needsUpdate = true;
@@ -196,12 +268,14 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
     let disposeScene = () => {};
 
     const start = async () => {
-      const family = getComputedStyle(host).getPropertyValue("--font-research").trim() || "Cambria, Georgia, serif";
+      // Resolve the actual loaded Next.js font families from the DOM so canvas text matches the site.
+      const bodyStyle = getComputedStyle(document.body);
+      const h2El = document.querySelector("#research-title");
+      const headingFont = (h2El ? getComputedStyle(h2El).fontFamily : bodyStyle.fontFamily) || "Inter, sans-serif";
+      const bodyFont = bodyStyle.fontFamily || "Inter, sans-serif";
+
       try {
-        await Promise.all([
-          document.fonts.load(`400 32px ${family}`),
-          document.fonts.load(`600 32px ${family}`),
-        ]);
+        await document.fonts.ready;
       } catch {}
       if (disposed) return;
 
@@ -215,7 +289,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
 
       renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.14;
+      renderer.toneMappingExposure = 0.96;
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       renderer.shadowMap.autoUpdate = false;
@@ -223,15 +297,15 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       renderer.domElement.setAttribute("aria-label", "3D scroll-driven research journal");
 
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x132238);
-      scene.fog = new THREE.Fog(0x132238, 10, 22);
+      scene.background = new THREE.Color(0x0f1c30);
+      scene.fog = new THREE.Fog(0x0f1c30, 12, 24);
 
-      const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 40);
+      const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 40);
 
-      // Warm studio reading-lamp lighting + cool fill.
-      scene.add(new THREE.HemisphereLight(0xe4ecfc, 0x19283e, 2.1));
-      const key = new THREE.DirectionalLight(0xffe7c7, 3.2);
-      key.position.set(-2.4, 6.8, 3.6);
+      // Calibrated studio lighting so pages stay crisp and high-contrast without overexposure.
+      scene.add(new THREE.HemisphereLight(0xdce7fa, 0x132036, 1.35));
+      const key = new THREE.DirectionalLight(0xfff0db, 1.9);
+      key.position.set(-2.6, 7.2, 3.8);
       key.castShadow = true;
       key.shadow.mapSize.set(1024, 1024);
       key.shadow.camera.left = -4.2;
@@ -241,22 +315,19 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       key.shadow.normalBias = 0.02;
       scene.add(key);
 
-      const rim = new THREE.PointLight(0x8bb6f2, 14, 14);
-      rim.position.set(3.8, 3.6, -2.8);
+      const rim = new THREE.PointLight(0x7ca9eb, 8, 14);
+      rim.position.set(4.0, 3.8, -3.0);
       scene.add(rim);
 
-      const warmSpot = new THREE.PointLight(0xffcb8c, 8, 9);
-      warmSpot.position.set(-2.2, 2.9, 1.4);
-      scene.add(warmSpot);
-
       const mat = (color: number, extra: THREE.MeshStandardMaterialParameters = {}) =>
-        new THREE.MeshStandardMaterial({ color, roughness: 0.72, ...extra });
+        new THREE.MeshStandardMaterial({ color, roughness: 0.78, ...extra });
 
-      const clothNavy = mat(0x162b47, { roughness: 0.8, metalness: 0.06 });
-      const brass = mat(0xd4b26a, { metalness: 0.82, roughness: 0.26 });
+      const clothNavy = mat(0x132440, { roughness: 0.84, metalness: 0.05 });
+      const brass = mat(0xcfa95e, { metalness: 0.8, roughness: 0.28 });
       const paperEdgeTex = pageEdgeTexture();
-      const paperBlockMat = mat(0xf2eee4, { roughness: 0.88, map: paperEdgeTex ?? undefined });
-      const deskMat = mat(0x182b45, { roughness: 0.86, metalness: 0.05 });
+      const paperBlockMat = mat(0xece6da, { roughness: 0.92, map: paperEdgeTex ?? undefined });
+      const deskMat = mat(0x122238, { roughness: 0.9, metalness: 0.04 });
+      const deskPadMat = mat(0x0c1729, { roughness: 0.88 });
 
       const addMesh = (
         parent: THREE.Object3D,
@@ -285,79 +356,75 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         z: number,
       ) => addMesh(parent, new RoundedBoxGeometry(w, h, d, 2, Math.min(w, h, d) * 0.16), material, x, y, z);
 
-      // Grounded reading surface.
-      const desk = addMesh(scene, new THREE.PlaneGeometry(26, 20), deskMat, 0, 0, 0);
+      // Grounded reading surface + subtle desk blotter pad.
+      const desk = addMesh(scene, new THREE.PlaneGeometry(28, 22), deskMat, 0, 0, 0);
       desk.rotation.x = -Math.PI / 2;
       desk.castShadow = false;
+      const deskPad = box(scene, deskPadMat, 4.6, 0.015, 3.2, 0, 0.006, 0);
+      deskPad.castShadow = false;
 
-      // Book assembly centered at (0, 0.05, 0).
+      // Book assembly centered at (0, 0.02, 0).
       const book = new THREE.Group();
-      book.position.set(0, 0.05, 0);
+      book.position.set(0, 0.02, 0);
       scene.add(book);
 
-      const pageWidth = 1.72;
-      const pageHeight = 2.44;
+      const pageWidth = 1.66;
+      const pageHeight = 2.34;
 
-      // Back cover + spine cradle.
-      const backBoard = box(book, clothNavy, 1.82, 0.06, 2.58, 0.91, 0, 0);
-      // Brass corner protectors on back cover right corners.
-      box(book, brass, 0.16, 0.068, 0.16, 1.75, 0, -1.22);
-      box(book, brass, 0.16, 0.068, 0.16, 1.75, 0, 1.22);
+      // Back cover board (right half, rests on desk).
+      box(book, clothNavy, 1.76, 0.052, 2.48, 0.88, 0.026, 0);
+      box(book, brass, 0.11, 0.058, 0.11, 1.71, 0.026, -1.19);
+      box(book, brass, 0.11, 0.058, 0.11, 1.71, 0.026, 1.19);
 
-      // Left cover board (sits under left stack when open).
-      const leftUnderBoard = box(book, clothNavy, 1.82, 0.06, 2.58, -0.91, 0, 0);
-      box(leftUnderBoard, brass, 0.16, 0.068, 0.16, -0.84, 0, -1.22);
-      box(leftUnderBoard, brass, 0.16, 0.068, 0.16, -0.84, 0, 1.22);
-
-      // Rounded spine with raised ribs.
+      // Rounded spine with brass bands.
       const spineGroup = new THREE.Group();
       book.add(spineGroup);
-      const spineCyl = addMesh(spineGroup, new THREE.CylinderGeometry(0.065, 0.065, 2.58, 20), clothNavy, 0, 0.03, 0);
+      const spineCyl = addMesh(spineGroup, new THREE.CylinderGeometry(0.058, 0.058, 2.48, 20), clothNavy, 0, 0.04, 0);
       spineCyl.rotation.x = Math.PI / 2;
-      for (const rz of [-0.95, -0.35, 0.35, 0.95]) {
-        const rib = addMesh(spineGroup, new THREE.CylinderGeometry(0.072, 0.072, 0.04, 16), brass, 0, 0.03, rz);
+      for (const rz of [-0.92, -0.32, 0.32, 0.92]) {
+        const rib = addMesh(spineGroup, new THREE.CylinderGeometry(0.064, 0.064, 0.032, 16), brass, 0, 0.04, rz);
         rib.rotation.x = Math.PI / 2;
       }
 
-      // Left and right paper blocks.
-      const leftStack = box(book, paperBlockMat, pageWidth, 0.125, pageHeight, -0.88, 0.088, 0);
-      const rightStack = box(book, paperBlockMat, pageWidth, 0.125, pageHeight, 0.88, 0.088, 0);
+      // Left and right paper blocks (sit on top of the cover boards at y = 0.052).
+      const leftStack = box(book, paperBlockMat, pageWidth, 0.11, pageHeight, -0.85, 0.107, 0);
+      box(book, paperBlockMat, pageWidth, 0.11, pageHeight, 0.85, 0.107, 0);
 
       // Crimson silk ribbon bookmark.
-      const ribbon = box(book, mat(0xa8434e, { roughness: 0.7 }), 0.095, 0.012, 0.42, 0.48, 0.045, 1.34);
+      const ribbon = box(book, mat(0xa8434e, { roughness: 0.72 }), 0.085, 0.01, 0.34, 0.42, 0.052, 1.24);
       ribbon.castShadow = false;
 
-      // Static left & right reading surfaces.
-      const leftPageMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, side: THREE.FrontSide });
-      const rightPageMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, side: THREE.FrontSide });
-      const leftPage = addMesh(book, new THREE.PlaneGeometry(pageWidth, pageHeight), leftPageMat, -0.88, 0.153, 0);
+      // Static left & right reading surfaces (y = 0.164, cleanly above the 0.162 stack top).
+      const leftPageMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, side: THREE.FrontSide });
+      const rightPageMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, side: THREE.FrontSide });
+      const leftPage = addMesh(book, new THREE.PlaneGeometry(pageWidth, pageHeight), leftPageMat, -0.85, 0.164, 0);
       leftPage.rotation.x = -Math.PI / 2;
       leftPage.castShadow = false;
-      const rightPage = addMesh(book, new THREE.PlaneGeometry(pageWidth, pageHeight), rightPageMat, 0.88, 0.153, 0);
+      const rightPage = addMesh(book, new THREE.PlaneGeometry(pageWidth, pageHeight), rightPageMat, 0.85, 0.164, 0);
       rightPage.rotation.x = -Math.PI / 2;
       rightPage.castShadow = false;
 
-      // Front hardcover pivot (hinges at x = 0).
+      // Front hardcover pivot: starts at y = 0.188 when closed, and drops to y = 0.026 when fully open
+      // so it lies flat UNDER the left paper stack instead of burying the left page.
       const coverPivot = new THREE.Group();
-      coverPivot.position.set(0, 0.165, 0);
+      coverPivot.position.set(0, 0.188, 0);
       book.add(coverPivot);
-      box(coverPivot, clothNavy, 1.82, 0.058, 2.58, 0.91, 0, 0);
-      box(coverPivot, brass, 0.16, 0.066, 0.16, 1.75, 0, -1.22);
-      box(coverPivot, brass, 0.16, 0.066, 0.16, 1.75, 0, 1.22);
+      box(coverPivot, clothNavy, 1.76, 0.052, 2.48, 0.88, 0, 0);
+      box(coverPivot, brass, 0.11, 0.058, 0.11, 1.71, 0, -1.19);
+      box(coverPivot, brass, 0.11, 0.058, 0.11, 1.71, 0, 1.19);
 
-      const coverMat = new THREE.MeshStandardMaterial({ roughness: 0.78, metalness: 0.08 });
-      const coverFace = addMesh(coverPivot, new THREE.PlaneGeometry(1.78, 2.54), coverMat, 0.91, 0.031, 0);
+      const coverMat = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0.06 });
+      const coverFace = addMesh(coverPivot, new THREE.PlaneGeometry(1.72, 2.44), coverMat, 0.88, 0.028, 0);
       coverFace.rotation.x = -Math.PI / 2;
-      coverMat.map = manuscriptTexture(latest.current.studies[0], "cover", family);
+      coverMat.map = manuscriptTexture(latest.current.studies[0], "cover", headingFont, bodyFont);
 
       // Curved 3D turning page pivot.
       const turnPivot = new THREE.Group();
-      turnPivot.position.set(0, 0.158, 0);
+      turnPivot.position.set(0, 0.168, 0);
       book.add(turnPivot);
 
-      const turnFrontGeo = new THREE.PlaneGeometry(pageWidth, pageHeight, 26, 1);
-      const turnBackGeo = new THREE.PlaneGeometry(pageWidth, pageHeight, 26, 1);
-      // Flip UVs horizontally on the back side so text reads left-to-right when turned onto the left stack.
+      const turnFrontGeo = new THREE.PlaneGeometry(pageWidth, pageHeight, 24, 1);
+      const turnBackGeo = new THREE.PlaneGeometry(pageWidth, pageHeight, 24, 1);
       const backUv = turnBackGeo.attributes.uv as THREE.BufferAttribute;
       for (let i = 0; i < backUv.count; i++) {
         backUv.setX(i, 1 - backUv.getX(i));
@@ -365,32 +432,32 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       backUv.needsUpdate = true;
       const baseTurnPositions = new Float32Array((turnFrontGeo.attributes.position as THREE.BufferAttribute).array);
 
-      const turnFrontMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, side: THREE.FrontSide });
-      const turnBackMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, side: THREE.BackSide });
+      const turnFrontMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, side: THREE.FrontSide });
+      const turnBackMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, side: THREE.BackSide });
 
       const turnFrontMesh = new THREE.Mesh(turnFrontGeo, turnFrontMat);
       turnFrontMesh.rotation.x = -Math.PI / 2;
-      turnFrontMesh.position.set(0.88, 0.002, 0);
+      turnFrontMesh.position.set(0.85, 0.002, 0);
       turnFrontMesh.castShadow = true;
       turnFrontMesh.receiveShadow = true;
 
       const turnBackMesh = new THREE.Mesh(turnBackGeo, turnBackMat);
       turnBackMesh.rotation.x = -Math.PI / 2;
-      turnBackMesh.position.set(0.88, 0.001, 0);
+      turnBackMesh.position.set(0.85, 0.001, 0);
       turnBackMesh.castShadow = true;
       turnBackMesh.receiveShadow = true;
 
       turnPivot.add(turnFrontMesh, turnBackMesh);
       turnPivot.visible = false;
 
-      // Cache page textures per study.
+      // Pre-render & cache page textures per study.
       const pageCache = new Map<string, [THREE.Texture, THREE.Texture]>();
       const getPages = (study: ResearchEntry): [THREE.Texture, THREE.Texture] => {
         const cached = pageCache.get(study.id);
         if (cached) return cached;
         const pair: [THREE.Texture, THREE.Texture] = [
-          manuscriptTexture(study, "abstract", family),
-          manuscriptTexture(study, "methods", family),
+          manuscriptTexture(study, "abstract", headingFont, bodyFont),
+          manuscriptTexture(study, "methods", headingFont, bodyFont),
         ];
         pageCache.set(study.id, pair);
         return pair;
@@ -411,39 +478,40 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       let lastTime = performance.now();
       let lastCoverAngle = -1;
       let lastFlipAngle = -1;
-      let lastShadowProgress = -1;
 
       const applyState = (p: number) => {
         const list = latest.current.studies;
         const count = list.length;
-        // Phase 1 (0.00 -> 0.16): open cover. Phase 3 (0.90 -> 1.00): gently close cover.
-        const openEase = smoothstep(0.02, 0.16, p);
+
+        // 0.00 -> 0.14: cover opens. 0.90 -> 1.00: cover gently closes.
+        const openEase = smoothstep(0.01, 0.14, p);
         const closeEase = smoothstep(0.90, 0.99, p);
         const openAmount = openEase * (1 - closeEase);
         const coverAngle = openAmount * Math.PI;
-        coverPivot.rotation.z = coverAngle;
 
-        // Show left board/stack only once cover begins opening; shift closed book to center.
-        const isOpened = coverAngle > 0.12;
-        leftUnderBoard.visible = isOpened;
+        coverPivot.rotation.z = coverAngle;
+        // Drop the cover pivot as it opens so the open front cover sits flat at y = 0.026 beneath leftStack.
+        coverPivot.position.y = THREE.MathUtils.lerp(0.188, 0.026, Math.sin(coverAngle * 0.5));
+
+        const isOpened = coverAngle > Math.PI * 0.52;
         leftStack.visible = isOpened;
         leftPage.visible = isOpened;
-        backBoard.visible = true;
 
-        // Center the book horizontally: when closed, right half is centered at x = 0; when open, spine is at x = 0.
+        // Center closed book at x = 0; center open spread spine at x = 0.
         book.position.x = THREE.MathUtils.lerp(-0.88, 0, openEase) + THREE.MathUtils.lerp(0, -0.88, closeEase);
-        book.rotation.y = THREE.MathUtils.lerp(-0.24, 0, openEase) + THREE.MathUtils.lerp(0, 0.16, closeEase) + smoothPointerX * 0.05;
-        book.rotation.x = smoothPointerY * 0.035;
+        book.rotation.y =
+          THREE.MathUtils.lerp(-0.22, 0, openEase) +
+          THREE.MathUtils.lerp(0, 0.18, closeEase) +
+          smoothPointerX * 0.04;
+        book.rotation.x = smoothPointerY * 0.03;
 
-        // Map middle scroll (0.16 -> 0.90) across studies and flips.
-        const readingT = THREE.MathUtils.clamp((p - 0.16) / (0.90 - 0.16), 0, 1);
-        const segments = Math.max(1, count);
-        const scaled = readingT * segments;
+        // Map middle scroll (0.14 -> 0.90) across studies with generous flip window.
+        const readingT = THREE.MathUtils.clamp((p - 0.14) / (0.90 - 0.14), 0, 1);
+        const scaled = readingT * Math.max(1, count);
         const baseIndex = Math.min(count - 1, Math.floor(scaled));
         const local = scaled - baseIndex;
 
-        // Flip happens in the final 34% of each study segment (except the last study).
-        const flipStart = 0.66;
+        const flipStart = 0.60;
         const canFlip = baseIndex < count - 1 && isOpened && !calm();
         const flipT = canFlip && local > flipStart ? smoothstep(flipStart, 1, local) : 0;
 
@@ -460,7 +528,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
           turnPivot.rotation.z = flipAngle;
           deformTurnPage(turnFrontGeo, baseTurnPositions, flipAngle, pageWidth);
           deformTurnPage(turnBackGeo, baseTurnPositions, flipAngle, pageWidth);
-          if (Math.abs(flipAngle - lastFlipAngle) > 0.02) {
+          if (Math.abs(flipAngle - lastFlipAngle) > 0.03) {
             renderer.shadowMap.needsUpdate = true;
             lastFlipAngle = flipAngle;
           }
@@ -476,22 +544,21 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
           }
         }
 
-        if (Math.abs(coverAngle - lastCoverAngle) > 0.02 || Math.abs(p - lastShadowProgress) > 0.04) {
+        if (Math.abs(coverAngle - lastCoverAngle) > 0.03) {
           renderer.shadowMap.needsUpdate = true;
           lastCoverAngle = coverAngle;
-          lastShadowProgress = p;
         }
 
-        // Camera framing: slightly closer when open for crisp readability.
+        // Frame the entire book with generous breathing room above (heading, even at 90° page flip) and below (HUD).
         const narrow = host.clientWidth < 768;
-        const baseY = narrow ? 4.9 : 3.95;
-        const baseZ = narrow ? 4.35 : 3.15;
+        const baseY = narrow ? 6.4 : 5.4;
+        const baseZ = narrow ? 5.6 : 4.85;
         camera.position.set(
-          smoothPointerX * 0.14,
-          THREE.MathUtils.lerp(baseY + 0.35, baseY, openAmount),
-          THREE.MathUtils.lerp(baseZ + 0.55, baseZ, openAmount),
+          smoothPointerX * 0.12,
+          THREE.MathUtils.lerp(baseY + 0.3, baseY, openAmount),
+          THREE.MathUtils.lerp(baseZ + 0.4, baseZ, openAmount),
         );
-        camera.lookAt(0, 0.08, 0.08);
+        camera.lookAt(0, 0.15, 0.0);
       };
 
       const draw = (now: number) => {
@@ -501,11 +568,11 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         lastTime = now;
 
         const targetP = targetProgressRef.current;
-        const ease = calm() ? 1 : 1 - Math.exp(-dt * 12);
+        const ease = calm() ? 1 : 1 - Math.exp(-dt * 18);
         currentProgress += (targetP - currentProgress) * ease;
         if (Math.abs(targetP - currentProgress) < 0.0004) currentProgress = targetP;
 
-        const ptrEase = calm() ? 1 : 1 - Math.exp(-dt * 8);
+        const ptrEase = calm() ? 1 : 1 - Math.exp(-dt * 10);
         smoothPointerX += (pointerX - smoothPointerX) * ptrEase;
         smoothPointerY += (pointerY - smoothPointerY) * ptrEase;
         if (Math.abs(pointerX - smoothPointerX) < 0.0005) smoothPointerX = pointerX;
@@ -562,7 +629,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       };
       const onClick = () => {
         const list = latest.current.studies;
-        const readingT = THREE.MathUtils.clamp((currentProgress - 0.16) / (0.90 - 0.16), 0, 0.999);
+        const readingT = THREE.MathUtils.clamp((currentProgress - 0.14) / (0.90 - 0.14), 0, 0.999);
         const idx = Math.min(list.length - 1, Math.floor(readingT * list.length));
         latest.current.onRead(idx);
       };

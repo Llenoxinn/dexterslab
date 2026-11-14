@@ -70,7 +70,7 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
       if (scrollable <= 0) return;
       const clamped = Math.max(0, Math.min(studies.length - 1, index));
       const readingT = (clamped + 0.35) / Math.max(1, studies.length);
-      const targetP = 0.16 + readingT * (0.90 - 0.16);
+      const targetP = 0.14 + readingT * (0.90 - 0.14);
       const trackTop = track.getBoundingClientRect().top + window.scrollY;
       window.scrollTo({ top: trackTop + targetP * scrollable, behavior: "smooth" });
     },
@@ -79,32 +79,51 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
 
   if (!studies.length) return null;
 
-  const readingT = Math.min(0.999, Math.max(0, (progress - 0.16) / (0.90 - 0.16)));
+  const readingT = Math.min(0.999, Math.max(0, (progress - 0.14) / (0.90 - 0.14)));
   const activeIndex = Math.min(studies.length - 1, Math.floor(readingT * studies.length));
   const modalIndex = readingIndex ?? activeIndex;
   const modalStudy = studies[modalIndex] ?? studies[0];
 
-  const manuscript = (entry: ResearchEntry, titleId: string) => (
+  const manuscript = (entry: ResearchEntry, titleId: string, index: number) => (
     <article className="research-manuscript">
-      <p className="research-manuscript-imprint">Computational &amp; Experimental Biology · {entry.domain}</p>
-      <h3 id={titleId}>{entry.title}</h3>
-      <p className="research-manuscript-author">{site.name}</p>
-      <p className="research-manuscript-affiliation">University of the Philippines Cebu</p>
+      <header className="research-manuscript-head">
+        <div className="research-manuscript-meta-row">
+          <span className="research-manuscript-modality">{entry.modality}</span>
+          <span className="research-manuscript-domain">{entry.domain}</span>
+        </div>
+        <h3 id={titleId}>{entry.title}</h3>
+        <p className="research-manuscript-byline">
+          <strong>{site.name}</strong>
+          <span>University of the Philippines Cebu</span>
+        </p>
+      </header>
+
       <section className="research-abstract">
-        <h4>
-          Overview <span>{entry.modality}</span>
-        </h4>
+        <h4>Study Overview</h4>
         <p>{entry.summary}</p>
       </section>
-      <p className="research-manuscript-keywords">
-        <strong>Keywords:</strong> {entry.tags.join("; ")}
-      </p>
-      {entry.highlights.map((highlight) => (
-        <section key={highlight.heading}>
-          <h4>{highlight.heading}</h4>
-          <p>{highlight.detail}</p>
-        </section>
-      ))}
+
+      <div className="research-highlights-grid">
+        {entry.highlights.map((highlight, idx) => (
+          <section key={highlight.heading} className="research-highlight-card">
+            <span className="research-highlight-index">0{idx + 1}</span>
+            <div>
+              <h4>{highlight.heading}</h4>
+              <p>{highlight.detail}</p>
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <section className="research-keywords-block" aria-label="Keywords">
+        <h4>Keywords</h4>
+        <ul className="research-keyword-chips">
+          {entry.tags.map((tag) => (
+            <li key={tag}>{tag}</li>
+          ))}
+        </ul>
+      </section>
+      <span className="sr-only">Study {index + 1} of {studies.length}</span>
     </article>
   );
 
@@ -145,7 +164,7 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
         )}
 
         {unsupported && (
-          <div className="research-desk-fallback">{manuscript(studies[activeIndex], "research-fallback-title")}</div>
+          <div className="research-desk-fallback">{manuscript(studies[activeIndex], "research-fallback-title", activeIndex)}</div>
         )}
 
         {!unsupported && (
@@ -193,15 +212,22 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
           onClose={() => setReadingIndex(null)}
         >
           <div className="research-reader-shell">
-            <button
-              type="button"
-              className="research-reader-close"
-              onClick={() => setReadingIndex(null)}
-              aria-label="Close research paper"
-            >
-              Close ×
-            </button>
-            {manuscript(modalStudy, "research-manuscript-title")}
+            <div className="research-reader-topbar">
+              <span className="research-reader-counter">
+                Research Monograph · Study 0{modalIndex + 1} / 0{studies.length}
+              </span>
+              <button
+                type="button"
+                className="research-reader-close"
+                onClick={() => setReadingIndex(null)}
+                aria-label="Close research paper"
+              >
+                Close ×
+              </button>
+            </div>
+            <div className="research-reader-body">
+              {manuscript(modalStudy, "research-manuscript-title", modalIndex)}
+            </div>
             <nav className="research-reader-pagination" aria-label="Read another study">
               <button
                 type="button"
