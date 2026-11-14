@@ -619,6 +619,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     const host = hostRef.current;
     const tip = tipRef.current;
     if (!host) return;
+    let disposed = false;
     const wheelHost = host.parentElement ?? host;
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -906,7 +907,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
 
     const frame = (now: number) => {
       raf = 0;
-      if (contextLost) return;
+      if (contextLost || disposed) return;
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       const calm = isCalm();
@@ -931,7 +932,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       if (visible && !covered && !document.hidden && !calm) raf = requestAnimationFrame(frame);
     };
     const wake = () => {
-      if (raf || !visible || covered || document.hidden) return;
+      if (disposed || raf || !visible || covered || document.hidden) return;
       last = performance.now();
       raf = requestAnimationFrame(frame);
     };
@@ -954,6 +955,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     frame(performance.now());
 
     return () => {
+      disposed = true;
       cancelAnimationFrame(raf);
       window.clearTimeout(zoomTimer);
       apiRef.current = null;
@@ -970,6 +972,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerUp);
       wheelHost.removeEventListener("wheel", onWheel);
+      renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
+      renderer.domElement.removeEventListener("webglcontextrestored", onContextRestored);
 
       const mats = new Set<THREE.Material>();
       const geoSet = new Set<THREE.BufferGeometry>();

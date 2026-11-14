@@ -32,9 +32,9 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
   if (!study) return null;
   const select = (index: number) => { setSelected(index); setOpen(true); };
 
-  const manuscript = <article className="research-manuscript">
+  const manuscript = (titleId: string) => <article className="research-manuscript">
     <p className="research-manuscript-imprint">Computational &amp; Experimental Biology</p>
-    <h3 id="research-manuscript-title">{study.title}</h3>
+    <h3 id={titleId}>{study.title}</h3>
     <p className="research-manuscript-author">{site.name}</p>
     <p className="research-manuscript-affiliation">University of the Philippines Cebu</p>
     <section className="research-abstract"><h4>Abstract <span>Placeholder</span></h4>
@@ -51,7 +51,7 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
         onOpen={() => setOpen(true)} onRead={() => setReading(true)}
         onReady={() => setReady(true)} onUnsupported={() => { setUnsupported(true); setReady(true); }} />}
       {!ready && <div className="research-desk-loading" role="status"><span aria-hidden="true" />Preparing the reading desk…</div>}
-      {unsupported && <div className="research-desk-fallback">{manuscript}</div>}
+      {unsupported && <div className="research-desk-fallback">{manuscript("research-fallback-title")}</div>}
 
       <div className="wrap research-desk-hud">
         <nav className="research-study-tabs" aria-label="Choose research study">
@@ -80,7 +80,7 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
       {reading && <Modal className="research-reader-backdrop" labelledBy="research-manuscript-title" onClose={() => setReading(false)}>
         <div className="research-reader-shell">
           <button type="button" className="research-reader-close" onClick={() => setReading(false)} aria-label="Close research paper">Close ×</button>
-          {manuscript}
+          {manuscript("research-manuscript-title")}
           <nav className="research-reader-pagination" aria-label="Read another study">
             <button type="button" onClick={() => select((selected + studies.length - 1) % studies.length)}>← Previous study</button>
             <span>{selected + 1} / {studies.length}</span>

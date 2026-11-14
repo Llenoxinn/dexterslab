@@ -157,7 +157,7 @@ export function createChristmasDecor(root: THREE.Group, core: THREE.Group, termi
       if (index % 2 === 0) {
         mesh(decor, new THREE.CylinderGeometry(0.025, 0.025, 0.12, 8), wire, x, y - 0.06, -3.72);
         const bulb = ball(decor, bulbs[(index / 2 + span) % bulbs.length], 0.07, x, y - 0.16, -3.72);
-        bulb.scale.y = 1.35;
+        bulb.scale.y *= 1.35;
       }
     }
     cable(decor, points);
