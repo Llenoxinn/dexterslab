@@ -225,22 +225,24 @@ export function ContactSection() {
           <button
             ref={messageButtonRef}
             type="button"
-            className={`btn ${panel === "message" ? "btn-solid" : "btn-ghost"}`}
+            className="btn btn-solid contact-action"
             aria-expanded={panel === "message"}
             aria-controls="contact-panel"
             onClick={() => togglePanel("message")}
           >
             Write me a message
+            <span className="contact-action-icon" aria-hidden="true" />
           </button>
           <button
             ref={linksButtonRef}
             type="button"
-            className={`btn ${panel === "links" ? "btn-solid" : "btn-ghost"}`}
+            className="btn btn-ghost contact-action"
             aria-expanded={panel === "links"}
             aria-controls="contact-panel"
             onClick={() => togglePanel("links")}
           >
             Find me online
+            <span className="contact-action-icon" aria-hidden="true" />
           </button>
         </div>
       </div>
