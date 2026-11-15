@@ -137,9 +137,14 @@ export function MethodSection() {
           <h3 className="about-skills-heading">Core skills</h3>
 
           <div className="skill-groups">
+          {/* Closed, each group is one scannable line; open, every skill shows its tools. */}
           {SKILL_GROUPS.map((group) => (
-            <section key={group.title} className="skill-group" aria-label={group.title}>
-              <h4 className="skill-group-title">{group.title}</h4>
+            <details key={group.title} className="skill-group">
+              <summary className="skill-group-summary">
+                <h4 className="skill-group-title">{group.title}</h4>
+                <span className="skill-group-gist">{group.skills.map((skill) => skill.name).join(", ")}</span>
+                <span className="skill-group-mark" aria-hidden="true" />
+              </summary>
               <ul className="skill-list">
                 {group.skills.map((skill) => (
                   <li key={skill.name} className="skill-row">
@@ -160,7 +165,7 @@ export function MethodSection() {
                   </li>
                 ))}
               </ul>
-            </section>
+            </details>
           ))}
           </div>
         </div>

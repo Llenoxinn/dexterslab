@@ -10835,3 +10835,93 @@ html[data-lab-theme="phosphor"] body { background: #101232; }
     justify-content: center;
   }
 }
+
+/* ── About: core skills as an index you can open ──────────────────────
+   Closed, each group is its title and one line of what it covers; open, its tools. */
+.skill-group {
+  border-top: 1px solid var(--hairline);
+}
+.skill-group-summary {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding: 14px 32px 14px 0;
+  list-style: none;
+  cursor: pointer;
+}
+.skill-group-summary::-webkit-details-marker {
+  display: none;
+}
+.skill-group-summary .skill-group-title {
+  margin: 0;
+}
+.skill-group-gist {
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  text-wrap: pretty;
+  color: rgb(10 10 93 / 0.72);
+}
+/* A plus that turns into a minus: the same open/close mark as the contact actions. */
+.skill-group-mark {
+  position: absolute;
+  top: 18px;
+  right: 4px;
+  width: 12px;
+  height: 12px;
+}
+.skill-group-mark::before,
+.skill-group-mark::after {
+  content: "";
+  position: absolute;
+  inset: 5px 0 auto;
+  height: 2px;
+  background: var(--color-ink);
+  transition: rotate 200ms var(--ease-out);
+}
+.skill-group-mark::after {
+  rotate: 90deg;
+}
+.skill-group[open] .skill-group-mark::after {
+  rotate: 0deg;
+}
+.skill-group-summary:focus-visible {
+  outline: 2px solid var(--color-neon);
+  outline-offset: 2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .skill-group-summary:hover .skill-group-title {
+    text-decoration: underline 2px;
+    text-underline-offset: 5px;
+  }
+}
+.skill-group[open] .skill-list {
+  padding-bottom: 16px;
+}
+/* Where supported, the group opens with its height instead of jumping. */
+@supports (interpolate-size: allow-keywords) {
+  .skill-groups {
+    interpolate-size: allow-keywords;
+  }
+  .skill-group::details-content {
+    block-size: 0;
+    overflow: hidden;
+    transition: block-size 260ms var(--ease-out), content-visibility 260ms allow-discrete;
+  }
+  .skill-group[open]::details-content {
+    block-size: auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skill-group::details-content,
+  .skill-group-mark::before,
+  .skill-group-mark::after {
+    transition: none;
+  }
+}
+[data-lab-theme="phosphor"] .skill-group-gist {
+  color: rgb(238 240 255 / 0.72);
+}
+[data-lab-theme="phosphor"] .skill-group-mark::before,
+[data-lab-theme="phosphor"] .skill-group-mark::after {
+  background: currentColor;
+}
