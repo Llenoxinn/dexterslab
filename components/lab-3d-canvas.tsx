@@ -18,6 +18,8 @@ import { createGovernor, qualityTiers, type QualityTier } from "@/lib/render-qua
 import { steelMaterial, studioEnvironment } from "@/lib/lab-materials";
 import { batchScene, PROXY_LAYER } from "@/lib/batch-scene";
 import { createLake } from "@/lib/lab-lake";
+import { createSkyRays } from "@/lib/sky-rays";
+import { createClayLeaves } from "@/lib/clay-leaves";
 
 export type FocusStation = "terminal" | "core" | "tank" | "bench" | "rack";
 export type StationId = "overview" | FocusStation | "free";
@@ -851,7 +853,10 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     });
     const sunShaft = scene.getObjectByName("sun-shaft");
     // ~900 meshes become ~40 draws: the scene graph stays as proxies, the batches draw it.
-    const batcher = batchScene(root, scene);
+    // The window's sky panes stay out of the batches: the sky-rays mask draws them on their own.
+    const skyPanes: THREE.Object3D[] = [];
+    root.traverse((o) => { if (o.userData.sky) skyPanes.push(o); });
+    const batcher = batchScene(root, scene, (mesh) => !!mesh.userData.sky);
     host.dataset.batched = String(batcher.saved);
     // The lab stands in a still lake that dissolves into the page.
     const lake = createLake(renderer, {
@@ -860,6 +865,32 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       sun: SUN_DIR,
     });
     scene.add(lake.mesh);
+    // Light streaming out of the back window, cut by the real louvres.
+    const skyRays = createSkyRays(renderer, {
+      sun: SUN_DIR,
+      sky: skyPanes,
+      source: new THREE.Vector3(STUDIO_BACK_WINDOW.x, STUDIO_BACK_WINDOW.y, STUDIO_BACK_WINDOW.z).addScaledVector(SUN_DIR, 7),
+    });
+    // Clay and steel leaves tumbling down around the room and settling on the lake.
+    const leaves = createClayLeaves({
+      clay: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 }),
+      steel: steelMaterial(studio, "polished"), // small leaves need the bright cards, not the brushed spread
+      // In front of the open cutaway and off its left side; never right of it, where the copy sits.
+      area: {
+        minX: ROOM_CENTER_X - ROOM_WIDTH / 2 - 5, maxX: ROOM_CENTER_X + ROOM_WIDTH / 2 - 2.5,
+        minZ: ROOM_CENTER_Z - ROOM_DEPTH / 2 - 1, maxZ: ROOM_CENTER_Z + ROOM_DEPTH / 2 + 8,
+      },
+      clayCount: 36,
+      steelCount: 6,
+      room: {
+        minX: ROOM_CENTER_X - ROOM_WIDTH / 2, maxX: ROOM_CENTER_X + ROOM_WIDTH / 2,
+        minZ: ROOM_CENTER_Z - ROOM_DEPTH / 2, maxZ: ROOM_CENTER_Z + ROOM_DEPTH / 2,
+      },
+      top: 9,
+      water: -0.26,
+    });
+    scene.add(leaves.group);
+    const breeze = new THREE.Vector2(0.18, 0.06);
     const drawingSize = new THREE.Vector2();
     /** The page colour is the scene's backdrop; on the dark theme the lake turns to night water. */
     const paintBackdrop = () => {
@@ -1113,6 +1144,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       composer.setSize(width, height);
       renderer.getDrawingBufferSize(drawingSize);
       lake.setSize(drawingSize.x, drawingSize.y);
+      skyRays.setSize(drawingSize.x, drawingSize.y);
       if (stationRef.current === "overview" && !zoomedRef.current) goal.radius = overviewRadius();
       else goal.radius = Math.min(goal.radius, overviewRadius());
     };
@@ -1437,10 +1469,13 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         lake.uniforms.uFade.value = lakeFade;
         lake.mesh.visible = lakeFade > 0.01;
         if (!calm) lake.uniforms.uTime.value = animT;
-        if (lake.mesh.visible) lake.renderReflection(scene, camera, [sunShaft, clayText]);
+        leaves.update(animT, lakeFade, breeze);
+        if (lake.mesh.visible) lake.renderReflection(scene, camera, [sunShaft, clayText, leaves.group]);
         // AO only while the assembled room is on screen; the debris reads fine without it.
         if (useAO && nearRoom) composer.render(dt);
         else renderer.render(scene, camera);
+        // Shafts belong to the whole sunlit room, like the lake: they drain away with it.
+        skyRays.render(scene, camera, 0.34 * lakeFade, [sunShaft, clayText, lake.mesh]);
         // The entrance (shader compiles, every piece in flight) is not the steady state; judge after it.
         if (!calm && built >= ASSEMBLE_SECONDS + 1) adapt(now);
         else lastRendered = 0;
@@ -1528,6 +1563,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       composer.dispose();
       batcher.dispose();
       lake.dispose();
+      skyRays.dispose();
+      leaves.dispose();
       renderer.dispose();
       // Hand the GPU context back now. Without this every hot reload leaks one, and the
       // browser eventually refuses to create any more.

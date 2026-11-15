@@ -54,6 +54,7 @@ export function createStudioWindows(root: THREE.Group, wall: THREE.Material, sid
     pane.position.set(openingX, (bottom + top) / 2, -0.18);
     pane.castShadow = false;
     pane.userData.buildRole = "wall";
+    pane.userData.sky = true; // the sky-rays mask draws these white
     group.add(pane);
     windows.push(group);
   }
