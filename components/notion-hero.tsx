@@ -46,6 +46,20 @@ const LINKS = [
 
 const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+const manilaTime = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Manila", hour: "2-digit", minute: "2-digit" });
+
+/** Cebu's time, ticking each minute. Rendered only after mount so server and client agree. */
+function ManilaClock() {
+  const [now, setNow] = useState<string | null>(null);
+  useEffect(() => {
+    const tick = () => setNow(manilaTime.format(new Date()));
+    tick();
+    const id = window.setInterval(tick, 15_000);
+    return () => window.clearInterval(id);
+  }, []);
+  return <time className="hero-corner-time">{now ?? "--:--"} PHT</time>;
+}
+
 export function NotionHero() {
   const [view, setView] = useState<ViewId>("whoami");
   const [station, setStation] = useState<StationId>("overview");
@@ -71,6 +85,11 @@ export function NotionHero() {
 
       <div className="wrap hero-3d-hud">
         <div className="hero-3d-top">
+          {/* Quiet corner annotations, like a drawing sheet: who and where, with Cebu's live time. */}
+          <p className="hero-corner-kicker" aria-hidden="true">
+            <span>Student developer</span>
+            <span>Cebu, Philippines · <ManilaClock /></span>
+          </p>
           <div className="hero-3d-intro" inert={station !== "overview"}>
             <h1 className="ndev-title">/dev/dexter</h1>
             <p className="ndev-subtitle">
@@ -94,7 +113,14 @@ export function NotionHero() {
           </div>
         </div>
 
+        {/* One line at the foot of the hero, like a caption under the model. */}
+        <p className="hero-tagline" aria-hidden="true">A lab<br />for ideas.</p>
+
         <div className="hero-3d-bottom">
+          <p className="hero-corner hero-corner--left" aria-hidden="true">
+            <span className="hero-corner-cross" />
+            01 / dexterslab
+          </p>
           <div className="lab-3d-controls" role="group" aria-label="Fly to a lab station">
             {STATIONS.map((item) => (
               <button
@@ -108,6 +134,10 @@ export function NotionHero() {
               </button>
             ))}
           </div>
+          <p className="hero-corner hero-corner--right" aria-hidden="true">
+            Scroll to explore ↓
+            <span className="hero-corner-cross" />
+          </p>
         </div>
       </div>
 
