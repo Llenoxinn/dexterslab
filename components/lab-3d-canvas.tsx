@@ -15,6 +15,7 @@ import { CONTACT_SPIRAL_SECONDS, CONTACT_WORD_COLUMNS, type ContactChoreography 
 import { createStudioWindows, STUDIO_BACK_WINDOW, STUDIO_SUN_DIRECTION } from "@/lib/studio-daylight";
 import { interludeBus } from "@/lib/interlude-bus";
 import { createGovernor, qualityTiers, type QualityTier } from "@/lib/render-quality";
+import { batchScene, PROXY_LAYER } from "@/lib/batch-scene";
 
 export type FocusStation = "terminal" | "core" | "tank" | "bench" | "rack";
 export type StationId = "overview" | FocusStation | "free";
@@ -764,6 +765,38 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     gtao.setSize = (w: number, h: number) => {
       const s = tier.ao || 0.5;
       gtaoSetSize(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)));
+      aoAge = Infinity;
+    };
+    // Occlusion only changes when the camera or the room moves. While both hold still, the last
+    // denoised AO is blended again and recomputed every few frames: the clay keeps its contact
+    // shading at a fraction of the cost (it was the hero's stutter on integrated GPUs).
+    const AO_REUSE_FRAMES = 12;
+    let aoAge = Infinity;
+    const aoView = new THREE.Matrix4();
+    const gtaoInternals = gtao as unknown as {
+      copyMaterial: THREE.ShaderMaterial;
+      blendMaterial: THREE.ShaderMaterial;
+      pdRenderTarget: THREE.WebGLRenderTarget;
+      _renderPass: (r: THREE.WebGLRenderer, m: THREE.Material, t: THREE.WebGLRenderTarget | null) => void;
+    };
+    const gtaoRender = gtao.render.bind(gtao);
+    const sameView = (a: THREE.Matrix4, b: THREE.Matrix4) => a.elements.every((v, i) => Math.abs(v - b.elements[i]) < 1e-5);
+    gtao.render = (r, writeBuffer, readBuffer, delta, mask) => {
+      if (aoAge >= AO_REUSE_FRAMES || !sameView(aoView, camera.matrixWorld)) {
+        aoView.copy(camera.matrixWorld);
+        aoAge = 0;
+        gtaoRender(r, writeBuffer, readBuffer, delta, mask);
+        return;
+      }
+      aoAge += 1;
+      const g = gtaoInternals;
+      const target = gtao.renderToScreen ? null : writeBuffer;
+      g.copyMaterial.uniforms.tDiffuse.value = readBuffer.texture;
+      g.copyMaterial.blending = THREE.NoBlending;
+      g._renderPass(r, g.copyMaterial, target);
+      g.blendMaterial.uniforms.intensity.value = gtao.blendIntensity;
+      g.blendMaterial.uniforms.tDiffuse.value = g.pdRenderTarget.texture;
+      g._renderPass(r, g.blendMaterial, target);
     };
     gtao.blendIntensity = 0.72;
     gtao.updateGtaoMaterial({ radius: 0.48, distanceExponent: 1.6, thickness: 0.5, scale: 1, samples: roomy ? 16 : 8 });
@@ -800,6 +833,9 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       ),
     });
     const sunShaft = scene.getObjectByName("sun-shaft");
+    // ~900 meshes become ~40 draws: the scene graph stays as proxies, the batches draw it.
+    const batcher = batchScene(root, scene);
+    host.dataset.batched = String(batcher.saved);
 
     // ---------- The interlude headline, in clay ----------
     // lab-interlude simulates the pixel headline; here every pixel becomes a small rounded clay block
@@ -1061,6 +1097,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
 
     // ---------- Pointer: orbit, pinch, hover, click-to-focus ----------
     const raycaster = new THREE.Raycaster();
+    raycaster.layers.enable(PROXY_LAYER); // the batched meshes' proxies still take the hits
     const ndc = new THREE.Vector2();
     const pointers = new Map<number, { x: number; y: number }>();
     let moved = 0;
@@ -1306,6 +1343,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       // The clock starts after the first frame is on screen: compiling shaders can take seconds.
       const built = calm ? Infinity : assembleFrom === 0 ? 0 : (now - assembleFrom) / 1000;
       const journeyOn = !(from === 0 && mix === 0 && built >= ASSEMBLE_SECONDS);
+      if (journeyOn) aoAge = Infinity; // pieces are moving: occlusion must follow them
       if (journeyOn || journeyWasOn) journey.reset();
       lab.tick(animT);
       const shellOpacity = journey.apply({
@@ -1345,7 +1383,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
 
       // Shadows follow every frame while pieces are landing or leaving the floor.
       // Only the room needs its shadows; once it has blown apart, the GPU can skip them entirely.
-      if (from === 0 && (mix < 0.6 || shadowFrame % 4 === 0)) renderer.shadowMap.needsUpdate = true;
+      // At rest only small props animate, so a shadow refresh every fourth frame is enough.
+      if (from === 0 && ((journeyOn && mix < 0.6) || shadowFrame % 4 === 0)) renderer.shadowMap.needsUpdate = true;
       shadowFrame += 1;
       // The journal is a full-screen scene of its own with an opaque backdrop. While it covers the
       // viewport this layer is invisible, so it stops drawing and leaves the GPU to the journal.
@@ -1353,6 +1392,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       const jr = journal?.getBoundingClientRect();
       const coveredByJournal = !!jr && jr.top <= 0 && jr.bottom >= window.innerHeight;
       if (stageOpacity > 0 && !coveredByJournal) {
+        scene.updateMatrixWorld();
+        batcher.sync();
         // AO only while the assembled room is on screen; the debris reads fine without it.
         if (useAO && nearRoom) composer.render(dt);
         else renderer.render(scene, camera);
@@ -1441,6 +1482,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       key.shadow.map?.dispose();
       gtao.dispose();
       composer.dispose();
+      batcher.dispose();
       renderer.dispose();
       // Hand the GPU context back now. Without this every hot reload leaks one, and the
       // browser eventually refuses to create any more.
