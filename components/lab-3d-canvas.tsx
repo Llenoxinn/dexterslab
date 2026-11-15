@@ -11,7 +11,7 @@ import { createFilipinoLab, narraTexture, sawaliTexture, signTexture } from "@/l
 import { createChristmasDecor } from "@/lib/christmas-lab";
 import { ASSEMBLE_SECONDS, STAGES, STAGE_OPACITY, createJourney } from "@/lib/lab-journey";
 import { addLabProps } from "@/lib/lab-props";
-import { CONTACT_SPIRAL_SECONDS, CONTACT_WORD_COLUMNS, type ContactChoreography } from "@/lib/contact-choreography";
+import { CONTACT_SPIRAL_SECONDS, CONTACT_WORD_COLUMNS, pingFinale, type ContactChoreography } from "@/lib/contact-choreography";
 import { createStudioWindows, STUDIO_BACK_WINDOW, STUDIO_SUN_DIRECTION } from "@/lib/studio-daylight";
 import { interludeBus } from "@/lib/interlude-bus";
 import { createGovernor, qualityTiers, type QualityTier } from "@/lib/render-quality";
@@ -1336,6 +1336,11 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       const contactK = calm ? 1 : 1 - Math.exp(-dt * 4.8);
       if (contactMode === "links" && STAGES[from] === "frame" && !calm) linksSeconds += dt;
       contactPose.linksElapsed = linksSeconds;
+      const finale = contactMode === "links" && !calm ? pingFinale(linksSeconds) : "";
+      if (contactEl && (contactEl.dataset.pingFinale ?? "") !== finale) {
+        if (finale) contactEl.dataset.pingFinale = finale;
+        else delete contactEl.dataset.pingFinale;
+      }
       contactPose.message += ((contactMode === "message" ? 1 : 0) - contactPose.message) * contactK;
       contactPose.links += ((contactMode === "links" ? 1 : 0) - contactPose.links) * contactK;
       contactPose.energy += ((contactSocial >= 0 ? 1 : 0) - contactPose.energy) * contactK;

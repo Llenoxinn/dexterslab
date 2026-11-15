@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CONTACT_WORD_POINTS, pingConversion, type ContactChoreography } from "./contact-choreography";
+import { CONTACT_WORD_POINTS, PING_FIELD_COUNT, pingConversion, pingFieldPop, type ContactChoreography } from "./contact-choreography";
 import { createPingGeometry } from "./ping-geometry";
 
 /**
@@ -237,7 +237,7 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
     const key = [box.x, box.y, box.halfW, box.halfH, top, c.camera.aspect].map((v) => v.toFixed(3)).join("|");
     if (key !== fieldKey) {
       fieldKey = key;
-      field = contactField(candidates.length, box, top, c.camera.aspect);
+      field = contactField(PING_FIELD_COUNT, box, top, c.camera.aspect);
     }
     return field;
   };
@@ -248,8 +248,25 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
     pingRoot.add(mesh);
     return mesh;
   });
+  // On top of the spiral, a field of PING fills every free cell around the box: one instanced draw.
+  const fieldWords = new THREE.InstancedMesh(
+    pingGeometry,
+    new THREE.MeshStandardMaterial({ color: 0x2323d2, roughness: .36, metalness: .12 }),
+    PING_FIELD_COUNT,
+  );
+  fieldWords.name = "contact-ping-field";
+  fieldWords.frustumCulled = false;
+  fieldWords.visible = false;
+  fieldWords.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+  const fieldPos = new THREE.Vector3();
+  const fieldQuat = new THREE.Quaternion();
+  const fieldTilt = new THREE.Quaternion();
+  const fieldEuler = new THREE.Euler();
+  const fieldScale = new THREE.Vector3();
+  const fieldMatrix = new THREE.Matrix4();
   // Kept outside the travelling lab, so replacements don't become journey pieces themselves.
-  root.parent?.add(pingRoot);
+  root.parent?.add(pingRoot, fieldWords);
 
   // Interlude rings: evenly spaced places for whole bio/tech props, alternating between two rings.
   const RING_COUNT = 72;
@@ -470,13 +487,17 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
           // Four groups of satellites: a focused social channel pulls its group forward.
           const channel = p.slot % 4;
           const selected = contact.energy * (1 - Math.min(1, Math.abs(channel - contact.social)));
-          // The links fill the section: every piece has a cell of its own in the free space around
-          // the box (sides, above and below) and drifts in a small loop inside it.
-          const field = fieldFor(c, contact);
-          const [fx, fy] = field.points[p.slot] ?? [contact.orbitX, contact.orbitY];
-          const a = p.phase + t * (.35 + (Math.sin(p.phase * 7) + 1) * .12);
-          const sx = fx + Math.cos(a) * field.cellX * .1 + Math.sin(t * .47 + p.phase * 3) * field.cellX * .04;
-          const sy = fy + Math.sin(a * 1.3) * field.cellY * .1;
+          const ring = p.slot % 2;
+          const speed = .3 + (Math.sin(p.phase * 7) + 1) * .16;
+          const disturbance = Math.sin(t * 1.1 + p.phase) * .18 + Math.sin(t * .47 + p.phase * 3) * .22;
+          const a = p.phase + (p.slot / candidates.length) * Math.PI * 6 + t * (ring ? -speed : speed) + disturbance;
+          // Uneven spiral bands live beyond a protected ellipse around the text and cards.
+          const wobble = (1 + Math.sin(t * .7 + p.phase)) * .075 + (1 + Math.cos(t * 1.3 + p.phase * 3)) * .025;
+          const rx = contact.orbitRadiusX + ring * 0.065 + wobble;
+          // The orbit's top edge also stays below the section's top.
+          const ry = Math.max(0.12, Math.min(contact.orbitRadiusY + ring * 0.04 + wobble, (c.contactTop ?? 1) - 0.08 - contact.orbitY));
+          const sx = contact.orbitX + Math.cos(a) * rx;
+          const sy = contact.orbitY + Math.sin(a) * ry;
           const proximity = near(c, sx, sy);
           screenPoint(c.camera, sx, sy, 28 - selected * 4 - proximity * 2, contactPos);
           euler.set(p.phase + t * 0.45, p.phase + t * 0.6 + selected * 0.9, Math.cos(a) * 0.5);
@@ -508,6 +529,7 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
     reset() {
       eased.clear();
       pingWords.forEach((word) => { word.visible = false; });
+      fieldWords.visible = false;
       for (const p of pieces) {
         p.obj.position.copy(p.homePos);
         p.obj.quaternion.copy(p.homeQuat);
@@ -621,6 +643,35 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
         world.compose(aPos, aQuat, aScale).premultiply(cached.inverse);
         world.decompose(p.obj.position, p.obj.quaternion, p.obj.scale);
         p.obj.visible = aScale.x > 0.004;
+      }
+
+      const contact = c.contact;
+      const fieldWeight = contact ? contact.links * (c.from === "frame" ? 1 : c.to === "frame" ? m : 0) : 0;
+      fieldWords.visible = !!contact && fieldWeight > 0.001;
+      if (contact && fieldWords.visible) {
+        const { points, cellX, cellY } = fieldFor(c, contact);
+        const seconds = contact.linksElapsed ?? 0;
+        const portrait = c.camera.aspect < .85;
+        for (let i = 0; i < PING_FIELD_COUNT; i++) {
+          const pop = pingFieldPop(seconds, i) * fieldWeight;
+          const [x, y] = points[i] ?? [0, 0];
+          const phase = i * 2.39996;
+          const t = c.time;
+          screenPoint(
+            c.camera,
+            x + Math.cos(t * .5 + phase) * cellX * .1,
+            y + Math.sin(t * .62 + phase) * cellY * .1,
+            30,
+            fieldPos,
+          );
+          fieldEuler.set(Math.cos(t * .4 + phase) * .2, Math.sin(t * .65 + phase) * .55, Math.sin(t * .5 + phase) * .3);
+          fieldQuat.copy(c.camera.quaternion).multiply(fieldTilt.setFromEuler(fieldEuler));
+          // A small overshoot as each word pops in.
+          const size = (portrait ? .24 : .6) * pop * (1 + .3 * Math.sin(Math.PI * pop));
+          fieldScale.setScalar(Math.max(1e-4, size));
+          fieldWords.setMatrixAt(i, fieldMatrix.compose(fieldPos, fieldQuat, fieldScale));
+        }
+        fieldWords.instanceMatrix.needsUpdate = true;
       }
 
       let opacity = shellOpacity[c.from] + (shellOpacity[c.to] - shellOpacity[c.from]) * m;

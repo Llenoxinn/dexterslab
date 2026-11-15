@@ -201,6 +201,12 @@ export function ContactSection() {
         setHoveredSocial(null);
       }}
     >
+      {/* The PING finale: once the screen is full of PING, it asks, then answers itself.
+          The 3D layer drives the phase through data-ping-finale on this section. */}
+      <div className="contact-finale" aria-hidden="true">
+        <span className="contact-finale-line" data-line="ask">Are you sure about that?</span>
+        <span className="contact-finale-line" data-line="cool">COOL!</span>
+      </div>
       <div className="contact-hero">
         <div className="contact-word-stage" data-contact-word>
           <h2 id="contact-heading" className="section-title contact-hero-title">

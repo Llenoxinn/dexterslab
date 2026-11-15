@@ -139,3 +139,16 @@ test("the links field covers the free space around the box and never sits on it"
     assert.ok(points.some(([, y]) => y > 0.5 || y < -0.6));
   }
 });
+
+test("the PING field fills after the spiral starts converting, then the finale asks before it answers", async () => {
+  const { pingFieldPop, pingFinale, PING_FIELD_COUNT, CONTACT_SPIRAL_SECONDS, PING_FINALE } = await import("../lib/contact-choreography.ts");
+  const pops = (s) => Array.from({ length: PING_FIELD_COUNT }, (_, i) => pingFieldPop(s, i));
+  assert.ok(pops(CONTACT_SPIRAL_SECONDS).every((v) => v === 0), "field waits for the spiral");
+  const mid = pops(CONTACT_SPIRAL_SECONDS + 6);
+  assert.ok(mid.some((v) => v === 1) && mid.some((v) => v === 0), "fills one by one");
+  assert.ok(pops(PING_FINALE.ask).every((v) => v === 1), "screen is full before the finale");
+  assert.equal(pingFinale(PING_FINALE.ask - 0.1), "");
+  assert.equal(pingFinale(PING_FINALE.ask + 0.1), "ask");
+  assert.equal(pingFinale(PING_FINALE.cool + 0.1), "cool");
+  assert.equal(pingFinale(PING_FINALE.end + 0.1), "");
+});

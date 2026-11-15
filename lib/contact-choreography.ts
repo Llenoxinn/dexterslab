@@ -24,6 +24,25 @@ export function pingConversion(seconds: number, slot: number, count: number): nu
   return progress * progress * (3 - 2 * progress);
 }
 
+/** Extra PING words that fill the free space around the box, beyond the props' spiral. */
+export const PING_FIELD_COUNT = 96;
+
+/** The field words pop in one at a time, starting just after the props begin to convert. */
+export function pingFieldPop(seconds: number, index: number, count = PING_FIELD_COUNT): number {
+  const order = (index * 53) % Math.max(1, count);
+  const start = CONTACT_SPIRAL_SECONDS + 1.5 + order / Math.max(1, count - 1) * 9;
+  const progress = Math.max(0, Math.min(1, (seconds - start) / .45));
+  return progress * progress * (3 - 2 * progress);
+}
+
+/** Once the screen is full of PING, the whole screen asks, then answers itself. */
+export const PING_FINALE = { ask: CONTACT_SPIRAL_SECONDS + 14, cool: CONTACT_SPIRAL_SECONDS + 16.6, end: CONTACT_SPIRAL_SECONDS + 18.4 };
+export function pingFinale(seconds: number): "" | "ask" | "cool" {
+  if (seconds >= PING_FINALE.ask && seconds < PING_FINALE.cool) return "ask";
+  if (seconds >= PING_FINALE.cool && seconds < PING_FINALE.end) return "cool";
+  return "";
+}
+
 /** Mutable frame data shared with the journey; motion stays outside React's render loop. */
 export type ContactChoreography = {
   message: number;
