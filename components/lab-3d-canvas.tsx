@@ -985,7 +985,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     scene.fog = new THREE.FogExp2(deepWater, 0);
     let diveS = 0;
     const lobbySection = document.getElementById("lobby");
-    let anchors: DiveAnchors = { diveStart: 0, diveEnd: 1, descendStart: 2, descendEnd: 3, riseStart: 4, riseEnd: 5 };
+    let anchors: DiveAnchors = { diveStart: 0, diveEnd: 1, descendStart: 2, descendEnd: 3, blastStart: 4, blastEnd: 5 };
     const pageColour = new THREE.Color(BACKDROP);
     const breeze = new THREE.Vector2(0.18, 0.06);
     const drawingSize = new THREE.Vector2();
@@ -1189,14 +1189,14 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         diveEnd: Math.max(vh * 0.6, interludeTop),
         descendStart: interludeTop + interludeSpan * 0.9,
         descendEnd: lobbyTop,
-        riseStart: lobbyTop + lobbySpan * 0.75,
-        riseEnd: lobbyTop + lobbySpan + vh * 0.3,
+        blastStart: lobbyTop + lobbySpan * 0.75,
+        blastEnd: lobbyTop + lobbySpan + vh * 0.3,
       };
       const keys = [
         0,
         // BOOM: the room bursts as the camera arrives back above it.
-        anchors.riseEnd - vh * 0.2,
-        anchors.riseEnd + vh * 0.5,
+        anchors.blastEnd - vh * 0.2,
+        anchors.blastEnd + vh * 0.5,
         top("method", vh * 3) - vh * 0.25,
         top("experience", vh * 2) - vh * 0.5,
         top("achievements", vh * 4) - vh * 0.6,
@@ -1537,7 +1537,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         if (camera.aspect < 0.85) waterPose.position.set(ROOM_CENTER_X + 1, 17, ROOM_FRONT + 19);
         else waterPose.position.set(ROOM_CENTER_X + 1, 12, ROOM_FRONT + 15);
         // A slow walk around the lobby while its section scrolls.
-        const lobbyT = clamp((smoothY - anchors.descendEnd) / Math.max(1, anchors.riseStart - anchors.descendEnd), 0, 1);
+        const lobbyT = clamp((smoothY - anchors.descendEnd) / Math.max(1, anchors.blastStart - anchors.descendEnd), 0, 1);
         lobbyPose.position.copy(lobbyBase.position).sub(lobbyCenter).applyAxisAngle(UP, (lobbyT - 0.5) * 0.55).add(lobbyCenter);
         divePose(diveS, rigPose, waterPose, lobbyPose, WATER_LEVEL, dived);
         camera.position.copy(dived.position);

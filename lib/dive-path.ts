@@ -5,8 +5,7 @@ import * as THREE from "three";
  *
  *   0  the hero rig (orbit, zoom, stations all still work)
  *   1  looking down at the lake in front of the room: the interlude headline floats on the water
- *   2  under the surface, in the lobby
- *   3  back up through the surface at the hero rig: the burst (BOOM) starts here
+ *   2  under the surface, in the lobby; the camera stays here for the BOOM, which happens under water
  *
  * Exact scroll gives the chapter; the camera eases between authored poses. The same scroll position
  * always gives the same pose, forwards, backwards and after a jump.
@@ -19,22 +18,26 @@ export type DiveAnchors = {
   /** Where it leaves the headline and where it reaches the lobby. */
   descendStart: number;
   descendEnd: number;
-  /** Where it leaves the lobby and where it is back at the hero rig. */
-  riseStart: number;
-  riseEnd: number;
+  /** The lobby's tail: where the blast starts and where it has played out and the water has cleared. */
+  blastStart: number;
+  blastEnd: number;
 };
 
 const smooth = (t: number) => t * t * (3 - 2 * t);
 const span = (y: number, a: number, b: number) => (b <= a ? (y >= b ? 1 : 0) : Math.min(1, Math.max(0, (y - a) / (b - a))));
 
-/** Scroll position → story value `s` in [0, 3]. */
+/** Scroll position → story value `s` in [0, 2]. */
 export function diveStage(y: number, a: DiveAnchors): number {
   if (y < a.diveEnd) return smooth(span(y, a.diveStart, a.diveEnd));
   if (y < a.descendStart) return 1;
-  if (y < a.descendEnd) return 1 + smooth(span(y, a.descendStart, a.descendEnd));
-  if (y < a.riseStart) return 2;
-  return 2 + smooth(span(y, a.riseStart, a.riseEnd));
+  return 1 + smooth(span(y, a.descendStart, a.descendEnd));
 }
+
+/** Scroll position → blast progress in [0, 1], linear (the caller eases it). */
+export const blastProgress = (y: number, a: DiveAnchors) => span(y, a.blastStart, a.blastEnd);
+
+/** How far the water has cleared to the page, over the last third of the blast. */
+export const clearAmount = (b: number) => smooth(Math.min(1, Math.max(0, (b - 0.65) / 0.35)));
 
 export type Pose = { position: THREE.Vector3; target: THREE.Vector3 };
 
@@ -49,8 +52,8 @@ const bezier = (a: THREE.Vector3, c: THREE.Vector3, b: THREE.Vector3, t: number,
 const control = new THREE.Vector3();
 
 /**
- * The camera at `s`. Through the surface (1→2) and back up (2→3) the path bends so the lens crosses
- * the water near-vertically, never skimming along it.
+ * The camera at `s`. Through the surface (1→2) the path bends so the lens crosses the water
+ * near-vertically, never skimming along it.
  */
 export function divePose(s: number, rig: Pose, water: Pose, lobby: Pose, level: number, out: Pose): Pose {
   if (s <= 0) {
@@ -59,16 +62,11 @@ export function divePose(s: number, rig: Pose, water: Pose, lobby: Pose, level: 
   } else if (s <= 1) {
     out.position.lerpVectors(rig.position, water.position, s);
     out.target.lerpVectors(rig.target, water.target, s);
-  } else if (s <= 2) {
-    const t = s - 1;
+  } else {
+    const t = Math.min(1, s - 1);
     control.set(water.target.x, level, (water.target.z + lobby.position.z) / 2);
     bezier(water.position, control, lobby.position, t, out.position);
     out.target.lerpVectors(water.target, lobby.target, t);
-  } else {
-    const t = Math.min(1, s - 2);
-    control.set(lobby.position.x, level, (lobby.position.z + rig.position.z) / 2);
-    bezier(lobby.position, control, rig.position, t, out.position);
-    out.target.lerpVectors(lobby.target, rig.target, t);
   }
   return out;
 }
