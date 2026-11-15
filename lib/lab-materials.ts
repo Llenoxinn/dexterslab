@@ -308,8 +308,10 @@ export function rustedSteelMaterial(env: THREE.Texture, opts: { verdigris?: bool
   const verdigris = opts.verdigris ? 1 : 0;
   material.onBeforeCompile = (shader) => {
     SUNKEN_VERTEX(shader);
+    shader.uniforms.uVerdigris = { value: verdigris };
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", SUNKEN_COMMON)
+      .replace("#include <common>", `${SUNKEN_COMMON}
+uniform float uVerdigris;`)
       .replace(
         "#include <color_fragment>",
         `#include <color_fragment>
@@ -318,7 +320,7 @@ export function rustedSteelMaterial(env: THREE.Texture, opts: { verdigris?: bool
         float sFw = max(length(dFdx(vSunkP)), length(dFdy(vSunkP)));
         float sFine = mix(0.5, sFbm(vSunkP * 70.0), 1.0 - smoothstep(0.15, 0.8, sFw * 70.0));
         float sRust = smoothstep(0.35, 0.65, sFbm(vSunkP * 1.3) * 0.7 + sFine * 0.45) * (1.0 - smoothstep(0.05, 0.25, sEdge));
-        float sGreen = ${verdigris.toFixed(1)} * smoothstep(0.55, 0.75, sFbm(vSunkP * 2.7 + 9.0)) * sRust;
+        float sGreen = uVerdigris * smoothstep(0.55, 0.75, sFbm(vSunkP * 2.7 + 9.0)) * sRust;
         vec3 sPatina = mix(vec3(0.16, 0.055, 0.02) * (0.6 + 0.8 * sFine), vec3(0.10, 0.34, 0.27), sGreen);
         diffuseColor.rgb = mix(diffuseColor.rgb, sPatina, sRust);`,
       )
@@ -333,6 +335,6 @@ export function rustedSteelMaterial(env: THREE.Texture, opts: { verdigris?: bool
         metalnessFactor = mix(metalnessFactor, 0.28, sRust);`,
       );
   };
-  material.customProgramCacheKey = () => `lobby-rust-${verdigris}`;
+  material.customProgramCacheKey = () => "lobby-rust"; // verdigris is a uniform: one program
   return material;
 }

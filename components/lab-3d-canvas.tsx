@@ -968,7 +968,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     const lobby = createLobby({
       center: lobbyCenter,
       groups: STACK_GROUPS,
-      materials: { clay: clayKit.steps, accent: clayKit.accent, steel },
+      materials: { clay: clayKit.steps, accent: clayKit.accent, env: studio },
     });
     scene.add(lobby.group);
     // Refracted sun: steeper under the surface, still from behind the room.
