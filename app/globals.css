@@ -10522,55 +10522,101 @@ html[data-lab-theme="phosphor"] body { background: #101232; }
 [data-lab-theme="phosphor"] .site-header .btn-ghost { background: rgb(238 240 255 / .08); }
 
 /* ── Contact: the PING finale ─────────────────────────────────────────
-   Once the screen is full of PING, the whole screen asks, then answers. */
+   The screen fills with DOS-blue blocks, asks, then answers itself and dissolves back to the PING
+   field. Driven by data-ping-finale ("ask" | "cool") on #contact, set by the 3D layer's clock. */
 .contact-finale {
   position: fixed;
   inset: 0;
   z-index: 1000; /* over the header too: the whole screen asks */
   display: grid;
-  place-items: center;
+  align-content: center;
   padding: var(--gutter);
-  background: var(--color-ink);
   color: var(--color-paper);
   pointer-events: none;
-  clip-path: inset(50% 0 50% 0);
-  transition: clip-path 420ms var(--ease-in-out);
 }
-[data-ping-finale] .contact-finale {
-  clip-path: inset(0 0 0 0);
+.contact-finale-pixels {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  grid-template-rows: repeat(10, 1fr);
 }
-.contact-finale-line {
+.contact-finale-pixels span {
+  background: var(--color-ink);
+  opacity: 0;
+  /* Out: each block clears after its own delay, so the PING field shows through block by block. */
+  transition: opacity 0ms linear calc(var(--d) * 1ms + 120ms);
+}
+[data-ping-finale] .contact-finale-pixels span {
+  opacity: 1;
+  transition-delay: calc(var(--d) * 1ms);
+}
+.contact-finale-ask,
+.contact-finale-cool {
+  position: relative;
   grid-area: 1 / 1;
-  max-width: 14ch;
+  margin: 0 auto;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: clamp(2.6rem, 9vw, 8.5rem);
-  line-height: 0.95;
+  line-height: 0.98;
   text-align: center;
-  text-wrap: balance;
   text-shadow: 0.06em 0.06em 0 var(--color-neon);
+}
+/* Two lines at most: wide measure, size from the viewport. */
+.contact-finale-ask {
+  width: min(100%, 15ch);
+  font-size: clamp(2.6rem, 7.4vw, 7.25rem);
+  text-wrap: balance;
+}
+.contact-finale-word {
+  display: inline-block;
   opacity: 0;
-  transform: scale(0.92);
-  transition: opacity 220ms var(--ease-out), transform 420ms var(--ease-out);
 }
-.contact-finale-line[data-line="cool"] {
-  font-size: clamp(4.5rem, 20vw, 17rem);
-  color: var(--color-paper);
+[data-ping-finale="ask"] .contact-finale-word {
+  /* Typed in word by word once the blocks have filled the screen. */
+  animation: finale-word 1ms steps(1) forwards;
+  animation-delay: calc(380ms + var(--w) * 150ms);
 }
-[data-ping-finale="ask"] .contact-finale-line[data-line="ask"],
-[data-ping-finale="cool"] .contact-finale-line[data-line="cool"] {
-  opacity: 1;
-  transform: none;
+.contact-finale-caret {
+  display: inline-block;
+  width: 0.5em;
+  height: 0.82em;
+  margin-left: 0.06em;
+  vertical-align: -0.06em;
+  background: currentColor;
+  box-shadow: 0.06em 0.06em 0 var(--color-neon);
+  opacity: 0;
 }
-[data-ping-finale="cool"] .contact-finale {
-  background: var(--color-neon);
+[data-ping-finale="ask"] .contact-finale-caret {
+  animation: finale-caret 1060ms steps(1) 380ms infinite;
 }
-[data-ping-finale="cool"] .contact-finale-line[data-line="cool"] {
-  text-shadow: 0.06em 0.06em 0 var(--color-ink-deep);
+.contact-finale-cool {
+  font-size: clamp(5rem, 23vw, 21rem);
+  opacity: 0;
+}
+[data-ping-finale="cool"] .contact-finale-cool {
+  /* One stepped slam: big, then settled, in three pixel-sized moves. */
+  animation: finale-slam 260ms steps(3) forwards;
+}
+@keyframes finale-word {
+  to { opacity: 1; }
+}
+@keyframes finale-caret {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@keyframes finale-slam {
+  from { opacity: 1; transform: scale(1.35); }
+  to { opacity: 1; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .contact-finale,
-  .contact-finale-line {
+  .contact-finale-pixels span,
+  [data-ping-finale] .contact-finale-pixels span {
     transition: none;
+  }
+  [data-ping-finale="ask"] .contact-finale-word,
+  [data-ping-finale="cool"] .contact-finale-cool {
+    animation: none;
+    opacity: 1;
   }
 }

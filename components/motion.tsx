@@ -151,7 +151,7 @@ export function PageMotion() {
       }, { threshold: 0.08 });
       for (const section of sections) {
         const elements = [...section.children].filter((element): element is HTMLElement =>
-          element instanceof HTMLElement && !element.matches(".exp-grid, .findings-grid, .contact-panel-area") && !element.querySelector(".about-focus-item, .gh-repo-card"));
+          element instanceof HTMLElement && !element.matches(".exp-grid, .findings-grid, .contact-panel-area, .contact-finale") && !element.querySelector(".about-focus-item, .gh-repo-card"));
         targets.set(section, elements);
         for (const element of elements) element.dataset.reveal = "pending";
         observer.observe(section);

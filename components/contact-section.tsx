@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type HCaptcha from "@hcaptcha/react-hcaptcha";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useClipboard } from "@/lib/use-clipboard";
 import { EnvelopeIcon, FacebookMark, GitHubMark, LinkedInMark } from "@/components/icons";
 import { pixelPath } from "@/lib/pixel";
@@ -16,6 +16,11 @@ import {
 } from "@/lib/pixel-art";
 import { WEB3FORMS_HCAPTCHA_SITEKEY, mailtoDraft, sendContactMessage } from "@/lib/contact-delivery";
 import { site } from "@/lib/site";
+
+/* The PING finale fills and clears the screen block by block, like the interlude's pixel morphs:
+   a 16 x 10 grid with a seeded order, so every visit dissolves the same way. */
+const FINALE_CELLS = Array.from({ length: 160 }, (_, i) => Math.round((((i * 73) % 160) / 160) * 260));
+const FINALE_QUESTION = "Are you sure about that?".split(" ");
 
 const WEB3FORMS_KEY = process.env.NEXT_PUBLIC_WEB3FORMS_KEY ?? "";
 const ContactCaptcha = dynamic(() => import("@/components/contact-captcha"), { ssr: false });
@@ -204,8 +209,20 @@ export function ContactSection() {
       {/* The PING finale: once the screen is full of PING, it asks, then answers itself.
           The 3D layer drives the phase through data-ping-finale on this section. */}
       <div className="contact-finale" aria-hidden="true">
-        <span className="contact-finale-line" data-line="ask">Are you sure about that?</span>
-        <span className="contact-finale-line" data-line="cool">COOL!</span>
+        <div className="contact-finale-pixels">
+          {FINALE_CELLS.map((delay, i) => (
+            <span key={i} style={{ "--d": delay } as CSSProperties} />
+          ))}
+        </div>
+        <p className="contact-finale-ask">
+          {FINALE_QUESTION.map((word, i) => (
+            <span key={i}>
+              <span className="contact-finale-word" style={{ "--w": i } as CSSProperties}>{word}</span>{" "}
+            </span>
+          ))}
+          <span className="contact-finale-caret" />
+        </p>
+        <p className="contact-finale-cool">COOL!</p>
       </div>
       <div className="contact-hero">
         <div className="contact-word-stage" data-contact-word>
