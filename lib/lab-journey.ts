@@ -55,6 +55,8 @@ type Piece = {
   wordSlot: number;
   /** Place in the interlude rings, or -1. */
   ring: number;
+  /** Not stick- or sheet-like: a loose part that still reads as an object when it travels alone. */
+  chunky: boolean;
 };
 
 type ShellMat = { mesh: THREE.Mesh; mat: THREE.Material };
@@ -93,6 +95,8 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
     o.getWorldPosition(tmp);
     box.setFromObject(o);
     const baseOffset = tmp.y - box.min.y;
+    const dims = box.getSize(new THREE.Vector3());
+    const chunky = Math.min(dims.x, dims.y, dims.z) / Math.max(1e-6, dims.x, dims.y, dims.z) > 0.3;
     const buildRole = o.userData.buildRole === "floor" ? "floor" : o.userData.buildRole === "wall" || shell ? "wall" : "prop";
 
     let dir: THREE.Vector3;
@@ -139,23 +143,24 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
       slot: -1,
       wordSlot: -1,
       ring: -1,
+      chunky,
     });
   };
   visit(root);
 
-  // Contact frame: a border of slots around the screen edges. The chunkiest props take them.
+  // Contact frame: a dense border of slots around the screen edges, three deep at the sides.
   const slots: Array<[number, number]> = [];
-  for (const nx of [-0.9, -0.76, -0.62, 0.62, 0.76, 0.9]) {
-    for (let r = 0; r < 8; r++) slots.push([nx, -0.84 + r * 0.24]);
+  for (const nx of [-0.93, -0.8, -0.67, 0.67, 0.8, 0.93]) {
+    for (let r = 0; r < 10; r++) slots.push([nx, -0.86 + r * 0.191]);
   }
-  for (let c = 0; c < 7; c++) {
-    slots.push([-0.45 + c * 0.15, 0.86]);
-    slots.push([-0.45 + c * 0.15, -0.86]);
+  for (let c = 0; c < 9; c++) {
+    slots.push([-0.52 + c * 0.13, 0.88]);
+    slots.push([-0.52 + c * 0.13, -0.88]);
   }
   const candidates = pieces
-    // After the burst, only whole, recognizable bio/tech/lab objects travel through the page—no loose sticks or trim.
-    .filter((p) => p.unit && !p.shell && p.size > 0.12 && p.size < 2.8)
-    .sort((a, b) => b.size - a.size)
+    // Whole objects first; then chunky loose parts that still read as objects. Never sticks or trim.
+    .filter((p) => !p.shell && p.size > 0.12 && p.size < 2.8 && (p.unit || (p.chunky && p.size > 0.22)))
+    .sort((a, b) => Number(b.unit) - Number(a.unit) || b.size - a.size)
     .slice(0, slots.length);
   // Shuffle so neighbouring slots don't all hold the same kind of thing.
   for (let i = candidates.length - 1; i > 0; i--) {
@@ -210,6 +215,10 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
   const contactQuat = new THREE.Quaternion();
   const contactRotation = new THREE.Quaternion();
   const centerOffset = new THREE.Vector3();
+  // Eased pose per piece: each frame a piece moves part of the way to its target, so stage changes,
+  // fast scrolls and retargets glide instead of jumping. A target that teleports (a column piece
+  // wrapping from bottom to top, off screen) is taken at once.
+  const eased = new Map<Piece, { pos: THREE.Vector3; quat: THREE.Quaternion; scale: THREE.Vector3; last: THREE.Vector3 }>();
 
   /** A point `dist` units from the camera, through normalized screen coords (-1..1). */
   const screenPoint = (camera: THREE.PerspectiveCamera, nx: number, ny: number, dist: number, out: THREE.Vector3) => {
@@ -222,6 +231,14 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
     time: number;
     scroll: number;
     interlude?: number;
+    /** Seconds since the last frame, for easing each piece toward its target. */
+    dt?: number;
+    /** Normalized screen y of the Contact section's top edge; the frame stays below it. */
+    contactTop?: number;
+    /** 0..1: how far part of the debris has dived into the interlude headline as it forms. */
+    absorb?: number;
+    /** Normalized screen y of the headline's centre, where the debris dives to. */
+    absorbY?: number;
     orbitCenter: THREE.Vector3;
     /** Where the page content ends, in normalized screen x (0..1). The columns live outside it. */
     contentEdge: number;
@@ -238,6 +255,15 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
   };
   const orbitCenter = new THREE.Vector3();
 
+  /** Pulls a piece into the interlude headline and shrinks it, by `c.absorb`. */
+  const dive = (p: Piece, c: Ctx, pos: THREE.Vector3, scale: THREE.Vector3) => {
+    const absorb = c.absorb ?? 0;
+    // Each piece aims for its own spot along the line of text, not one point.
+    screenPoint(c.camera, Math.cos(p.phase) * 0.4, (c.absorbY ?? 0) + Math.sin(p.phase * 3) * 0.08, 26, contactPos);
+    pos.lerp(contactPos, absorb * 0.95);
+    scale.multiplyScalar(Math.max(0.0001, 1 - absorb * absorb));
+  };
+
   /** Writes stage `s` for piece `p` into (pos, quat, scale). */
   const formation = (s: Stage, p: Piece, c: Ctx, pos: THREE.Vector3, quat: THREE.Quaternion, scale: THREE.Vector3) => {
     const t = c.time;
@@ -252,6 +278,9 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
         euler.set(p.spin.x, p.spin.y, p.spin.z);
         quat.setFromEuler(euler).premultiply(roomQuat);
         scale.copy(roomScale);
+        // When the headline forms while the debris is still hanging here, half the props dive
+        // into it and shrink away, so the wreckage visibly becomes the words.
+        if ((c.absorb ?? 0) > 0 && !p.shell && p.pick < 0.5) dive(p, c, pos, scale);
         return;
       case "swirl": {
         if (p.ring < 0) {
@@ -282,25 +311,29 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
         else euler.set(p.phase + t * 0.35, p.phase * 2 + t * 0.28, a);
         quat.setFromEuler(euler);
         scale.copy(roomScale).multiplyScalar(clamp((p.unit ? 1.0 : 0.5) / Math.max(0.05, p.size), 0.3, 2.4) * (1 + hover * 0.6));
+        // As the headline forms, the outer ring dives into it and shrinks away: the debris becomes
+        // the clay letters. The pieces drift back out to their ring once the words have landed.
+        if ((c.absorb ?? 0) > 0 && outer) dive(p, c, pos, scale);
         return;
       }
       case "trail":
       case "scatter":
       case "orbit": {
-        // Organized, out of the way: the chosen props queue up in evenly spaced columns at the page
-        // edges and move along them as you scroll. One column behind About, both edges after that.
-        const both = s !== "trail";
-        // Evenly distribute whole props per column without overlapping.
-        const perColumn = Math.min(12, Math.max(1, Math.floor(candidates.length / (both ? 2 : 1))));
-        if (p.slot < 0 || p.slot >= (both ? perColumn * 2 : perColumn)) {
+        // Organized, out of the way: two columns in the page gutters. A piece keeps its side for
+        // the whole journey (the right column never crosses to the left over the copy). Behind
+        // About only the right column shows; the left one waits below the screen and rises in.
+        // They flow downward on their own clock, so they keep moving while the reader is still.
+        const perColumn = Math.min(12, Math.max(1, Math.floor(candidates.length / 2)));
+        if (p.slot < 0 || p.slot >= perColumn * 2) {
           pos.copy(roomPos).add(p.dir);
           quat.copy(roomQuat);
           scale.setScalar(0);
           return;
         }
-        const right = both ? p.slot % 2 === 0 : true;
-        // The queue creeps along by itself and runs faster with the scroll.
-        const u = ((both ? Math.floor(p.slot / 2) : p.slot) / perColumn + c.scroll * 0.00016 + t * 0.012) % 1;
+        const right = p.slot < perColumn;
+        const index = right ? p.slot : p.slot - perColumn;
+        const waiting = s === "trail" && !right;
+        const u = (index / perColumn + t * 0.045) % 1;
         // The column runs down the middle of the gutter beside the content, never behind the copy.
         // Narrow gutters push it to the very edge and shrink the pieces to fit.
         const column = clamp((1 + c.contentEdge) / 2, 0.8, 0.975);
@@ -308,11 +341,11 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
         // A shallow helix gives the journey depth without crossing the reading column.
         const depth = Math.sin(u * Math.PI * 2 + t * 0.16);
         let nx = (right ? column : -column) + Math.sin(u * Math.PI * 4 + p.phase + t * 0.8) * 0.012 * fit;
-        const ny = 1.12 - u * 2.24;
+        const ny = waiting ? -1.35 - (index / perColumn) * 0.5 : 1.12 - u * 2.24;
         const hover = near(c, nx, ny);
         nx += (right ? 1 : -1) * hover * 0.025 * fit;
         screenPoint(c.camera, nx, ny, 30 + depth * 1.5, pos);
-        euler.set(0.35, p.phase + c.scroll * 0.0012 + t * 0.35 + hover * 1.4, 0.08);
+        euler.set(0.35, p.phase + t * 0.35 + hover * 1.4, 0.08);
         quat.setFromEuler(euler);
         scale.copy(roomScale).multiplyScalar(clamp((p.unit ? 0.85 : 0.5) / Math.max(0.05, p.size), 0.3, 2.6) * fit * (1 + hover * 0.7));
         return;
@@ -326,14 +359,18 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
           scale.setScalar(0);
           return;
         }
-        const [nx, ny] = p.slot >= 0
+        const [nx, slotY] = p.slot >= 0
           ? slots[Math.floor((p.slot / Math.max(1, candidates.length)) * slots.length)]
           : [0, 0];
+        // While the section is still coming up the screen, squeeze the border into the part of the
+        // screen it covers, so no prop sits over the Achievements copy above it.
+        const frameTop = Math.min(0.88, (c.contactTop ?? 1) - 0.1);
+        const ny = frameTop >= 0.88 ? slotY : -0.88 + ((slotY + 0.88) / 1.76) * Math.max(0, frameTop + 0.88);
         const hover = near(c, nx, ny);
         const portrait = c.camera.aspect < 0.85;
         if (p.slot >= 0) {
           // On phones the border hugs the edges, leaving room for the form.
-          const frameX = portrait && Math.abs(nx) > 0.6 ? Math.sign(nx) * (0.9 + (p.slot % 3) * 0.04) : nx;
+          const frameX = portrait && Math.abs(nx) > 0.6 ? Math.sign(nx) * (0.95 + (p.slot % 2) * 0.03) : nx;
           screenPoint(c.camera, frameX + Math.sin(t * 0.5 + p.phase) * 0.008, ny + Math.cos(t * 0.4 + p.phase) * 0.01, 26 - hover * 1.5, pos);
           euler.set(0.35 + hover * 0.2, p.phase + Math.sin(t * 0.3 + p.phase) * 0.15 + hover * 0.45, 0.08);
           quat.setFromEuler(euler);
@@ -375,7 +412,8 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
           // Uneven spiral bands live beyond a protected ellipse around the text and cards.
           const wobble = (1 + Math.sin(t * .7 + p.phase)) * .075 + (1 + Math.cos(t * 1.3 + p.phase * 3)) * .025;
           const rx = contact.orbitRadiusX + ring * 0.065 + wobble;
-          const ry = contact.orbitRadiusY + ring * 0.04 + wobble;
+          // The orbit's top edge also stays below the section's top.
+          const ry = Math.max(0.12, Math.min(contact.orbitRadiusY + ring * 0.04 + wobble, (c.contactTop ?? 1) - 0.08 - contact.orbitY));
           const sx = contact.orbitX + Math.cos(a) * rx;
           const sy = contact.orbitY + Math.sin(a) * ry;
           const proximity = near(c, sx, sy);
@@ -407,6 +445,7 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
     pieces,
     /** Put every piece back at its home transform; the lab's own tick animates from there. */
     reset() {
+      eased.clear();
       pingWords.forEach((word) => { word.visible = false; });
       for (const p of pieces) {
         p.obj.position.copy(p.homePos);
@@ -501,6 +540,22 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
         if (cached.frame !== frameNumber) {
           cached.inverse.copy(parent.matrixWorld).invert();
           cached.frame = frameNumber;
+        }
+        if (!assembling && c.dt !== undefined) {
+          let e = eased.get(p);
+          if (!e) {
+            e = { pos: aPos.clone(), quat: aQuat.clone(), scale: aScale.clone(), last: aPos.clone() };
+            eased.set(p, e);
+          }
+          const jumped = e.last.distanceToSquared(aPos) > 36;
+          e.last.copy(aPos);
+          const k = jumped ? 1 : 1 - Math.exp(-c.dt * 9);
+          e.pos.lerp(aPos, k);
+          e.quat.slerp(aQuat, k);
+          e.scale.lerp(aScale, k);
+          aPos.copy(e.pos);
+          aQuat.copy(e.quat);
+          aScale.copy(e.scale);
         }
         world.compose(aPos, aQuat, aScale).premultiply(cached.inverse);
         world.decompose(p.obj.position, p.obj.quaternion, p.obj.scale);
