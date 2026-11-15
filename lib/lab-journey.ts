@@ -9,7 +9,7 @@ import { createPingGeometry } from "./ping-geometry";
  *   room → burst → swirl → trail → scatter → orbit → frame
  *
  * - room:    the assembled diorama (with the load-in, pieces fly into place)
- * - burst:   it shatters in place
+ * - burst:   the BOOM is under the lake; the props wait below the screen, then rise into the swirl
  * - swirl:   the debris circles the interlude line in two counter-turning rings, always moving
  * - trail:   the props queue up in one tidy column down the right edge (About)
  * - scatter: two tidy columns, one on each edge (Experience, Projects, GitHub)
@@ -63,6 +63,19 @@ type ShellMat = { mesh: THREE.Mesh; mat: THREE.Material };
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const smooth = (t: number) => t * t * (3 - 2 * t);
+
+/**
+ * Where a prop waits during the underwater BOOM, in screen terms: x across the width, y below the
+ * bottom edge (NDC), and its distance from the lens. Deterministic per piece.
+ */
+export function parkBelow(phase: number, pick: number): [nx: number, ny: number, depth: number] {
+  const fract = (v: number) => v - Math.floor(v);
+  return [
+    (fract(pick * 7.31 + phase * 0.159) * 2 - 1) * 0.88,
+    -1.2 - fract(phase * 0.37 + pick * 3.1) * 0.4,
+    26 + fract(pick * 13.7 + phase * 0.05) * 8,
+  ];
+}
 
 export type ContactField = { points: Array<[number, number]>; cellX: number; cellY: number };
 
@@ -356,15 +369,18 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
         quat.copy(roomQuat);
         scale.copy(roomScale);
         return;
-      case "burst":
-        pos.copy(roomPos).add(p.dir);
-        euler.set(p.spin.x, p.spin.y, p.spin.z);
-        quat.setFromEuler(euler).premultiply(roomQuat);
-        scale.copy(roomScale);
-        // When the headline forms while the debris is still hanging here, half the props dive
-        // into it and shrink away, so the wreckage visibly becomes the words.
-        if ((c.absorb ?? 0) > 0 && !p.shell && p.pick < 0.5) dive(p, c, pos, scale);
+      case "burst": {
+        // The BOOM happens under the lake, not to the lab: the room's props wait just below the
+        // bottom edge of the screen, so burst → swirl plays as them rising up out of the water.
+        // Pieces that sit the swirl out stay hidden at both ends and never cross the frame.
+        const [nx, ny, depth] = parkBelow(p.phase, p.pick);
+        screenPoint(c.camera, nx, ny, depth, pos);
+        euler.set(p.spin.x, p.spin.y + t * 0.2, p.spin.z);
+        quat.setFromEuler(euler);
+        if (p.ring < 0) scale.setScalar(0);
+        else scale.copy(roomScale).multiplyScalar(clamp((p.unit ? 1.0 : 0.5) / Math.max(0.05, p.size), 0.3, 2.4));
         return;
+      }
       case "swirl": {
         if (p.ring < 0) {
           pos.copy(roomPos).add(p.dir);
