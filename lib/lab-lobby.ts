@@ -114,7 +114,8 @@ export function createLobby(options: {
   lobby.add(floor, inset);
 
   // Everything breakable is collected in `loose`, then flattened into the lobby's own space.
-  const loose: Array<{ obj: THREE.Object3D; emblem: number }> = [];
+  // `guest` pieces carry on down the page with the lab's props after the BOOM (lib/lab-journey).
+  const loose: Array<{ obj: THREE.Object3D; emblem: number; guest?: boolean }> = [];
 
   // Back wall: a half cylinder, open toward the camera, laid as 10 × 3 curved panels with hairline joints.
   const COLS = 10;
@@ -161,14 +162,15 @@ export function createLobby(options: {
       const b = new THREE.Mesh(block, kit.clay[0]);
       b.position.set(x * 0.76 - 0.38, 0.43 + y * 0.86, z * 0.76 - 0.38);
       plinth.add(b);
-      loose.push({ obj: b, emblem: -1 });
+      // Two of each plinth's top blocks, on a diagonal, travel on as debris.
+      loose.push({ obj: b, emblem: -1, guest: y === 1 && x === z });
     }
     const cap = new THREE.Mesh(new RoundedBoxGeometry(1.7, 0.14, 1.7, 2, 0.05), kit.clay[3]);
     cap.position.y = 1.79;
     const mark = emblem(i, kit);
     mark.position.y = 2.45;
     plinth.add(cap, mark);
-    loose.push({ obj: cap, emblem: -1 }, { obj: mark, emblem: i });
+    loose.push({ obj: cap, emblem: -1 }, { obj: mark, emblem: i, guest: true });
   });
 
   // Flatten every piece into the lobby's space and give it a seeded throw from the heart of the arc.
@@ -217,6 +219,14 @@ export function createLobby(options: {
   });
   lobby.visible = false;
 
+  // The guests live in their own group at the same place, so they stay on screen after the lobby hides.
+  const escort = new THREE.Group();
+  escort.name = "lobby-escort";
+  escort.position.copy(center);
+  escort.visible = false;
+  const guests = loose.filter((l) => l.guest).map((l) => l.obj);
+  for (const g of guests) escort.add(g); // same frame as the lobby: local transforms carry over
+
   const offset = new THREE.Vector3();
   const euler = new THREE.Euler();
   const tumble = new THREE.Quaternion();
@@ -225,6 +235,9 @@ export function createLobby(options: {
 
   return {
     group: lobby,
+    /** The debris that joins the journey, and the group that holds it (add it to the scene). */
+    escort,
+    guests,
     /** Number of breakable pieces. */
     pieceCount: pieces.length,
     /** Where piece `i` is (world space) at blast progress `b`: the blast seeds bubbles along these paths. */
@@ -258,9 +271,11 @@ export function createLobby(options: {
       block.dispose();
       wallMaterial.dispose();
       for (const m of [...kit.clay, kit.accent, kit.rust, kit.green]) m.dispose();
-      lobby.traverse((o) => {
-        if (o instanceof THREE.Mesh) o.geometry.dispose();
-      });
+      for (const g of [lobby, escort]) {
+        g.traverse((o) => {
+          if (o instanceof THREE.Mesh) o.geometry.dispose();
+        });
+      }
     },
   };
 }

@@ -899,7 +899,16 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     stage.setAttribute("aria-hidden", "true");
     document.body.prepend(stage);
     stage.appendChild(renderer.domElement);
+    // The lobby under the lake is built before the journey: some of its debris travels with the lab.
+    const ROOM_FRONT = ROOM_CENTER_Z + ROOM_DEPTH / 2;
+    const lobbyCenter = new THREE.Vector3(ROOM_CENTER_X, -16, ROOM_FRONT + 4);
+    const lobby = createLobby({
+      center: lobbyCenter,
+      groups: STACK_GROUPS,
+      materials: { clay: clayKit.steps, accent: clayKit.accent, env: studio },
+    });
     const journey = createJourney(root, {
+      guests: lobby.guests,
       center: new THREE.Vector3(ROOM_CENTER_X, 0.5, ROOM_CENTER_Z),
       toCamera: new THREE.Vector3(
         Math.sin(OVERVIEW.phi) * Math.sin(OVERVIEW.theta),
@@ -950,13 +959,11 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
 
     // ---------- The dive: down to the lake, under it to the lobby, and the BOOM down there ----------
     const WATER_LEVEL = -0.26;
-    const ROOM_FRONT = ROOM_CENTER_Z + ROOM_DEPTH / 2;
     // Over the water in front of the open cutaway, looking steeply down at the headline's patch.
     const waterPose: Pose = {
       position: new THREE.Vector3(ROOM_CENTER_X + 1, 12, ROOM_FRONT + 15),
       target: new THREE.Vector3(ROOM_CENTER_X + 1, WATER_LEVEL, ROOM_FRONT + 6.5),
     };
-    const lobbyCenter = new THREE.Vector3(ROOM_CENTER_X, -16, ROOM_FRONT + 4);
     // Aimed left of the hall's centre, so the plinths fill the right two-thirds and the copy owns the left.
     const lobbyBase: Pose = {
       position: lobbyCenter.clone().add(new THREE.Vector3(-1.5, 3.6, 14.5)),
@@ -966,13 +973,9 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     const rigPose: Pose = { position: new THREE.Vector3(), target: new THREE.Vector3() };
     const dived: Pose = { position: new THREE.Vector3(), target: new THREE.Vector3() };
     const UP = new THREE.Vector3(0, 1, 0);
-    const lobby = createLobby({
-      center: lobbyCenter,
-      groups: STACK_GROUPS,
-      materials: { clay: clayKit.steps, accent: clayKit.accent, env: studio },
-    });
-    scene.add(lobby.group);
-    // The BOOM: the lobby blows apart under water; the lab's props then rise out of it into the journey.
+    scene.add(lobby.group, lobby.escort);
+    // The BOOM: the lobby blows apart under water; the lab's props rise out of it into the journey,
+    // joined by some of the lobby's own debris (its guests).
     const blast = createUnderwaterBlast({
       center: lobbyCenter.clone().add(new THREE.Vector3(0, 1.2, -2.6)),
       floorY: lobbyCenter.y,
@@ -1206,7 +1209,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         // The props are parked below the screen by the time the lobby blows (the room is hidden then),
         // and rise into the swirl once the water has cleared.
         anchors.blastStart,
-        anchors.blastEnd + vh * 0.5,
+        // The swirl only starts gathering the debris once the blast has mostly played out.
+        Math.max(anchors.blastEnd + vh * 0.5, anchors.blastStart + (anchors.blastEnd - anchors.blastStart) * 0.6 + vh),
         top("method", vh * 3) - vh * 0.25,
         top("experience", vh * 2) - vh * 0.5,
         top("achievements", vh * 4) - vh * 0.6,
@@ -1590,7 +1594,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       }
       lobby.group.visible = diveS > 1.02 && clear < 1;
       lobbyCaustics.visible = lobby.group.visible && boom < 0.35;
-      if (lobby.group.visible && !calm) lobby.tick(animT, boom);
+      // Keeps ticking after the lobby hides: its guests' blast pose is where the journey picks them up.
+      if (diveS > 1.02 && !calm) lobby.tick(animT, boom);
       let from = 0;
       let mix = 0;
       if (!calm) {
@@ -1604,6 +1609,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       // Fully under: the lab above is out of sight, so it stops drawing (its batches follow root).
       // Its props travel from the room to their spot below the screen while hidden, never on camera.
       root.visible = water < 1 && !(from === 0 && mix > 0);
+      lobby.escort.visible = lobby.group.visible || (from >= 1 && root.visible);
       // Retarget from the current pose: repeated clicks never restart or snap the objects.
       const contactK = calm ? 1 : 1 - Math.exp(-dt * 4.8);
       if (contactMode === "links" && STAGES[from] === "frame" && !calm) linksSeconds += dt;
