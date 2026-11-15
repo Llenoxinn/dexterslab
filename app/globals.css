@@ -10684,15 +10684,23 @@ html[data-lab-theme="phosphor"] body { background: #101232; }
 .lab-lobby-pin {
   position: sticky;
   top: 0;
+  isolation: isolate;
   display: grid;
   align-items: end;
   height: 100svh;
   padding: calc(var(--header-h) + 24px) var(--gutter) clamp(40px, 8svh, 96px);
 }
 /* The copy owns the left third; an edge darkening (not a blob behind the text) keeps it legible
-   while the plinths stay clear on the right. */
-:root[data-dive="on"] .lab-lobby-pin {
+   while the plinths stay clear on the right. It lives on its own layer and follows the camera like
+   the copy, so surfacing for the BOOM never drags a dark band over the room above. */
+:root[data-dive="on"] .lab-lobby-pin::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: linear-gradient(90deg, rgb(10 10 93 / 0.78) 0%, rgb(10 10 93 / 0.5) 30%, rgb(10 10 93 / 0) 52%);
+  opacity: var(--lobby-presence, 0);
+  pointer-events: none;
 }
 .lab-lobby-copy {
   max-width: min(32rem, 100%);
@@ -10748,7 +10756,7 @@ html[data-lab-theme="phosphor"] body { background: #101232; }
     grid-template-columns: 1fr;
     gap: 2px;
   }
-  :root[data-dive="on"] .lab-lobby-pin {
+  :root[data-dive="on"] .lab-lobby-pin::before {
     background: linear-gradient(0deg, rgb(10 10 93 / 0.82) 0%, rgb(10 10 93 / 0.55) 55%, rgb(10 10 93 / 0) 85%);
   }
 }
