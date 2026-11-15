@@ -127,7 +127,9 @@ export function LabGame() {
   useEffect(() => {
     const canvas = canvasRef.current;
     const box = canvas?.parentElement;
-    const ctx = canvas?.getContext("2d");
+    // CPU-backed: a tiny pixel canvas gains nothing from the GPU, and a GPU reset (the 3D scenes
+    // can trigger one on weak devices) would otherwise wipe it until the next frame.
+    const ctx = canvas?.getContext("2d", { willReadFrequently: true });
     const arena = canvas?.closest<HTMLElement>("[data-lab-arena]");
     if (!canvas || !box || !ctx || !arena) return;
     // Mid-height orbs need a duck key, so touch players never meet them.
@@ -181,7 +183,7 @@ export function LabGame() {
         img = document.createElement("canvas");
         img.width = s.w;
         img.height = s.h;
-        const c = img.getContext("2d")!;
+        const c = img.getContext("2d", { willReadFrequently: true })!;
         s.map.forEach((row, y) => {
           for (let x = 0; x < row.length; x++) {
             const ch = row[x];
@@ -702,9 +704,16 @@ export function LabGame() {
       player.hold = false;
     };
 
-    const visibilityObserver = new IntersectionObserver(() => {
+    const visibilityObserver = new IntersectionObserver(([entry]) => {
       if (phase === "running" && !inView()) pause();
+      // Repaint on arrival, so the bench is never blank when the footer scrolls in.
+      else if (entry?.isIntersecting && !raf) draw();
     }, { threshold: [0, 0.3, 0.7, 1] });
+    const onRestored = () => {
+      cache.clear();
+      draw();
+    };
+    canvas.addEventListener("contextrestored", onRestored);
     visibilityObserver.observe(arena);
     const onHide = () => {
       if (document.hidden) pause();
@@ -739,6 +748,7 @@ export function LabGame() {
       window.clearTimeout(milestoneTimer);
       ro.disconnect();
       visibilityObserver.disconnect();
+      canvas.removeEventListener("contextrestored", onRestored);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
