@@ -221,7 +221,9 @@ export function createChristmasDecor(root: THREE.Group, core: THREE.Group, termi
     lantern.scale.setScalar(scale);
     decor.add(lantern);
     parols.push(lantern);
-    mesh(lantern, new THREE.CylinderGeometry(0.012, 0.012, 4, 6), wire, 0, 2.55, 0);
+    // Hung from a nail in the back wall: a short wire, not a cord up to a ceiling the cutaway doesn't have.
+    mesh(lantern, new THREE.CylinderGeometry(0.012, 0.012, 0.32, 6), wire, 0, 0.89, -0.03);
+    ball(lantern, gold, 0.035, 0, 1.05, -0.05);
     const outline: THREE.Vector3[] = [];
     for (let point = 0; point < 10; point++) {
       const angle = Math.PI / 2 + point * Math.PI / 5;
