@@ -51,7 +51,6 @@ const ROOM_WIDTH = 20.3;
 const ROOM_CENTER_X = -7.3 + ROOM_WIDTH / 2;
 
 /** Clay render: one matte white for everything, DOS blue for the lab hardware, a pale table to sit on. */
-const CLAY = 0xf3f3f5;
 const ACCENT = 0x2323d2;
 const BACKDROP = 0xeef0f6;
 
@@ -130,6 +129,8 @@ type LabBuild = {
   accents: Set<THREE.Material>;
   /** Materials that keep their own look (the CRT screen and the painted sign). */
   keep: Set<THREE.Material>;
+  /** Materials that take the accent ramp's light step in the clay render (the lavender parts). */
+  tints: Set<THREE.Material>;
   /** The lab's bare hardware (coil, stands, rack frames): rendered as real brushed steel. */
   steel: THREE.Material;
 };
@@ -519,6 +520,7 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
     accents: new Set<THREE.Material>([M.ink, M.neon, M.liquid, M.tankFluid, M.holo, M.glow]),
     keep: new Set<THREE.Material>([M.screen, M.blueprint, M.led, daylight.sky]),
     steel: M.steel,
+    tints: new Set<THREE.Material>([M.lav]),
     markers,
     activate: christmas.activate,
     tick: (t: number) => {
@@ -596,11 +598,40 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
 }
 
 /**
- * Re-skins the whole lab as a matte clay model: every surface becomes one white, the lab hardware
- * turns DOS blue, glass stays glass, and the practical lights switch off (the sun does the lighting).
+ * A neutral clay ramp: one cool hue at constant low chroma, stepped in OKLCH lightness
+ * (L 0.975 / 0.935 / 0.885 / 0.80 / 0.68; finer steps at the light end). One white made every
+ * desk, cabinet and prop the same value as the floor and walls, so without AO they vanished.
  */
-function applyClay(root: THREE.Object3D, lab: Pick<LabBuild, "accents" | "keep">) {
-  const clay = new THREE.MeshStandardMaterial({ color: CLAY, roughness: 0.92, metalness: 0 });
+const CLAY_RAMP = [0xf6f6fb, 0xe8e9f0, 0xd7d8e1, 0xbbbdc8, 0x9597a5] as const;
+/** A light step of the DOS-blue accent ramp (OKLCH 0.86 0.045 277), for the lab's lavender parts. */
+const CLAY_TINT = 0xc9cfef;
+
+/** OKLab lightness of a material colour (0..1), from its linear RGB. */
+function oklabL(c: THREE.Color) {
+  const l = Math.cbrt(0.4122214708 * c.r + 0.5363325363 * c.g + 0.0514459929 * c.b);
+  const m = Math.cbrt(0.2119034982 * c.r + 0.6806995451 * c.g + 0.1073969566 * c.b);
+  const s = Math.cbrt(0.0883024619 * c.r + 0.2817188376 * c.g + 0.6299787005 * c.b);
+  return 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
+}
+
+/**
+ * Re-skins the whole lab as a matte clay model, with each surface on a step of the clay ramp by role:
+ * the floor and walls sit mid-ramp as a quiet backdrop; furniture and props keep the lightness order
+ * of their original colours, so they separate from the room by value. Hardware turns DOS blue,
+ * lavender parts take the accent ramp's light step, glass stays glass, and the practical lights
+ * switch off (the sun does the lighting).
+ */
+function applyClay(root: THREE.Object3D, lab: Pick<LabBuild, "accents" | "keep" | "tints">) {
+  const steps = CLAY_RAMP.map((color) => new THREE.MeshStandardMaterial({ color, roughness: 0.92, metalness: 0 }));
+  const tint = new THREE.MeshStandardMaterial({ color: CLAY_TINT, roughness: 0.88, metalness: 0 });
+  const stepFor = (m: THREE.Material, role: unknown) => {
+    if (role === "floor") return steps[2];
+    if (role === "wall" && (m as THREE.MeshStandardMaterial).map) return steps[1];
+    const sm = m as THREE.MeshStandardMaterial;
+    if (sm.map) return steps[3]; // textured woods: darker clay than the floor they stand on
+    const L = sm.color ? oklabL(sm.color) : 0.9;
+    return steps[L >= 0.9 ? 0 : L >= 0.78 ? 1 : L >= 0.62 ? 2 : L >= 0.45 ? 3 : 4];
+  };
   const accent = new THREE.MeshStandardMaterial({ color: ACCENT, roughness: 0.6, metalness: 0, emissive: ACCENT, emissiveIntensity: 0.15 });
   const glass = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.15, transparent: true, opacity: 0.3, depthWrite: false });
   const accentGlass = new THREE.MeshStandardMaterial({
@@ -612,17 +643,20 @@ function applyClay(root: THREE.Object3D, lab: Pick<LabBuild, "accents" | "keep">
     side: THREE.DoubleSide,
   });
   const replaced = new Set<THREE.Material>();
-  const swap = (m: THREE.Material) => {
+  const swap = (m: THREE.Material, role: unknown) => {
     if (lab.keep.has(m)) return m;
     replaced.add(m);
     const seeThrough = m.transparent && m.opacity < 0.95;
     if (lab.accents.has(m) || m.userData.accent) return seeThrough ? accentGlass : accent;
-    return seeThrough ? glass : clay;
+    if (seeThrough) return glass;
+    if (lab.tints.has(m)) return tint;
+    return stepFor(m, role);
   };
   root.traverse((o) => {
     if (o instanceof THREE.Light) o.visible = false;
     if (!(o instanceof THREE.Mesh)) return;
-    o.material = Array.isArray(o.material) ? o.material.map(swap) : swap(o.material);
+    const role = o.userData.buildRole;
+    o.material = Array.isArray(o.material) ? o.material.map((m) => swap(m, role)) : swap(o.material, role);
   });
   for (const m of replaced) m.dispose();
 }
