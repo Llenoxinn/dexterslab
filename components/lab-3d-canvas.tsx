@@ -21,6 +21,10 @@ import { createLake } from "@/lib/lab-lake";
 import { createSkyRays } from "@/lib/sky-rays";
 import { createClayLeaves } from "@/lib/clay-leaves";
 import { createSkyDome } from "@/lib/sky-dome";
+import { diveStage, divePose, underwaterAmount, type DiveAnchors, type Pose } from "@/lib/dive-path";
+import { createUnderwater } from "@/lib/underwater";
+import { createLobby } from "@/lib/lab-lobby";
+import { STACK_GROUPS } from "@/lib/content";
 
 export type FocusStation = "terminal" | "core" | "tank" | "bench" | "rack";
 export type StationId = "overview" | FocusStation | "free";
@@ -39,7 +43,6 @@ const LAVENDER = 0xcbcbef;
 const PAPER = 0xf6f6fc;
 
 const DEG = Math.PI / 180;
-const smoothstep01 = (t: number) => { const x = Math.min(1, Math.max(0, t)); return x * x * (3 - 2 * x); };
 const LIMITS = { thetaMin: -60 * DEG, thetaMax: 60 * DEG, phiMin: 38 * DEG, phiMax: 88 * DEG, radiusMin: 2.6 };
 /** The lab is a diorama seen from outside; these bounds only keep the camera above the table and out of the back wall. */
 const ROOM = { x: 40, zFront: 40, yMin: 0.6, yMax: 40 };
@@ -659,6 +662,7 @@ function applyClay(root: THREE.Object3D, lab: Pick<LabBuild, "accents" | "keep" 
     o.material = Array.isArray(o.material) ? o.material.map((m) => swap(m, role)) : swap(o.material, role);
   });
   for (const m of replaced) m.dispose();
+  return { steps, accent };
 }
 
 /**
@@ -802,7 +806,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     });
     lab.steel.dispose();
     lab.keep.add(steel);
-    applyClay(root, lab);
+    const clayKit = applyClay(root, lab);
     textures.push(...addSunlight(scene, SUN_DIR));
 
     // Ambient occlusion is what makes white clay read as solid: soft darkening wherever things meet.
@@ -926,12 +930,46 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     // A sky around the lake, sharing the one sun; it drains away with the room like the lake.
     const sky = createSkyDome(SUN_DIR);
     scene.add(sky.mesh);
+
+    // ---------- The dive: down to the lake, under it to the lobby, back up for the BOOM ----------
+    const WATER_LEVEL = -0.26;
+    const ROOM_FRONT = ROOM_CENTER_Z + ROOM_DEPTH / 2;
+    // Over the water in front of the open cutaway, looking steeply down at the headline's patch.
+    const waterPose: Pose = {
+      position: new THREE.Vector3(ROOM_CENTER_X + 1, 12, ROOM_FRONT + 15),
+      target: new THREE.Vector3(ROOM_CENTER_X + 1, WATER_LEVEL, ROOM_FRONT + 6.5),
+    };
+    const lobbyCenter = new THREE.Vector3(ROOM_CENTER_X, -16, ROOM_FRONT + 4);
+    const lobbyBase: Pose = {
+      position: lobbyCenter.clone().add(new THREE.Vector3(0, 3.4, 13.5)),
+      target: lobbyCenter.clone().add(new THREE.Vector3(0, 1.7, -1)),
+    };
+    const lobbyPose: Pose = { position: lobbyBase.position.clone(), target: lobbyBase.target.clone() };
+    const rigPose: Pose = { position: new THREE.Vector3(), target: new THREE.Vector3() };
+    const dived: Pose = { position: new THREE.Vector3(), target: new THREE.Vector3() };
+    const UP = new THREE.Vector3(0, 1, 0);
+    const lobby = createLobby({
+      center: lobbyCenter,
+      groups: STACK_GROUPS,
+      materials: { clay: clayKit.steps, accent: clayKit.accent, steel },
+      font: getComputedStyle(document.body).fontFamily || "sans-serif",
+    });
+    scene.add(lobby.group);
+    // Refracted sun: steeper under the surface, still from behind the room.
+    const underwater = createUnderwater(renderer, { surfaceY: WATER_LEVEL, sun: new THREE.Vector3(-0.22, 0.8, -0.55) });
+    // Fog is always declared (one shader variant) and only thickens under the surface.
+    const deepWater = new THREE.Color(0x0b1450);
+    scene.fog = new THREE.FogExp2(deepWater, 0);
+    let diveS = 0;
+    let anchors: DiveAnchors = { diveStart: 0, diveEnd: 1, descendStart: 2, descendEnd: 3, riseStart: 4, riseEnd: 5 };
+    const pageColour = new THREE.Color(BACKDROP);
     const breeze = new THREE.Vector2(0.18, 0.06);
     const drawingSize = new THREE.Vector2();
     /** The page colour is the scene's backdrop; on the dark theme the lake turns to night water. */
     const paintBackdrop = () => {
       const bg = new THREE.Color(getComputedStyle(document.body).backgroundColor || BACKDROP);
       scene.background = bg;
+      pageColour.copy(bg);
       lake.uniforms.uDark.value = bg.getHSL({ h: 0, s: 0, l: 0 }).l < 0.5 ? 1 : 0;
       sky.uniforms.uDark.value = lake.uniforms.uDark.value;
     };
@@ -966,17 +1004,11 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     const debrisProbe = new THREE.Vector3();
     let debrisFrame = 0;
     const TEXT_DEPTH = 24;
-    /** 0..1: debris diving into the headline. Dives in over the flight, holds, then drifts back out. */
-    const absorbAmount = (now: number) => {
-      const { assembleAt, landAt } = interludeBus;
-      if (!assembleAt || isCalm()) return 0;
-      const fly = Math.max(1, landAt - assembleAt);
-      const t = now - assembleAt;
-      if (t < 0 || t > fly + 2200) return 0;
-      if (t < fly * 0.6) return smoothstep01(t / (fly * 0.6));
-      if (t < fly + 400) return 1;
-      return 1 - smoothstep01((t - fly - 400) / 1800);
-    };
+    const textEuler = new THREE.Euler();
+    const textUp = new THREE.Vector3(0, 1, 0);
+    const waterQuat = new THREE.Quaternion();
+    // A block's thin axis (local z) turned to point up: it lies flat on the water.
+    const flatQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
     /** Places the clay blocks where the interlude's pixels are; returns whether it drew any. */
     const updateClayText = (calm: boolean) => {
       const px = interludeBus.pixels;
@@ -994,16 +1026,36 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       const perPx = (2 * TEXT_DEPTH * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / height;
       const side = Math.max(0.001, (px.cell - 1) * perPx);
       const count = Math.min(px.count, CLAY_TEXT_MAX);
-      const ink = document.documentElement.dataset.labTheme === "phosphor" ? textInkDark : textInk;
+      // Over the lake the headline floats on the water: pale clay, so it reads against the blue.
+      const onWater = diveS > 0.5 && diveS < 1.6;
+      const ink = onWater || document.documentElement.dataset.labTheme === "phosphor" ? textInkDark : textInk;
+      if (onWater) {
+        // Lying flat, turned to the camera's heading so the rows run across the screen.
+        textEuler.setFromQuaternion(camera.quaternion, "YXZ");
+        waterQuat.setFromAxisAngle(textUp, textEuler.y).multiply(flatQuat);
+      }
+      const perPxAt = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / height;
       for (let i = 0; i < count; i++) {
         const a = px.alpha[i];
         const nx = ((px.x[i] + px.cell / 2 - rect.left) / width) * 2 - 1;
         const ny = -(((px.y[i] + px.cell / 2 - rect.top) / height) * 2 - 1);
         textRay.set(nx, ny, 0.5).unproject(camera).sub(textCam).normalize();
-        textPos.copy(textCam).addScaledVector(textRay, TEXT_DEPTH);
-        // Blocks grow in as they arrive, like debris settling into place.
-        textScale.set(side, side, side * 1.5).multiplyScalar(a <= 0 ? 0.0001 : 0.35 + 0.65 * a);
-        textMatrix.compose(textPos, textQuat, textScale);
+        const grow = a <= 0 ? 0.0001 : 0.35 + 0.65 * a;
+        const hit = onWater && textRay.y < -0.02 ? (WATER_LEVEL - textCam.y) / textRay.y : -1;
+        if (hit > 0) {
+          // Where the pixel's ray meets the lake, sized to its distance so the layout holds on screen.
+          const w = Math.max(0.001, (px.cell - 1) * perPxAt * hit);
+          textPos.copy(textCam).addScaledVector(textRay, hit);
+          // Half-submerged, each block bobbing on its own phase across the water.
+          textPos.y = WATER_LEVEL + w * 0.1 + Math.sin(animT * 1.7 + textPos.x * 0.9 + textPos.z * 0.7) * w * 0.16;
+          textScale.set(w, w, w * 0.8).multiplyScalar(grow);
+          textMatrix.compose(textPos, waterQuat, textScale);
+        } else {
+          textPos.copy(textCam).addScaledVector(textRay, TEXT_DEPTH);
+          // Blocks grow in as they arrive, like debris settling into place.
+          textScale.set(side, side, side * 1.5).multiplyScalar(grow);
+          textMatrix.compose(textPos, textQuat, textScale);
+        }
         clayText.setMatrixAt(i, textMatrix);
         textColor.copy(ink[px.row[i]] ?? ink[0]).lerp(textNeon, px.tint[i]);
         clayText.setColorAt(i, textColor);
@@ -1059,11 +1111,24 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       };
       interludeTop = top("interlude", vh);
       interludeSpan = Math.max(1, (interludeEl?.offsetHeight ?? vh) - vh);
+      const lobbyEl = document.getElementById("lobby");
+      const lobbyTop = top("lobby", interludeTop + interludeSpan + vh);
+      const lobbySpan = Math.max(1, (lobbyEl?.offsetHeight ?? vh * 2) - vh);
+      // Tilt down to the water as the hero leaves; hold while the headline plays; dive to the lobby as
+      // the interlude ends; hold in the lobby; surface back at the rig as the lobby ends.
+      anchors = {
+        diveStart: vh * 0.04,
+        diveEnd: Math.max(vh * 0.6, interludeTop),
+        descendStart: interludeTop + interludeSpan * 0.9,
+        descendEnd: lobbyTop,
+        riseStart: lobbyTop + lobbySpan * 0.75,
+        riseEnd: lobbyTop + lobbySpan + vh * 0.3,
+      };
       const keys = [
         0,
-        vh * 0.9,
-        // Form the rings during the first title, then keep them through the four beats.
-        interludeTop + vh * 0.25,
+        // BOOM: the room bursts as the camera arrives back above it.
+        anchors.riseEnd - vh * 0.2,
+        anchors.riseEnd + vh * 0.5,
         top("method", vh * 3) - vh * 0.25,
         top("experience", vh * 2) - vh * 0.5,
         top("achievements", vh * 4) - vh * 0.6,
@@ -1182,6 +1247,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       renderer.getDrawingBufferSize(drawingSize);
       lake.setSize(drawingSize.x, drawingSize.y);
       skyRays.setSize(drawingSize.x, drawingSize.y);
+      underwater.setSize(drawingSize.x, drawingSize.y);
       if (stationRef.current === "overview" && !zoomedRef.current) goal.radius = overviewRadius();
       else goal.radius = Math.min(goal.radius, overviewRadius());
     };
@@ -1393,6 +1459,34 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       const pageY = window.scrollY;
       smoothY = calm || Math.abs(pageY - smoothY) < 0.5 ? pageY : smoothY + (pageY - smoothY) * (1 - Math.exp(-dt * 4.5));
       const scrolled = smoothY;
+
+      // The dive overrides the rig between the hero and the BOOM. Reduced motion snaps to chapters.
+      diveS = calm ? Math.round(diveStage(pageY, anchors)) : diveStage(smoothY, anchors);
+      if (diveS > 0.0005 && diveS < 2.9995) {
+        rigPose.position.copy(camera.position);
+        rigPose.target.copy(cur.target);
+        // Portrait: higher and further back, so the headline's width fits on the water.
+        if (camera.aspect < 0.85) waterPose.position.set(ROOM_CENTER_X + 1, 17, ROOM_FRONT + 19);
+        else waterPose.position.set(ROOM_CENTER_X + 1, 12, ROOM_FRONT + 15);
+        // A slow walk around the lobby while its section scrolls.
+        const lobbyT = clamp((smoothY - anchors.descendEnd) / Math.max(1, anchors.riseStart - anchors.descendEnd), 0, 1);
+        lobbyPose.position.copy(lobbyBase.position).sub(lobbyCenter).applyAxisAngle(UP, (lobbyT - 0.5) * 0.55).add(lobbyCenter);
+        divePose(diveS, rigPose, waterPose, lobbyPose, WATER_LEVEL, dived);
+        camera.position.copy(dived.position);
+        camera.lookAt(dived.target);
+        // The hero's off-centre framing only belongs near the rig.
+        const nearRig = diveS <= 1 ? 1 - diveS : diveS >= 2 ? diveS - 2 : 0;
+        const wide = width >= 900;
+        camera.setViewOffset(width, height, (wide ? 0.17 : 0) * width * cur.shift * nearRig, (wide ? -0.065 : -0.14) * height * cur.shift * nearRig, width, height);
+        camera.updateMatrixWorld();
+      }
+      const uw = underwaterAmount(camera.position.y, WATER_LEVEL);
+      (scene.fog as THREE.FogExp2).density = 0.06 * uw;
+      (scene.background as THREE.Color).copy(pageColour).lerp(deepWater, uw);
+      lobby.group.visible = diveS > 1.02 && diveS < 2.98;
+      if (lobby.group.visible && !calm) lobby.tick(animT);
+      // Fully under: the lab above is out of sight, so it stops drawing (its batches follow root).
+      root.visible = uw < 1;
       let from = 0;
       let mix = 0;
       if (!calm) {
@@ -1459,12 +1553,9 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         scroll: scrolled,
         interlude: clamp((scrolled - interludeTop) / interludeSpan, 0, 1),
         dt,
-        absorb: absorbAmount(now),
-        absorbY: (() => {
-          const pin = interludeEl?.querySelector(".lab-interlude-pin")?.getBoundingClientRect();
-          const top = stage.getBoundingClientRect().top;
-          return pin ? 1 - ((pin.top + pin.height * 0.49 - top) / height) * 2 : 0;
-        })(),
+        // Nothing leaves the room before the BOOM: the headline now plays on the water instead.
+        absorb: 0,
+        absorbY: 0,
         contactTop: contactEl ? 1 - ((contactEl.getBoundingClientRect().top - stage.getBoundingClientRect().top) / height) * 2 : 1,
         contentEdge,
         pointer: pointerOn ? pointerNdc : null,
@@ -1479,7 +1570,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       // Around the burst and the spiral, keep the debris positions fresh for the interlude.
       if (!calm && from >= 1 && from <= 2 && debrisFrame++ % 10 === 0) shareDebris();
       // The station buttons only make sense while the room is whole.
-      heroShell?.classList.toggle("is-burst", from > 0 || mix > 0.04);
+      heroShell?.classList.toggle("is-burst", from > 0 || mix > 0.04 || diveS > 0.05);
       if (sunShaft) sunShaft.visible = from === 0 && mix < 0.5 && shellOpacity > 0.5;
       const nearRoom = from === 0 && mix < 0.3;
 
@@ -1491,7 +1582,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       // Shadows follow every frame while pieces are landing or leaving the floor.
       // Only the room needs its shadows; once it has blown apart, the GPU can skip them entirely.
       // At rest only small props animate, so a shadow refresh every fourth frame is enough.
-      if (from === 0 && ((journeyOn && mix < 0.6) || shadowFrame % 4 === 0)) renderer.shadowMap.needsUpdate = true;
+      // Under the surface the sun's shadows have nothing in view to fall on.
+      if (from === 0 && uw < 1 && ((journeyOn && mix < 0.6) || shadowFrame % 4 === 0)) renderer.shadowMap.needsUpdate = true;
       shadowFrame += 1;
       // The journal is a full-screen scene of its own with an opaque backdrop. While it covers the
       // viewport this layer is invisible, so it stops drawing and leaves the GPU to the journal.
@@ -1504,21 +1596,32 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         // The lake belongs to the whole room: it drains away as the room bursts apart.
         const lakeFade = from === 0 ? clamp(1 - mix / 0.45, 0, 1) : 0;
         lake.uniforms.uFade.value = lakeFade;
-        lake.mesh.visible = lakeFade > 0.01;
+        // Above-water things stop drawing once the lens is fully under the surface.
+        const above = uw < 1;
+        lake.mesh.visible = above && lakeFade > 0.01;
         if (!calm) lake.uniforms.uTime.value = animT;
-        leaves.update(animT, lakeFade, breeze);
+        leaves.update(animT, above ? lakeFade : 0, breeze);
         sky.follow(camera);
         sky.uniforms.uFade.value = lakeFade;
-        sky.mesh.visible = lakeFade > 0.01;
-        if (lake.mesh.visible) lake.renderReflection(scene, camera, [sunShaft, clayText, leaves.group]);
+        sky.mesh.visible = above && lakeFade > 0.01;
+        // The headline floats on the water now, so the mirror shows it too.
+        if (lake.mesh.visible && uw < 0.5) lake.renderReflection(scene, camera, [sunShaft, leaves.group]);
         // AO only while the assembled room is on screen; the debris reads fine without it.
-        if (useAO && nearRoom) composer.render(dt);
+        if (useAO && nearRoom && above) composer.render(dt);
         else renderer.render(scene, camera);
         // Shafts belong to the whole sunlit room, like the lake: they drain away with it.
-        skyRays.render(scene, camera, 0.34 * lakeFade, [sunShaft, clayText, lake.mesh, sky.mesh]);
+        skyRays.render(scene, camera, 0.34 * lakeFade * (1 - uw), [sunShaft, clayText, lake.mesh, sky.mesh]);
+        // Under the surface: god rays and the surface seen from below, over the lobby.
+        underwater.render(camera, calm ? 0 : animT, uw);
         // The entrance (shader compiles, every piece in flight) is not the steady state; judge after it.
         if (!calm && built >= ASSEMBLE_SECONDS + 1) adapt(now);
         else lastRendered = 0;
+      }
+      // The lobby section goes transparent only while the 3D dive is actually running behind it.
+      const diving = !calm && !contextLost ? "on" : "";
+      if ((document.documentElement.dataset.dive ?? "") !== diving) {
+        if (diving) document.documentElement.dataset.dive = diving;
+        else delete document.documentElement.dataset.dive;
       }
       if (!host.dataset.ready) {
         host.dataset.ready = "true"; // fade the scene in over the loader
@@ -1603,6 +1706,10 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       composer.dispose();
       batcher.dispose();
       lake.dispose();
+      underwater.dispose();
+      lobby.dispose();
+      scene.fog = null;
+      delete document.documentElement.dataset.dive;
       skyRays.dispose();
       leaves.dispose();
       sky.dispose();
