@@ -11,6 +11,7 @@ import { createFilipinoLab, narraTexture, sawaliTexture, signTexture } from "@/l
 import { createChristmasDecor } from "@/lib/christmas-lab";
 import { ASSEMBLE_SECONDS, STAGES, STAGE_OPACITY, createJourney } from "@/lib/lab-journey";
 import { addLabProps } from "@/lib/lab-props";
+import { addHardware } from "@/lib/cs-hardware";
 import { CONTACT_SPIRAL_SECONDS, CONTACT_WORD_COLUMNS, pingFinale, type ContactChoreography } from "@/lib/contact-choreography";
 import { createStudioWindows, STUDIO_BACK_WINDOW, STUDIO_SUN_DIRECTION } from "@/lib/studio-daylight";
 import { interludeBus } from "@/lib/interlude-bus";
@@ -797,16 +798,30 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     scene.add(root);
     const lab = buildLab(root, textures);
     addLabProps(root);
+    addHardware(root);
     // Clay everywhere, except the bare hardware: brushed steel against its own studio of bright cards,
     // so it reads as metal (not grey plastic) next to the matte white model.
-    const studio = studioEnvironment(renderer);
+    // The hero's metal mirrors a white clay room, not a black studio: lit surroundings, bright floor.
+    const studio = studioEnvironment(renderer, { ambient: 0.32, floor: 0.75 });
     textures.push(studio);
     const steel = steelMaterial(studio, "brushed");
+    const polishedSteel = steelMaterial(studio, "polished");
+    const goldContacts = steelMaterial(studio, "polished", [1, 0.71, 0.29]);
+    const metals: Record<string, THREE.Material> = { steel, polished: polishedSteel, gold: goldContacts };
+    // Every tagged metal (frames, legs, hardware) becomes real metal, so steel reads as a system.
+    const tagged = new Set<THREE.Material>();
     root.traverse((o) => {
-      if (o instanceof THREE.Mesh && o.material === lab.steel) o.material = steel;
+      if (!(o instanceof THREE.Mesh) || Array.isArray(o.material)) return;
+      const tag = o.material.userData.metal as string | undefined;
+      if (o.material === lab.steel) o.material = steel;
+      else if (tag && metals[tag]) {
+        tagged.add(o.material);
+        o.material = metals[tag];
+      }
     });
     lab.steel.dispose();
-    lab.keep.add(steel);
+    tagged.forEach((m) => m.dispose());
+    for (const m of Object.values(metals)) lab.keep.add(m);
     const clayKit = applyClay(root, lab);
     textures.push(...addSunlight(scene, SUN_DIR));
 

@@ -17,6 +17,9 @@ export function addLabProps(root: THREE.Group) {
   const accent = new THREE.MeshStandardMaterial({ color: 0x2323d2 });
   accent.userData.accent = true;
   const glass = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false });
+  // Metal has one job in the lab: frames, legs and hardware. The canvas swaps this for brushed steel.
+  const metal = new THREE.MeshStandardMaterial({ color: 0xffffff });
+  metal.userData.metal = "steel";
 
   const geos = new Map<string, THREE.BufferGeometry>();
   const cached = (key: string, make: () => THREE.BufferGeometry) => {
@@ -54,9 +57,9 @@ export function addLabProps(root: THREE.Group) {
   // ---------- Central worktable ----------
   const table = group(props, 0.6, 0, 3.6, 0.04);
   put(table, box(3.6, 0.1, 1.5), clay, 0, 1.0, 0);
-  for (const [x, z] of [[-1.65, -0.6], [1.65, -0.6], [-1.65, 0.6], [1.65, 0.6]]) put(table, box(0.09, 0.95, 0.09), clay, x, 0.475, z);
-  put(table, box(3.3, 0.05, 0.05), clay, 0, 0.3, -0.6);
-  put(table, box(3.3, 0.05, 0.05), clay, 0, 0.3, 0.6);
+  for (const [x, z] of [[-1.65, -0.6], [1.65, -0.6], [-1.65, 0.6], [1.65, 0.6]]) put(table, box(0.09, 0.95, 0.09), metal, x, 0.475, z);
+  put(table, box(3.3, 0.05, 0.05), metal, 0, 0.3, -0.6);
+  put(table, box(3.3, 0.05, 0.05), metal, 0, 0.3, 0.6);
 
   // Microscope.
   const scope = group(table, -1.1, 1.05, -0.1, 0.5);
@@ -108,9 +111,9 @@ export function addLabProps(root: THREE.Group) {
     put(c, box(0.62, 0.68, 0.09), accent, 0, 0.88, -0.26);
     // A cantilever frame instead of four legs: two closed side loops.
     for (const sx of [-0.28, 0.28]) {
-      put(c, box(0.07, 0.07, 0.64), accent, sx, 0.035, 0);
-      put(c, box(0.07, 0.5, 0.07), accent, sx, 0.26, 0.28);
-      put(c, box(0.07, 0.5, 0.07), accent, sx, 0.26, -0.28);
+      put(c, box(0.07, 0.07, 0.64), metal, sx, 0.035, 0);
+      put(c, box(0.07, 0.5, 0.07), metal, sx, 0.26, 0.28);
+      put(c, box(0.07, 0.5, 0.07), metal, sx, 0.26, -0.28);
     }
     return c;
   };
@@ -151,9 +154,9 @@ export function addLabProps(root: THREE.Group) {
 
   const lamp = group(props, -6.0, 0, 6.3, 0.9);
   lamp.userData.unit = true; // travels as one intact object in the scroll journey
-  put(lamp, cyl(0.24, 0.26, 0.04), clay, 0, 0.02, 0);
-  put(lamp, cyl(0.02, 0.02, 2.2), clay, 0, 1.1, 0);
-  const lampArm = put(lamp, cyl(0.018, 0.018, 0.9), clay, 0, 2.3, 0.3);
+  put(lamp, cyl(0.24, 0.26, 0.04), metal, 0, 0.02, 0);
+  put(lamp, cyl(0.02, 0.02, 2.2), metal, 0, 1.1, 0);
+  const lampArm = put(lamp, cyl(0.018, 0.018, 0.9), metal, 0, 2.3, 0.3);
   lampArm.rotation.x = 1.0;
   const shade = put(lamp, cyl(0.1, 0.26, 0.3, 24), accent, 0, 2.38, 0.72);
   shade.rotation.x = 0.5;

@@ -10,9 +10,13 @@ import * as THREE from "three";
  */
 
 /** Studio of HDR cards on a dark ground, prefiltered once. Only metal samples it (`material.envMap`). */
-export function studioEnvironment(renderer: THREE.WebGLRenderer): THREE.Texture {
+export function studioEnvironment(
+  renderer: THREE.WebGLRenderer,
+  /** How lit the room around the cards is (linear). Dark for close-up contrast; light for a white room. */
+  { ambient = 0.045, floor = 0.18 }: { ambient?: number; floor?: number } = {},
+): THREE.Texture {
   const room = new THREE.Scene();
-  room.background = new THREE.Color().setRGB(0.045, 0.05, 0.06, THREE.LinearSRGBColorSpace);
+  room.background = new THREE.Color().setRGB(ambient, ambient * 1.05, ambient * 1.2, THREE.LinearSRGBColorSpace);
   const card = (w: number, h: number, rgb: [number, number, number], at: [number, number, number], parent: THREE.Object3D = room) => {
     const mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(w, h),
@@ -32,7 +36,7 @@ export function studioEnvironment(renderer: THREE.WebGLRenderer): THREE.Texture 
   card(3.0, 5.4, [0.52, 0.68, 0.9], [6, 1.6, 2]); // cool side card
   card(2.0, 4.6, [1.5, 1.22, 0.88], [2.5, 2.2, -5.5]); // warm back card
   card(7.5, 2.2, [0.52, 0.55, 0.6], [0, 6, 0]); // top card
-  card(9, 9, [0.18, 0.17, 0.2], [0, -4, 0]); // pale floor bounce, the clay room below
+  card(9, 9, [floor, floor * 0.95, floor * 1.1], [0, -4, 0]); // floor bounce, the clay room below
   const pmrem = new THREE.PMREMGenerator(renderer);
   const env = pmrem.fromScene(room, 0.006).texture;
   pmrem.dispose();
@@ -60,10 +64,15 @@ const NOISE = /* glsl */ `
  * over a low base. `brushed`: streaks along local Y. Every term fades below its pixel footprint so the
  * finish never shimmers at distance; it simply settles to the base roughness.
  */
-export function steelMaterial(env: THREE.Texture, finish: MetalFinish): THREE.MeshStandardMaterial {
+export function steelMaterial(
+  env: THREE.Texture,
+  finish: MetalFinish,
+  /** Linear F0 of the metal: steel by default; gold is 1.00, 0.71, 0.29. */
+  f0: [number, number, number] = [0.56, 0.57, 0.58],
+): THREE.MeshStandardMaterial {
   const polished = finish === "polished";
   const material = new THREE.MeshStandardMaterial({
-    color: new THREE.Color().setRGB(0.56, 0.57, 0.58, THREE.LinearSRGBColorSpace),
+    color: new THREE.Color().setRGB(...f0, THREE.LinearSRGBColorSpace),
     metalness: 1,
     roughness: polished ? 0.09 : 0.26,
     envMap: env,
@@ -99,7 +108,7 @@ export function steelMaterial(env: THREE.Texture, finish: MetalFinish): THREE.Me
         }`,
       );
   };
-  material.customProgramCacheKey = () => `lab-steel-${finish}`;
+  material.customProgramCacheKey = () => `lab-steel-${finish}`; // F0 is a uniform: one program per finish
   return material;
 }
 
