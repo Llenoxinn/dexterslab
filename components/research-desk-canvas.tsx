@@ -190,7 +190,8 @@ function pageTexture(
     ctx.fillText(stamp, margin + 16, w.y + 29);
     w.y += 76;
 
-    w.text(study.shortName, 62, 700, fonts.heading, INK, 1.12, 22);
+    w.text(study.shortName, 62, 700, fonts.heading, INK, 1.12, 4);
+    w.text(study.subtitle, 36, 500, fonts.heading, MUTED, 1.2, 22);
     w.text(study.title, study.title.length > 160 ? 25 : 29, 600, fonts.body, TEXT, 1.4, 34);
     w.rule("rgba(26, 31, 61, 0.2)", 2, 38);
     w.text("PROBLEM", 22, 700, fonts.body, INK, 1.2, 14);

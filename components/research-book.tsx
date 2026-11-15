@@ -107,6 +107,7 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
         <p className="paper-domain">{entry.domain}</p>
         <h3 id={titleId} className="paper-title">
           {entry.shortName}
+          <span className="paper-subtitle">{entry.subtitle}</span>
         </h3>
         <p className="paper-citation">
           {entry.authors.join(", ")}. {entry.institution}
@@ -225,6 +226,7 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
                 </span>
                 <span className="research-hud-title" aria-live="polite">
                   {studies[activeIndex].shortName}
+                  <span className="research-hud-subtitle">{studies[activeIndex].subtitle}</span>
                 </span>
               </div>
 

@@ -62,6 +62,8 @@ export type ResearchEntry = {
   id: string;
   title: string;
   shortName: string;
+  /** The study's subject, set as a second, lighter line under the short name. */
+  subtitle: string;
   domain: string;
   modality: string;
   /** One line: the question the study asked. `**word**` marks emphasis. */
@@ -346,7 +348,8 @@ export const githubProjects: GitHubProjectEntry[] = [
 export const researchWorks: ResearchEntry[] = [
   {
     id: "admet-it-ficus-septica",
-    shortName: "ADMET-IT · Ficus septica",
+    shortName: "ADMET-IT",
+    subtitle: "Ficus septica",
     domain: "Cheminformatics, Molecular Docking & Enzymatic Bioassay",
     modality: "In Silico & In Vitro",
     title:
@@ -380,7 +383,8 @@ export const researchWorks: ResearchEntry[] = [
   },
   {
     id: "paspalum-conjugatum-smutans",
-    shortName: "Paspalum conjugatum · Anti-Quorum Sensing",
+    shortName: "Paspalum conjugatum",
+    subtitle: "Anti-quorum sensing",
     domain: "Phytochemistry, Oral Microbiology & Biofilm Attenuation",
     modality: "In Vitro",
     title:

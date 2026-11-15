@@ -10700,3 +10700,18 @@ html[data-lab-theme="phosphor"] body { background: #101232; }
     gap: 2px;
   }
 }
+
+/* Study titles: the name, then its subject in a lighter second voice (no middle-dot strings). */
+.paper-subtitle {
+  display: block;
+  margin-top: 0.3em;
+  font-size: 0.6em;
+  font-weight: 500;
+  line-height: 1.25;
+  opacity: 0.72; /* the title's own colour, quieter: follows every theme */
+}
+.research-hud-subtitle {
+  margin-left: 0.5em;
+  font-weight: 400;
+  opacity: 0.72;
+}
