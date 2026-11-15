@@ -48,9 +48,8 @@ const BACKDROP = 0xeef0f6;
 
 type Preset = { target: [number, number, number]; theta: number; phi: number; radius: number };
 
-// Three-quarter corner view, like a diorama on a table: from the front-right and above, so the
-// back and left walls meet in a V and the floor reads as a lozenge.
-const OVERVIEW: Preset = { target: [2.6, 1.4, 2.4], theta: 38 * DEG, phi: 56 * DEG, radius: 37 };
+// Slight three-quarter corner view (matching the diorama's natural front-left-wall framing).
+const OVERVIEW: Preset = { target: [2.6, 1.4, 2.4], theta: 16 * DEG, phi: 56 * DEG, radius: 34.5 };
 
 const PRESETS: Record<FocusStation, Preset> = {
   terminal: { target: [0.75, 1.75, -3.3], theta: 14 * DEG, phi: 80 * DEG, radius: 4.6 },
@@ -920,11 +919,10 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         Math.min(cur.target.z + r * sinPhi * Math.cos(theta), ROOM.zFront),
       );
       camera.lookAt(cur.target);
-      // The overview leaves room for the hero copy: the room sits left of it on wide screens, below it on narrow ones.
+      // The overview shifts the room slightly left on wide screens so /dev/dexter sits in clean space on the right.
       const wide = width >= 900;
-      // A positive x offset slides the view window right, so the diorama lands in the left of the frame.
-      const dx = (wide ? 0.16 : 0) * width * cur.shift;
-      const dy = (wide ? -0.04 : -0.14) * height * cur.shift;
+      const dx = (wide ? 0.11 : 0) * width * cur.shift;
+      const dy = (wide ? -0.03 : -0.14) * height * cur.shift;
       camera.setViewOffset(width, height, dx, dy, width, height);
     };
 

@@ -51,6 +51,8 @@ type Piece = {
   pick: number;
   /** Index into the Contact frame's slots, or -1 when the piece sits that formation out. */
   slot: number;
+  /** Index into the Contact "HELLO" word points, or -1. */
+  wordSlot: number;
   /** Place in the interlude rings, or -1. */
   ring: number;
 };
@@ -135,6 +137,7 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
         : 1.3 + clamp(tmp.y / 5, 0, 1) * 1.25 + clamp((tmp.x + 7.3) / 20.3, 0, 1) * .65 + rand() * .18,
       pick: rand(),
       slot: -1,
+      wordSlot: -1,
       ring: -1,
     });
   };
@@ -150,9 +153,9 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
     slots.push([-0.45 + c * 0.15, -0.86]);
   }
   const candidates = pieces
-    .filter((p) => !p.shell && p.size > 0.12 && p.size < (p.unit ? 2.8 : 1.8))
-    // Whole objects get first pick of the places, then the chunkiest loose parts.
-    .sort((a, b) => Number(b.unit) - Number(a.unit) || b.size - a.size)
+    // After the burst, only whole, recognizable bio/tech/lab objects travel through the page—no loose sticks or trim.
+    .filter((p) => p.unit && !p.shell && p.size > 0.12 && p.size < 2.8)
+    .sort((a, b) => b.size - a.size)
     .slice(0, slots.length);
   // Shuffle so neighbouring slots don't all hold the same kind of thing.
   for (let i = candidates.length - 1; i > 0; i--) {
@@ -160,6 +163,11 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
     [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
   }
   candidates.forEach((p, i) => { p.slot = i; });
+  const wordCandidates = pieces
+    .filter((p) => !p.shell && p.size > 0.08 && p.size < (p.unit ? 2.8 : 1.8))
+    .sort((a, b) => Number(b.unit) - Number(a.unit) || b.size - a.size)
+    .slice(0, Math.max(slots.length, CONTACT_WORD_POINTS.length));
+  wordCandidates.forEach((p, i) => { p.wordSlot = i; });
   const pingRoot = new THREE.Group();
   pingRoot.name = "contact-ping-words";
   const pingGeometry = createPingGeometry();
@@ -173,14 +181,12 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
   // Kept outside the travelling lab, so replacements don't become journey pieces themselves.
   root.parent?.add(pingRoot);
 
-  // Interlude rings: evenly spaced places for the mid-sized pieces, alternating between two rings.
+  // Interlude rings: evenly spaced places for whole bio/tech props, alternating between two rings.
   const RING_COUNT = 72;
   const ringPieces = pieces
-    .filter((p) => !p.shell && p.size > 0.1 && p.size < (p.unit ? 2.8 : 1.6))
-    .sort((a, b) => Number(b.unit) - Number(a.unit) || a.phase - b.phase)
-    .slice(0, RING_COUNT)
-    // Spread the whole objects around the rings instead of bunching them at the start.
-    .sort((a, b) => a.phase - b.phase);
+    .filter((p) => p.unit && !p.shell && p.size > 0.1 && p.size < 2.8)
+    .sort((a, b) => a.phase - b.phase)
+    .slice(0, RING_COUNT);
   ringPieces.forEach((p, i) => { p.ring = i; });
 
   // ---------- Scratch objects (no allocation per frame) ----------
@@ -284,8 +290,8 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
         // Organized, out of the way: the chosen props queue up in evenly spaced columns at the page
         // edges and move along them as you scroll. One column behind About, both edges after that.
         const both = s !== "trail";
-        // Twelve props per column, so they sit apart instead of overlapping.
-        const perColumn = 12;
+        // Evenly distribute whole props per column without overlapping.
+        const perColumn = Math.min(12, Math.max(1, Math.floor(candidates.length / (both ? 2 : 1))));
         if (p.slot < 0 || p.slot >= (both ? perColumn * 2 : perColumn)) {
           pos.copy(roomPos).add(p.dir);
           quat.copy(roomQuat);
@@ -312,32 +318,41 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
         return;
       }
       case "frame": {
-        if (p.slot < 0) {
+        const contact = c.contact;
+        const formingWord = Boolean(contact && contact.message > 0.0001);
+        if (p.slot < 0 && !(formingWord && p.wordSlot >= 0)) {
           pos.copy(c.orbitCenter);
           quat.copy(roomQuat);
           scale.setScalar(0);
           return;
         }
-        const [nx, ny] = slots[p.slot];
+        const [nx, ny] = p.slot >= 0
+          ? slots[Math.floor((p.slot / Math.max(1, candidates.length)) * slots.length)]
+          : [0, 0];
         const hover = near(c, nx, ny);
         const portrait = c.camera.aspect < 0.85;
-        // On phones the border hugs the edges, leaving room for the form.
-        const frameX = portrait && Math.abs(nx) > 0.6 ? Math.sign(nx) * (0.9 + (p.slot % 3) * 0.04) : nx;
-        screenPoint(c.camera, frameX + Math.sin(t * 0.5 + p.phase) * 0.008, ny + Math.cos(t * 0.4 + p.phase) * 0.01, 26 - hover * 1.5, pos);
-        euler.set(0.35 + hover * 0.2, p.phase + Math.sin(t * 0.3 + p.phase) * 0.15 + hover * 0.45, 0.08);
-        quat.setFromEuler(euler);
-        // Normalize sizes so the border reads as an even row of objects.
-        const target = (p.unit ? 0.95 : 0.6) * (portrait ? 0.38 : 1) * (1 + hover * 0.18);
-        scale.copy(roomScale).multiplyScalar(clamp(target / Math.max(0.05, p.size), 0.08, 3));
-        pos.sub(centerOffset.copy(p.center).multiply(scale).applyQuaternion(quat));
+        if (p.slot >= 0) {
+          // On phones the border hugs the edges, leaving room for the form.
+          const frameX = portrait && Math.abs(nx) > 0.6 ? Math.sign(nx) * (0.9 + (p.slot % 3) * 0.04) : nx;
+          screenPoint(c.camera, frameX + Math.sin(t * 0.5 + p.phase) * 0.008, ny + Math.cos(t * 0.4 + p.phase) * 0.01, 26 - hover * 1.5, pos);
+          euler.set(0.35 + hover * 0.2, p.phase + Math.sin(t * 0.3 + p.phase) * 0.15 + hover * 0.45, 0.08);
+          quat.setFromEuler(euler);
+          // Normalize sizes so the border reads as an even row of objects.
+          const target = (p.unit ? 0.95 : 0.6) * (portrait ? 0.38 : 1) * (1 + hover * 0.18);
+          scale.copy(roomScale).multiplyScalar(clamp(target / Math.max(0.05, p.size), 0.08, 3));
+          pos.sub(centerOffset.copy(p.center).multiply(scale).applyQuaternion(quat));
+        } else {
+          pos.copy(c.orbitCenter);
+          quat.copy(roomQuat);
+          scale.setScalar(0);
+        }
 
-        const contact = c.contact;
         if (!contact || contact.message + contact.links < 0.0001) return;
-        if (contact.message > 0.0001) {
-          const point = CONTACT_WORD_POINTS[p.slot];
+        if (contact.message > 0.0001 && p.wordSlot >= 0) {
+          const point = CONTACT_WORD_POINTS[p.wordSlot];
           // Spare props become a short underline, so every object has a destination.
-          const spareCount = Math.max(1, candidates.length - CONTACT_WORD_POINTS.length);
-          const x = point?.x ?? ((p.slot - CONTACT_WORD_POINTS.length + 0.5) / spareCount - 0.5) * 14;
+          const spareCount = Math.max(1, wordCandidates.length - CONTACT_WORD_POINTS.length);
+          const x = point?.x ?? ((p.wordSlot - CONTACT_WORD_POINTS.length + 0.5) / spareCount - 0.5) * 14;
           const y = point?.y ?? -3.5;
           screenPoint(c.camera, contact.wordX + x * contact.cellX, contact.wordY + y * contact.cellY, 26, contactPos);
           // Face the camera with a little depth. The lettering stays readable while typing.
