@@ -9807,52 +9807,7 @@ html:has(dialog:modal) { overflow: hidden; }
   .research-hud-jump .research-hud-pip { display:none; }
 }
 .research-desk-hint { margin:0; font-size:.75rem; color:#bfae9a; text-align:center; }
-/* Research dialog: a plain document. Hierarchy comes from type and spacing, not ornament. */
-.research-reader-backdrop { display:grid; place-items:center; padding:clamp(12px,4vw,40px); background:rgb(8 10 40 / .6); overflow-y:auto; overscroll-behavior:contain; }
-.research-reader-shell { position:relative; width:min(760px,100%); border-radius:8px; background:#fdfdfb; color:#1b1d33; box-shadow:0 1px 0 rgb(255 255 255 / .6) inset, 0 24px 60px rgb(6 8 40 / .35); }
-@media (prefers-reduced-motion:no-preference) {
- .research-reader-shell { animation:reader-enter 220ms cubic-bezier(.23,1,.32,1) both; }
- .research-reader-body { animation:reader-page 200ms ease-out both; }
- @keyframes reader-enter { from { opacity:0; transform:translateY(10px) scale(.985); } }
- @keyframes reader-page { from { opacity:0; } }
-}
-.research-reader-topbar { position:sticky; top:0; z-index:4; display:flex; align-items:center; justify-content:space-between; padding:12px 12px 12px clamp(24px,5vw,48px); background:rgb(253 253 251 / .92); backdrop-filter:blur(8px); border-radius:8px 8px 0 0; }
-.research-reader-counter { font-size:.8125rem; color:#6b6f8a; font-variant-numeric:tabular-nums; }
-.research-reader-close { display:grid; place-items:center; width:36px; height:36px; border:0; border-radius:50%; background:transparent; color:#3a3d58; transition:background-color 140ms ease, transform 140ms cubic-bezier(.23,1,.32,1); }
-.research-reader-close:active { transform:scale(.92); }
-.research-reader-body { padding:8px clamp(24px,5vw,48px) clamp(32px,5vw,48px); }
-
-.paper { display:grid; gap:32px; }
-.paper-head { display:grid; gap:8px; }
-.paper-domain { font-size:.875rem; color:#6b6f8a; }
-.paper-title { font-family:var(--font-inter),var(--font-sans),sans-serif; font-size:clamp(1.75rem,3.4vw,2.375rem); font-weight:700; line-height:1.1; letter-spacing:-.025em; color:#1313ba; text-wrap:balance; }
-.paper-summary { max-width:60ch; font-size:1.125rem; line-height:1.6; color:#1b1d33; text-wrap:pretty; }
-.paper-findings { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:24px 40px; }
-.paper-findings h4 { font-family:var(--font-inter),var(--font-sans),sans-serif; font-size:1rem; font-weight:700; letter-spacing:-.01em; line-height:1.35; color:#1b1d33; margin-bottom:6px; }
-.paper-findings p { font-size:.9375rem; line-height:1.65; color:#474a66; text-wrap:pretty; }
-.paper-facts { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:16px 40px; padding-top:24px; border-top:1px solid #e6e6ee; }
-.paper-facts-wide { grid-column:1 / -1; }
-.paper-facts dt { font-size:.8125rem; color:#6b6f8a; margin-bottom:2px; }
-.paper-facts dd { font-size:.875rem; line-height:1.55; color:#2c2f4a; text-wrap:pretty; }
-@media (max-width:600px) { .paper-facts { grid-template-columns:minmax(0,1fr); } }
-
-.research-reader-pagination { display:flex; justify-content:space-between; gap:12px; padding:12px clamp(16px,4vw,36px) 16px; border-top:1px solid #e6e6ee; }
-.research-reader-pagination .is-next { margin-left:auto; }
-.research-reader-pagination button { min-height:40px; padding:0 12px; border:0; border-radius:6px; background:transparent; color:#1313ba; font-size:.9375rem; font-weight:600; transition:background-color 140ms ease, transform 140ms cubic-bezier(.23,1,.32,1); }
-.research-reader-pagination button:active { transform:scale(.97); }
-@media (hover:hover) and (pointer:fine) {
- .research-reader-close:hover { background:#efeff5; }
- .research-reader-pagination button:hover { background:#f0f0fa; }
-}
 .research-desk-fallback { width:min(780px,calc(100% - 40px)); margin:20px auto 120px; padding:28px; border-radius:4px; background:#fbf8ef; color:#1d2147; }
-[data-lab-theme="phosphor"] .research-reader-shell { background:#12143a; color:#eef0ff; }
-[data-lab-theme="phosphor"] .research-reader-topbar { background:rgb(18 20 58 / .92); }
-[data-lab-theme="phosphor"] :is(.paper-summary, .paper-findings h4, .paper-facts dd) { color:#eef0ff; }
-[data-lab-theme="phosphor"] :is(.paper-findings p) { color:#c9cdf0; }
-[data-lab-theme="phosphor"] :is(.paper-domain, .paper-facts dt, .research-reader-counter) { color:#9aa0d4; }
-[data-lab-theme="phosphor"] :is(.paper-title, .research-reader-pagination button) { color:#a9b1ff; }
-[data-lab-theme="phosphor"] :is(.paper-facts, .research-reader-pagination) { border-color:#262c63; }
-[data-lab-theme="phosphor"] .research-reader-close { color:#eef0ff; }
 [data-lab-theme="phosphor"] .sheet .research-scene-section :is(h2,p) { color:#e5edf8; }
 @media (max-width:767px) {
  .research-scene-section { margin-block:48px; }
@@ -10295,70 +10250,273 @@ html[data-lab-fx="calm"] .hero-3d-intro > * { animation: none; }
   80%, 100% { transform: scaleX(1); opacity: .5; }
 }
 
-/* Research write-up, brief: the question as a lead, the numbers as the headline, then how and so-what. */
-.paper-problem {
-  max-width: 34ch;
-  font-family: var(--font-heading);
-  font-size: clamp(1.25rem, 2.2vw, 1.5rem);
-  font-weight: 500;
-  line-height: 1.4;
-  letter-spacing: -.01em;
-  color: #1b1d33;
-  text-wrap: pretty;
+
+/* Dark (phosphor) theme with the fixed 3D layer: the page goes dark, not the sheet, so the props
+   travelling behind every section stay visible. The hero and interlude take the dark tokens too. */
+html[data-lab-theme="phosphor"] body { background: #101232; }
+/* [data-sheet] lifts this to the specificity of the :is(.sheet, .site-header.is-light, …) rule above. */
+[data-lab-theme="phosphor"] .sheet[data-sheet] { background: transparent; }
+[data-lab-theme="phosphor"] :is(.hero-3d-shell, .lab-interlude) {
+  --color-ink: #dddfff;
+  --color-ink-deep: #eef0ff;
+  --color-paper: #101232;
+  --color-neon: #8c9df5;
 }
-:is(.paper-problem, .paper-conclusion) strong { font-weight: 700; color: var(--color-ink); }
-.paper-results { display: grid; border-block: 2px solid var(--color-ink); }
-/* One result per row: the number is the headline on the left, what it means beside it. */
-.paper-result {
+[data-lab-theme="phosphor"] .hero-3d-shell .ndev-subtitle { color: rgb(238 240 255 / .78); }
+[data-lab-theme="phosphor"] .hero-3d-shell .btn-ghost { color: #eef0ff; border-color: rgb(238 240 255 / .32); }
+
+/* ============================================================================
+ * Research dialog: a formal article page. One accent, hairlines only, hierarchy from type and
+ * a label column. Colours are tokens so the dark theme only swaps values.
+ * ========================================================================== */
+.research-reader-backdrop {
+  --r-bg: #ffffff;
+  --r-text: #1d2033;
+  --r-muted: #5f6380;
+  --r-faint: #8a8ea8;
+  --r-rule: #e4e5ee;
+  --r-accent: #1313ba;
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-  align-items: center;
-  gap: 8px 28px;
-  padding: 18px 0;
+  place-items: center;
+  padding: clamp(12px, 4vw, 40px);
+  background: rgb(8 10 40 / .55);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
-.paper-result + .paper-result { border-top: 1px solid rgb(10 10 93 / .14); }
-@media (max-width: 599px) { .paper-result { grid-template-columns: 1fr; } }
-.paper-result-value {
+[data-lab-theme="phosphor"] .research-reader-backdrop {
+  --r-bg: #12143a;
+  --r-text: #eceefc;
+  --r-muted: #aab0dc;
+  --r-faint: #8188bf;
+  --r-rule: #272c62;
+  --r-accent: #b3b9ff;
+}
+[data-lab-theme="contrast"] .research-reader-backdrop { --r-muted: #33364f; --r-faint: #4a4e6a; --r-rule: #9da0b8; }
+.research-reader-shell {
+  position: relative;
+  width: min(760px, 100%);
+  border-radius: 6px;
+  background: var(--r-bg);
+  color: var(--r-text);
+  box-shadow: 0 24px 64px rgb(6 8 40 / .28);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .research-reader-shell { animation: reader-enter 220ms cubic-bezier(.23, 1, .32, 1) both; }
+  .research-reader-body { animation: reader-page 180ms ease-out both; }
+}
+@keyframes reader-enter { from { opacity: 0; transform: translateY(8px) scale(.985); } }
+@keyframes reader-page { from { opacity: 0; } }
+.research-reader-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px 10px clamp(24px, 5vw, 56px);
+  border-bottom: 1px solid var(--r-rule);
+  border-radius: 6px 6px 0 0;
+  background: var(--r-bg);
+}
+.research-reader-counter { font-size: .8125rem; font-weight: 500; color: var(--r-muted); font-variant-numeric: tabular-nums; }
+.research-reader-close {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--r-text);
+  transition: background-color 140ms ease, transform 140ms cubic-bezier(.23, 1, .32, 1);
+}
+.research-reader-close:active { transform: scale(.94); }
+.research-reader-close:focus-visible,
+.research-reader-pagination button:focus-visible { outline: 2px solid var(--r-accent); outline-offset: 2px; }
+.research-reader-body { padding: clamp(28px, 5vw, 48px) clamp(24px, 5vw, 56px) clamp(32px, 5vw, 48px); }
+
+.paper { display: grid; gap: 36px; }
+.paper-head { display: grid; gap: 10px; padding-bottom: 28px; border-bottom: 1px solid var(--r-rule); }
+.paper-domain { font-size: .75rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--r-muted); }
+.paper-title {
   font-family: var(--font-heading);
-  font-size: clamp(2rem, 5.2vw, 3.25rem);
-  font-weight: 800;
-  line-height: 1.05;
-  letter-spacing: -.025em;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-ink);
-  overflow-wrap: break-word;
+  font-size: clamp(1.625rem, 3.2vw, 2.125rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -.02em;
+  color: var(--r-text);
   text-wrap: balance;
 }
-.paper-result-unit { margin-left: .2em; font-size: .45em; font-weight: 700; letter-spacing: 0; white-space: nowrap; color: rgb(10 10 93 / .6); }
-.paper-result-label { max-width: 32ch; font-size: .9375rem; line-height: 1.45; color: #3b3e5c; text-wrap: pretty; }
-.paper-brief { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 32px 48px; }
-.paper-brief h4 {
-  margin-bottom: 12px;
-  font-size: .75rem;
-  font-weight: 700;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  color: var(--color-ink);
-}
-.paper-methods { display: grid; gap: 10px; counter-reset: method; }
-.paper-methods li {
-  display: grid;
-  grid-template-columns: 2ch 1fr;
-  gap: 10px;
-  max-width: 60ch;
-  font-size: .9375rem;
-  line-height: 1.55;
-  color: #2a2d4a;
-  counter-increment: method;
-}
-.paper-methods li::before {
-  content: counter(method, decimal-leading-zero);
-  font-weight: 700;
+.paper-citation { max-width: 64ch; font-size: .875rem; line-height: 1.55; color: var(--r-muted); text-wrap: pretty; }
+
+/* Label column + content column; it stacks on narrow screens. */
+.paper-sections { display: grid; gap: 28px; }
+.paper-sections > div { display: grid; grid-template-columns: 9.5rem minmax(0, 1fr); gap: 6px 24px; }
+.paper-sections dt { padding-top: .2em; font-size: .75rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--r-faint); }
+.paper-sections dd { min-width: 0; font-size: 1rem; line-height: 1.6; color: var(--r-text); }
+.paper-sections dd p { max-width: 62ch; text-wrap: pretty; }
+.paper-sections dd strong { font-weight: 650; color: var(--r-text); }
+.paper-sections-meta dd { font-size: .875rem; line-height: 1.55; color: var(--r-muted); text-wrap: pretty; }
+.paper-sections > .paper-sections-meta:first-of-type { padding-top: 28px; border-top: 1px solid var(--r-rule); }
+@media (max-width: 599px) { .paper-sections > div { grid-template-columns: minmax(0, 1fr); } }
+
+.paper-methods { display: grid; gap: 6px; padding-left: 1.4em; list-style: decimal; }
+.paper-methods li { max-width: 62ch; padding-left: .25em; }
+.paper-methods li::marker { font-variant-numeric: tabular-nums; color: var(--r-faint); }
+
+/* Results: a plain two-column table. The figure leads in semibold tabular numerals. */
+.paper-results { width: 100%; border-collapse: collapse; }
+.paper-results tr { border-top: 1px solid var(--r-rule); }
+.paper-results tr:first-child { border-top: 0; }
+.paper-results :is(th, td) { padding: 12px 0; vertical-align: baseline; text-align: start; }
+.paper-results tr:first-child :is(th, td) { padding-top: 0; }
+.paper-results th {
+  width: 42%;
+  padding-right: 20px;
+  font-family: var(--font-heading);
+  font-size: 1.375rem;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -.01em;
   font-variant-numeric: tabular-nums;
-  color: rgb(10 10 93 / .45);
+  color: var(--r-accent);
+  white-space: nowrap;
 }
-.paper-conclusion { padding: 18px 20px; border-left: 3px solid var(--color-ink); background: rgb(19 19 186 / .05); }
-.paper-conclusion p { max-width: 60ch; font-size: 1rem; line-height: 1.6; color: #1b1d33; text-wrap: pretty; }
-[data-lab-theme="phosphor"] :is(.paper-problem, .paper-conclusion p, .paper-methods li) { color: #eef0ff; }
-[data-lab-theme="phosphor"] :is(.paper-result-value, .paper-brief h4, :is(.paper-problem, .paper-conclusion) strong) { color: #b9bcff; }
-[data-lab-theme="phosphor"] .paper-result-label { color: #c9cdf0; }
+.paper-results td { font-size: .9375rem; line-height: 1.5; color: var(--r-muted); text-wrap: pretty; }
+.paper-result-unit { margin-left: .25em; font-size: .7em; font-weight: 600; letter-spacing: 0; color: var(--r-muted); }
+@media (max-width: 599px) {
+  .paper-results th { white-space: normal; }
+  .paper-results tr { display: grid; gap: 2px; padding-block: 12px; }
+  .paper-results tr:first-child { padding-top: 0; }
+  .paper-results :is(th, td) { width: auto; padding: 0; }
+}
+
+.research-reader-pagination {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px clamp(16px, 4vw, 44px) 12px;
+  border-top: 1px solid var(--r-rule);
+}
+.research-reader-pagination .is-next { margin-left: auto; }
+.research-reader-pagination button {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--r-accent);
+  font-size: .9375rem;
+  font-weight: 600;
+  text-align: start;
+  transition: background-color 140ms ease, transform 140ms cubic-bezier(.23, 1, .32, 1);
+}
+.research-reader-pagination button:active { transform: scale(.98); }
+@media (hover: hover) and (pointer: fine) {
+  .research-reader-close:hover { background: var(--r-rule); }
+  .research-reader-pagination button:hover { background: color-mix(in srgb, var(--r-rule) 60%, transparent); }
+}
+/* The dialog renders inside the research section, where theme rules colour every p/dd/dt. These
+   four-class selectors out-rank them, so the dialog's own tokens win in every theme. */
+.research-reader-backdrop .research-reader-shell .paper :is(.paper-title, dd, dd p, li, strong) { color: var(--r-text); }
+.research-reader-backdrop .research-reader-shell .paper :is(.paper-domain, .paper-citation, td, .paper-sections-meta dd) { color: var(--r-muted); }
+.research-reader-backdrop .research-reader-shell .paper :is(dt, .paper-result-unit) { color: var(--r-faint); }
+.research-reader-backdrop .research-reader-shell .paper th { color: var(--r-accent); }
+.research-reader-backdrop .research-reader-shell .research-reader-topbar .research-reader-counter { color: var(--r-muted); }
+
+/* Hero corner annotations, like the margins of a drawing sheet: tiny tracked caps and hairline
+   crosshairs. The station buttons stay centred between them. */
+.hero-3d-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+.hero-corner,
+.hero-corner-kicker {
+  font-family: var(--font-heading);
+  font-size: .6875rem;
+  font-weight: 500;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgb(10 10 93 / .62);
+  white-space: nowrap;
+}
+.hero-corner { display: flex; align-items: center; gap: 14px; }
+.hero-corner--right { justify-self: end; }
+.hero-corner-cross { position: relative; display: block; width: 11px; height: 11px; flex: none; }
+.hero-corner-cross::before,
+.hero-corner-cross::after { content: ""; position: absolute; background: currentColor; }
+.hero-corner-cross::before { left: 5px; top: 0; width: 1px; height: 11px; }
+.hero-corner-cross::after { top: 5px; left: 0; width: 11px; height: 1px; }
+.hero-corner-kicker { display: grid; gap: 4px; margin-right: auto; padding-top: 4px; line-height: 1.4; }
+.hero-corner-time { font-variant-numeric: tabular-nums; }
+[data-lab-theme="phosphor"] :is(.hero-corner, .hero-corner-kicker) { color: rgb(238 240 255 / .62); }
+@media (max-width: 899px) {
+  .hero-corner, .hero-corner-kicker { display: none; }
+  .hero-3d-bottom { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+}
+
+/* The hero's foot line: one short phrase set big and tight, low in the right column. */
+.hero-tagline {
+  align-self: flex-end;
+  width: min(350px, 27vw);
+  margin: auto calc((100% - 100vw) / 2 + clamp(28px, 3.2vw, 64px)) clamp(18px, 3vh, 32px) 0;
+  font-family: var(--font-heading);
+  font-size: clamp(1.75rem, 2.7vw, 2.625rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.04em;
+  text-transform: uppercase;
+  color: var(--color-ink-deep);
+  pointer-events: none;
+}
+@media (max-width: 899px) { .hero-tagline { display: none; } }
+
+/* Contact actions: one primary, one secondary, both pills. The plus turns into a close mark when
+   its panel is open, and the open one carries a ring, so each button says what it will do next. */
+.contact-hero-actions { gap: 12px; }
+.contact-hero-actions .contact-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 18px 0 24px;
+  border-radius: 999px;
+  font-size: .9375rem;
+  font-weight: 600;
+  transition: transform 160ms cubic-bezier(.23, 1, .32, 1), box-shadow 200ms ease, background-color 200ms ease, color 200ms ease;
+}
+.contact-hero-actions .contact-action::after { content: none; }
+.contact-hero-actions .btn-solid.contact-action { background: var(--color-ink); border-color: var(--color-ink); color: var(--color-paper); }
+.contact-hero-actions .btn-ghost.contact-action { background: transparent; border: 1px solid rgb(10 10 93 / .28); color: var(--color-ink-deep); }
+.contact-hero-actions .contact-action[aria-expanded="true"] { box-shadow: 0 0 0 3px var(--color-paper), 0 0 0 5px var(--color-ink); }
+.contact-hero-actions .contact-action:active { transform: scale(.97); }
+.contact-hero-actions .contact-action:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 3px; }
+.contact-action-icon { position: relative; display: block; width: 12px; height: 12px; flex: none; transition: transform 240ms cubic-bezier(.23, 1, .32, 1); }
+.contact-action-icon::before,
+.contact-action-icon::after { content: ""; position: absolute; background: currentColor; border-radius: 1px; }
+.contact-action-icon::before { left: 5px; top: 0; width: 2px; height: 12px; }
+.contact-action-icon::after { top: 5px; left: 0; width: 12px; height: 2px; }
+.contact-action[aria-expanded="true"] .contact-action-icon { transform: rotate(45deg); }
+@media (hover: hover) and (pointer: fine) {
+  .contact-hero-actions .btn-ghost.contact-action:hover { background: rgb(19 19 186 / .06); }
+  .contact-hero-actions .btn-solid.contact-action:hover { background: var(--color-ink-deep); }
+}
+@media (max-width: 599px) {
+  .contact-hero-actions .contact-action { min-height: 44px; padding: 0 14px 0 18px; font-size: .875rem; }
+}
+[data-lab-theme="phosphor"] .contact-hero-actions .btn-ghost.contact-action { border-color: rgb(238 240 255 / .3); color: #eef0ff; }
+[data-lab-fx="calm"] .contact-action-icon { transition: none; }
+
+/* Dark theme: the header joins the night page instead of staying a pale bar. */
+[data-lab-theme="phosphor"] :is(.site-header, .site-header.is-light) {
+  --color-ink: #dddfff;
+  --color-ink-deep: #eef0ff;
+  --color-paper: #101232;
+  background: rgb(16 18 50 / .92);
+  color: #eef0ff;
+  border-bottom-color: rgb(238 240 255 / .1);
+}
+[data-lab-theme="phosphor"] .site-header .icon-btn { border-color: rgb(238 240 255 / .2); }
+[data-lab-theme="phosphor"] .site-header .btn-ghost { background: rgb(238 240 255 / .08); }
