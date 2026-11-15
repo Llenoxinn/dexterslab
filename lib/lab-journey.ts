@@ -64,6 +64,57 @@ type ShellMat = { mesh: THREE.Mesh; mat: THREE.Material };
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const smooth = (t: number) => t * t * (3 - 2 * t);
 
+export type ContactField = { points: Array<[number, number]>; cellX: number; cellY: number };
+
+/**
+ * Screen cells (NDC) for the links field: a jittered grid over the section's free space — both
+ * sides, the band above and the band below — with every cell over the protected box removed.
+ * The grid grows denser until there is a cell for every piece; cells are handed out in a shuffled,
+ * seeded order so neighbours never share a channel pattern.
+ */
+export function contactField(
+  count: number,
+  box: { x: number; y: number; halfW: number; halfH: number },
+  top: number,
+  aspect: number,
+): ContactField {
+  const left = -0.95, right = 0.95, bottom = -0.9;
+  const ceiling = Math.max(bottom + 0.3, Math.min(0.92, top));
+  const width = right - left;
+  const height = ceiling - bottom;
+  let cols = Math.max(3, Math.round(Math.sqrt(count * 1.6 * aspect * (width / height))));
+  for (let guard = 0; guard < 40; guard++) {
+    const rows = Math.max(2, Math.round(cols * (height / width) / aspect));
+    const cellX = width / cols;
+    const cellY = height / rows;
+    const free: Array<[number, number]> = [];
+    for (let r = 0; r < rows; r++)
+      for (let col = 0; col < cols; col++) {
+        const x = left + (col + 0.5) * cellX;
+        const y = bottom + (r + 0.5) * cellY;
+        // A cell is free when it clears the box by half a cell on each axis.
+        if (Math.abs(x - box.x) < box.halfW + cellX * 0.5 && Math.abs(y - box.y) < box.halfH + cellY * 0.5) continue;
+        free.push([x, y]);
+      }
+    if (free.length >= count) {
+      let seed = 23;
+      const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+      for (let i = free.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        [free[i], free[j]] = [free[j], free[i]];
+      }
+      // Jitter inside the cell so the field never reads as a grid.
+      const points = free.slice(0, count).map(([x, y]): [number, number] => [
+        x + (rand() - 0.5) * cellX * 0.25,
+        y + (rand() - 0.5) * cellY * 0.25,
+      ]);
+      return { points, cellX, cellY };
+    }
+    cols += 1;
+  }
+  return { points: Array.from({ length: count }, () => [box.x, ceiling] as [number, number]), cellX: 0.1, cellY: 0.1 };
+}
+
 export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector3; toCamera: THREE.Vector3 }) {
   let seed = 11;
   const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
@@ -176,6 +227,20 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
   const pingRoot = new THREE.Group();
   pingRoot.name = "contact-ping-words";
   const pingGeometry = createPingGeometry();
+  // The links field depends only on layout; rebuild it when the box, the top or the aspect change.
+  let fieldKey = "";
+  let field: ContactField = { points: [], cellX: 0.1, cellY: 0.1 };
+  const fieldFor = (c: { camera: THREE.PerspectiveCamera; contactTop?: number }, contact: { orbitX: number; orbitY: number; orbitRadiusX: number; orbitRadiusY: number }) => {
+    // The orbit radii were sized to clear the box with margin; the box itself sits inside them.
+    const box = { x: contact.orbitX, y: contact.orbitY, halfW: contact.orbitRadiusX * 0.8, halfH: contact.orbitRadiusY * 0.8 };
+    const top = (c.contactTop ?? 1) - 0.06;
+    const key = [box.x, box.y, box.halfW, box.halfH, top, c.camera.aspect].map((v) => v.toFixed(3)).join("|");
+    if (key !== fieldKey) {
+      fieldKey = key;
+      field = contactField(candidates.length, box, top, c.camera.aspect);
+    }
+    return field;
+  };
   const pingWords = candidates.map(() => {
     const material = new THREE.MeshStandardMaterial({ color: 0x2323d2, roughness: .36, metalness: .12, transparent: true, opacity: 0, depthWrite: false });
     const mesh = new THREE.Mesh(pingGeometry, material);
@@ -405,17 +470,13 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
           // Four groups of satellites: a focused social channel pulls its group forward.
           const channel = p.slot % 4;
           const selected = contact.energy * (1 - Math.min(1, Math.abs(channel - contact.social)));
-          const ring = p.slot % 2;
-          const speed = .3 + (Math.sin(p.phase * 7) + 1) * .16;
-          const disturbance = Math.sin(t * 1.1 + p.phase) * .18 + Math.sin(t * .47 + p.phase * 3) * .22;
-          const a = p.phase + (p.slot / candidates.length) * Math.PI * 6 + t * (ring ? -speed : speed) + disturbance;
-          // Uneven spiral bands live beyond a protected ellipse around the text and cards.
-          const wobble = (1 + Math.sin(t * .7 + p.phase)) * .075 + (1 + Math.cos(t * 1.3 + p.phase * 3)) * .025;
-          const rx = contact.orbitRadiusX + ring * 0.065 + wobble;
-          // The orbit's top edge also stays below the section's top.
-          const ry = Math.max(0.12, Math.min(contact.orbitRadiusY + ring * 0.04 + wobble, (c.contactTop ?? 1) - 0.08 - contact.orbitY));
-          const sx = contact.orbitX + Math.cos(a) * rx;
-          const sy = contact.orbitY + Math.sin(a) * ry;
+          // The links fill the section: every piece has a cell of its own in the free space around
+          // the box (sides, above and below) and drifts in a small loop inside it.
+          const field = fieldFor(c, contact);
+          const [fx, fy] = field.points[p.slot] ?? [contact.orbitX, contact.orbitY];
+          const a = p.phase + t * (.35 + (Math.sin(p.phase * 7) + 1) * .12);
+          const sx = fx + Math.cos(a) * field.cellX * .1 + Math.sin(t * .47 + p.phase * 3) * field.cellX * .04;
+          const sy = fy + Math.sin(a * 1.3) * field.cellY * .1;
           const proximity = near(c, sx, sy);
           screenPoint(c.camera, sx, sy, 28 - selected * 4 - proximity * 2, contactPos);
           euler.set(p.phase + t * 0.45, p.phase + t * 0.6 + selected * 0.9, Math.cos(a) * 0.5);

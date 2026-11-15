@@ -126,3 +126,16 @@ test("the room entrance builds the foundation before walls and props, with walls
     assert.ok(object.scale.distanceTo(home[i].scale) < .00001);
   });
 });
+
+test("the links field covers the free space around the box and never sits on it", async () => {
+  const { contactField } = await import("../lib/lab-journey.ts");
+  const box = { x: 0, y: -0.05, halfW: 0.45, halfH: 0.5 };
+  for (const aspect of [0.46, 1.6, 2.4]) {
+    const { points } = contactField(78, box, 0.85, aspect);
+    assert.equal(points.length, 78);
+    assert.ok(points.every(([x, y]) => Math.abs(x - box.x) >= box.halfW || Math.abs(y - box.y) >= box.halfH), "no point on the box");
+    // Both sides and a band above or below are used, not one ring.
+    assert.ok(points.some(([x]) => x < -0.6) && points.some(([x]) => x > 0.6));
+    assert.ok(points.some(([, y]) => y > 0.5 || y < -0.6));
+  }
+});
