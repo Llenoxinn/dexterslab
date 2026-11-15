@@ -17,6 +17,8 @@ type Props = {
   onRead: (index: number) => void;
   onReady: () => void;
   onUnsupported: () => void;
+  /** The GPU context was lost and did not come back: the parent remounts or falls back. */
+  onContextLost?: () => void;
 };
 
 /* ── Scroll choreography (shared with research-book.tsx) ───────────────── */
@@ -43,6 +45,9 @@ const GRID = "rgba(70, 92, 190, 0.13)";
 const INK = "#1313ba";
 const TEXT = "#0b0f2e"; // near-black ink: the daylight scene is bright, so the copy has to be dark
 const MUTED = "#2a3052";
+
+/** The research copy marks emphasis with `**word**`; the notebook pages print it plain. */
+const plain = (text: string) => text.replace(/\*\*(.+?)\*\*/g, "$1");
 
 const smoothstep = (a: number, b: number, x: number) => {
   const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1);
@@ -183,15 +188,20 @@ function pageTexture(
     w.text(study.shortName, 62, 700, fonts.heading, INK, 1.12, 22);
     w.text(study.title, study.title.length > 160 ? 25 : 29, 600, fonts.body, TEXT, 1.4, 34);
     w.rule("rgba(26, 31, 61, 0.2)", 2, 38);
-    w.text("OVERVIEW", 22, 700, fonts.body, INK, 1.2, 14);
-    w.text(study.summary, 31, 400, fonts.body, TEXT, 1.5, 38);
-    w.text("KEYWORDS", 22, 700, fonts.body, INK, 1.2, 14);
-    w.text(study.tags.join(" · "), 25, 500, fonts.body, MUTED, 1.5, 0);
+    w.text("PROBLEM", 22, 700, fonts.body, INK, 1.2, 14);
+    w.text(plain(study.problem), 34, 600, fonts.heading, TEXT, 1.4, 40);
+    w.text("METHODS", 22, 700, fonts.body, INK, 1.2, 14);
+    study.methods.forEach((m, i) => w.text(`${i + 1}.  ${m}`, 27, 400, fonts.body, TEXT, 1.45, 12));
   } else {
-    study.highlights.forEach((highlight, i) => {
-      w.text(`${String(i + 1).padStart(2, "0")}  ${highlight.heading}`, 34, 700, fonts.heading, INK, 1.25, 16);
-      w.text(highlight.detail, 30, 400, fonts.body, TEXT, 1.52, 46);
+    // Results first and big: the number is the headline, the label explains it.
+    w.text("KEY RESULTS", 22, 700, fonts.body, INK, 1.2, 22);
+    study.results.forEach((r) => {
+      w.text(r.value, 76, 800, fonts.heading, INK, 1.05, 8);
+      w.text(r.label, 27, 400, fonts.body, MUTED, 1.4, 44);
     });
+    w.rule("rgba(26, 31, 61, 0.2)", 2, 30);
+    w.text("CONCLUSION", 22, 700, fonts.body, INK, 1.2, 14);
+    w.text(plain(study.conclusion), 32, 500, fonts.body, TEXT, 1.5, 0);
     // A hand-drawn margin note in the lab-notebook spirit.
     if (w.y < 1300) {
       w.y = Math.max(w.y, 1240);
@@ -370,12 +380,12 @@ function lathe(points: [number, number][], material: THREE.Material, segments = 
 
 /* ── Component ─────────────────────────────────────────────────────────── */
 
-export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsupported }: Props) {
+export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsupported, onContextLost }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const targetProgressRef = useRef(progress);
   targetProgressRef.current = progress;
-  const latest = useRef({ studies, onRead, onReady, onUnsupported });
-  latest.current = { studies, onRead, onReady, onUnsupported };
+  const latest = useRef({ studies, onRead, onReady, onUnsupported, onContextLost });
+  latest.current = { studies, onRead, onReady, onUnsupported, onContextLost };
   const wakeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -406,7 +416,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         return;
       }
       const roomy = ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) > 4;
-      renderer.setPixelRatio(Math.min(devicePixelRatio || 1, roomy ? 2 : 1.5));
+      renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
       renderer.toneMapping = THREE.NeutralToneMapping;
       renderer.toneMappingExposure = 1;
       renderer.shadowMap.enabled = true;
@@ -431,7 +441,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       spot.position.set(-5.5, 8.5, -4.5);
       spot.target.position.set(0, 0, -0.1);
       spot.castShadow = true;
-      spot.shadow.mapSize.setScalar(Math.min(renderer.capabilities.maxTextureSize, roomy ? 4096 : 2048));
+      spot.shadow.mapSize.setScalar(Math.min(renderer.capabilities.maxTextureSize, 2048));
       spot.shadow.camera.near = 0.5;
       spot.shadow.radius = roomy ? 3 : 1.5;
       spot.shadow.intensity = 0.78;
@@ -783,6 +793,10 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       let lastTime = performance.now();
       let shadowKey = "";
       const elapsed = { t: 0 };
+      // Arrival: the notebook is carried in and set down on the table the first time you reach it.
+      let placeT = calm() ? 1 : 0;
+      let placing = false;
+      let lostTimer = 0;
 
       /* Clay pass: everything turns matte white except what carries the content. Printed surfaces
          (pages, cover, labels) keep their textures; the notebook cloth and anything that glowed
@@ -827,7 +841,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       }
 
       // Contact shading anchors the cover, paper edges and small props to the tabletop.
-      const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: roomy ? 4 : 2 }));
+      const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 2 }));
       composer.addPass(new RenderPass(scene, camera));
       const gtao = new GTAOPass(scene, camera, 1, 1);
       gtao.blendIntensity = 0.55;
@@ -887,6 +901,21 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         book.position.x = THREE.MathUtils.lerp(-BOARD_W / 2, 0, open);
         book.position.z = THREE.MathUtils.lerp(0.15, 0, open);
         book.rotation.y = THREE.MathUtils.lerp(-0.18, 0, openEase) + smoothX * 0.035;
+        if (placeT < 1) {
+          // Lowered in from above and the left, tilted like it's held at one edge, then it settles
+          // flat with a small rock as it meets the wood.
+          const e = 1 - Math.pow(1 - placeT, 3);
+          const settle = Math.sin(placeT * Math.PI * 3.2) * Math.pow(1 - placeT, 2);
+          book.position.y = (1 - e) * 1.9;
+          book.position.x -= (1 - e) * 0.9;
+          book.rotation.x = -(1 - e) * 0.32 + settle * 0.05;
+          book.rotation.z = (1 - e) * 0.22 + settle * 0.04;
+          book.rotation.y -= (1 - e) * 0.35;
+        } else if (book.position.y !== 0) {
+          book.position.y = 0;
+          book.rotation.x = 0;
+          book.rotation.z = 0;
+        }
 
         const readingT = THREE.MathUtils.clamp((p - OPEN_END) / (READ_END - OPEN_END), 0, 1);
         const scaled = readingT * count;
@@ -912,7 +941,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
           setMap(rightPageMat, r);
         }
 
-        const key = `${coverAngle.toFixed(4)}|${leaf.visible ? flip.toFixed(4) : "-"}|${book.position.x.toFixed(4)}|${book.rotation.y.toFixed(4)}`;
+        const key = `${placeT.toFixed(3)}|${coverAngle.toFixed(4)}|${leaf.visible ? flip.toFixed(4) : "-"}|${book.position.x.toFixed(4)}|${book.rotation.y.toFixed(4)}`;
         if (key !== shadowKey) {
           shadowKey = key;
           renderer.shadowMap.needsUpdate = true;
@@ -955,6 +984,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         // If the stage changed size without a resize event reaching us, catch up before drawing.
         const buffer = renderer.getSize(sizeProbe);
         if (buffer.x !== host.clientWidth || buffer.y !== host.clientHeight) resize();
+        if (placing && placeT < 1) placeT = still ? 1 : Math.min(1, placeT + dt / 1.35);
         if (!still) {
           animateProps(dt);
           renderer.shadowMap.needsUpdate = true;
@@ -964,6 +994,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
 
         // Bubbles keep the loop alive while on screen; otherwise render only while settling.
         const settling =
+          (placing && placeT < 1) ||
           Math.abs(target - current) > 0.0003 || Math.abs(pointerX - smoothX) > 0.001 || Math.abs(pointerY - smoothY) > 0.001;
         if (visible && !document.hidden && (settling || !still)) frame = requestAnimationFrame(draw);
       };
@@ -997,6 +1028,14 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         }
       });
       io.observe(host);
+      // Start the arrival once the stage is properly on screen, not while it is still preloading below.
+      const arrival = new IntersectionObserver(([entry]) => {
+        if (!entry.isIntersecting) return;
+        placing = true;
+        arrival.disconnect();
+        wake();
+      }, { threshold: 0.45 });
+      arrival.observe(host);
 
       const raycaster = new THREE.Raycaster();
       const ndc = new THREE.Vector2();
@@ -1036,8 +1075,14 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         event.preventDefault();
         contextLost = true;
         useAO = false;
+        // A context the browser never hands back would leave an empty stage: let the parent rebuild.
+        window.clearTimeout(lostTimer);
+        lostTimer = window.setTimeout(() => {
+          if (contextLost && !disposed) latest.current.onContextLost?.();
+        }, 1500);
       };
       const onRestored = () => {
+        window.clearTimeout(lostTimer);
         contextLost = false;
         renderer.shadowMap.needsUpdate = true;
         wake();
@@ -1051,8 +1096,10 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
 
       disposeScene = () => {
         cancelAnimationFrame(frame);
+        window.clearTimeout(lostTimer);
         wakeRef.current = null;
         io.disconnect();
+        arrival.disconnect();
         resizeObserver.disconnect();
         host.removeEventListener("pointermove", onPointerMove);
         host.removeEventListener("pointerleave", onPointerLeave);
