@@ -14,6 +14,7 @@ import { addLabProps } from "@/lib/lab-props";
 import { CONTACT_SPIRAL_SECONDS, CONTACT_WORD_COLUMNS, type ContactChoreography } from "@/lib/contact-choreography";
 import { createStudioWindows, STUDIO_BACK_WINDOW, STUDIO_SUN_DIRECTION } from "@/lib/studio-daylight";
 import { interludeBus } from "@/lib/interlude-bus";
+import { createGovernor, qualityTiers, type QualityTier } from "@/lib/render-quality";
 
 export type FocusStation = "terminal" | "core" | "tank" | "bench" | "rack";
 export type StationId = "overview" | FocusStation | "free";
@@ -698,7 +699,12 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     }
     delete host.dataset.webgl;
     const roomy = ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) > 4;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, roomy ? 2 : 1.5));
+    // Pixel ratio, MSAA and AO resolution move together as one tier; slow frames step it down.
+    const tiers = qualityTiers(window.devicePixelRatio || 1, roomy ? 2 : 1.5);
+    const governor = createGovernor(tiers.length);
+    let tier: QualityTier = tiers[0];
+    renderer.setPixelRatio(tier.ratio);
+    host.dataset.renderScale = String(tier.ratio);
     renderer.setClearColor(0x000000, 0);
     renderer.toneMapping = THREE.NeutralToneMapping;
     renderer.toneMappingExposure = 1.14; // the room sits in wall shade now; lift it so the clay reads light
@@ -749,10 +755,16 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     // Ambient occlusion is what makes white clay read as solid: soft darkening wherever things meet.
     const composer = new EffectComposer(
       renderer,
-      new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }),
+      new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: tier.samples }),
     );
     composer.addPass(new RenderPass(scene, camera));
     const gtao = new GTAOPass(scene, camera, 1, 1);
+    // AO is soft by nature: half resolution looks the same once denoised and costs a quarter.
+    const gtaoSetSize = gtao.setSize.bind(gtao);
+    gtao.setSize = (w: number, h: number) => {
+      const s = tier.ao || 0.5;
+      gtaoSetSize(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)));
+    };
     gtao.blendIntensity = 0.72;
     gtao.updateGtaoMaterial({ radius: 0.48, distanceExponent: 1.6, thickness: 0.5, scale: 1, samples: roomy ? 16 : 8 });
     gtao.updatePdMaterial({ radius: 6, lumaPhi: 10, depthPhi: 1, normalPhi: 4, samples: 16 });
@@ -1183,12 +1195,38 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       e.preventDefault();
       contextLost = true;
       interludeBus.clay = false; // let the flat headline take over while the GPU is gone
-      // A GPU that can't keep up with AO drops the context; come back without it.
+      // A GPU that can't keep up drops the context; come back a tier lower, without AO.
       useAO = false;
+      aoBlocked = true;
+      pendingTier = tiers[governor.fail()];
     };
     const onContextRestored = () => {
       contextLost = false;
+      if (pendingTier) applyTier(pendingTier, true);
+      pendingTier = null;
       wake();
+    };
+    let pendingTier: QualityTier | null = null;
+    let aoBlocked = false;
+    let lastRendered = 0;
+    const applyTier = (next: QualityTier, force = false) => {
+      if (next === tier && !force) return;
+      const resample = next.samples !== tier.samples;
+      tier = next;
+      renderer.setPixelRatio(tier.ratio);
+      if (resample) composer.reset(new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: tier.samples }));
+      resize();
+      useAO = !aoBlocked && tier.ao > 0;
+      renderer.shadowMap.needsUpdate = true;
+      host.dataset.renderScale = String(tier.ratio);
+      host.dataset.ao = useAO ? "on" : "off";
+      host.dataset.tierLog = `${host.dataset.tierLog ?? ""} ${tier.ratio}${useAO ? "+ao" : ""}@${Math.round(performance.now() / 1000)}s`.trim();
+    };
+    /** Only consecutive rendered frames count; a paused layer's gap is ignored by the governor. */
+    const adapt = (now: number) => {
+      const interval = lastRendered ? now - lastRendered : 0;
+      lastRendered = now;
+      applyTier(tiers[governor.sample(interval)]);
     };
     renderer.domElement.addEventListener("webglcontextlost", onContextLost);
     renderer.domElement.addEventListener("webglcontextrestored", onContextRestored);
@@ -1318,6 +1356,9 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         // AO only while the assembled room is on screen; the debris reads fine without it.
         if (useAO && nearRoom) composer.render(dt);
         else renderer.render(scene, camera);
+        // The entrance (shader compiles, every piece in flight) is not the steady state; judge after it.
+        if (!calm && built >= ASSEMBLE_SECONDS + 1) adapt(now);
+        else lastRendered = 0;
       }
       if (!host.dataset.ready) {
         host.dataset.ready = "true"; // fade the scene in over the loader

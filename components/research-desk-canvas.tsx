@@ -10,6 +10,10 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import type { ResearchEntry } from "@/lib/content";
 import { narraTexture } from "@/lib/filipino-lab";
 import { site } from "@/lib/site";
+import { createGovernor, qualityTiers, type QualityTier } from "@/lib/render-quality";
+
+/** Set once the journal's context has been lost: later mounts this session start without AO. */
+const LITE_KEY = "lab:journal-lite";
 
 type Props = {
   studies: ResearchEntry[];
@@ -416,7 +420,17 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         return;
       }
       const roomy = ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) > 4;
-      renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
+      // One ladder of pixel ratio, MSAA and AO. Small devices, and any browser that already lost this
+      // context once, start on the first tier without AO and never climb above it.
+      const tiers = qualityTiers(devicePixelRatio || 1, 1.5);
+      let lite = !roomy;
+      try {
+        lite ||= sessionStorage.getItem(LITE_KEY) === "1";
+      } catch {}
+      const governor = createGovernor(tiers.length, { start: lite ? Math.max(0, tiers.findIndex((t) => t.ao === 0)) : 0 });
+      let tier: QualityTier = tiers[governor.index];
+      renderer.setPixelRatio(tier.ratio);
+      host.dataset.renderScale = String(tier.ratio);
       renderer.toneMapping = THREE.NeutralToneMapping;
       renderer.toneMappingExposure = 1;
       renderer.shadowMap.enabled = true;
@@ -841,9 +855,14 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       }
 
       // Contact shading anchors the cover, paper edges and small props to the tabletop.
-      const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 2 }));
+      const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: tier.samples }));
       composer.addPass(new RenderPass(scene, camera));
       const gtao = new GTAOPass(scene, camera, 1, 1);
+      const gtaoSetSize = gtao.setSize.bind(gtao);
+      gtao.setSize = (w: number, h: number) => {
+        const s = tier.ao || 0.5;
+        gtaoSetSize(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)));
+      };
       gtao.blendIntensity = 0.55;
       gtao.updateGtaoMaterial({ radius: 0.16, distanceExponent: 1.6, thickness: 0.15, scale: 1, samples: roomy ? 16 : 8 });
       gtao.updatePdMaterial({ radius: 5, depthPhi: 1, normalPhi: 4, samples: 16 });
@@ -861,8 +880,27 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       composer.addPass(gtao);
       const output = new OutputPass();
       composer.addPass(output);
-      let useAO = true;
+      let useAO = tier.ao > 0;
       const render = () => { if (useAO) composer.render(); else renderer.render(scene, camera); };
+      let lastRendered = 0;
+      const applyTier = (next: QualityTier) => {
+        if (next === tier) return;
+        const resample = next.samples !== tier.samples;
+        tier = next;
+        renderer.setPixelRatio(tier.ratio);
+        composer.setPixelRatio(tier.ratio);
+        if (resample) composer.reset(new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: tier.samples }));
+        useAO = !contextLost && tier.ao > 0;
+        host.dataset.renderScale = String(tier.ratio);
+        renderer.shadowMap.needsUpdate = true;
+        resize();
+      };
+      /** Rendered frames only feed the governor while the loop runs back to back. */
+      const adapt = (now: number) => {
+        const interval = lastRendered ? now - lastRendered : 0;
+        lastRendered = now;
+        applyTier(tiers[governor.sample(interval)]);
+      };
 
       const frameCamera = () => {
         const aspect = host.clientWidth / Math.max(1, host.clientHeight);
@@ -991,6 +1029,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         }
         applyState(current);
         render();
+        if (!still) adapt(now);
 
         // Bubbles keep the loop alive while on screen; otherwise render only while settling.
         const settling =
@@ -1075,6 +1114,9 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         event.preventDefault();
         contextLost = true;
         useAO = false;
+        try {
+          sessionStorage.setItem(LITE_KEY, "1");
+        } catch {}
         // A context the browser never hands back would leave an empty stage: let the parent rebuild.
         window.clearTimeout(lostTimer);
         lostTimer = window.setTimeout(() => {
