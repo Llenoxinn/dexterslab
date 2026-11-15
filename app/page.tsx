@@ -3,6 +3,7 @@ import { ContactSection } from "@/components/contact-section";
 import { ExperienceSection } from "@/components/experience-section";
 import { GitHubSection } from "@/components/github-section";
 import { LabInterlude } from "@/components/lab-interlude";
+import { LabLobby } from "@/components/lab-lobby";
 import { MethodSection } from "@/components/method-section";
 import { PageMotion } from "@/components/motion";
 import { NotionHero } from "@/components/notion-hero";
@@ -26,6 +27,7 @@ export default function Home() {
         </div>
 
         <LabInterlude />
+        <LabLobby />
 
         <div data-sheet className="sheet rails">
           <PixelEdge />

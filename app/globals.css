@@ -10620,3 +10620,79 @@ html[data-lab-theme="phosphor"] body { background: #101232; }
     opacity: 1;
   }
 }
+
+/* ── The lobby under the lake ─────────────────────────────────────────
+   The 3D layer dives here and holds while this section scrolls past. Deep ink by default (no WebGL,
+   reduced motion); transparent over the 3D lobby once the canvas reports the dive is running. */
+.lab-lobby {
+  position: relative;
+  z-index: 1;
+  height: 240svh;
+  background: var(--color-ink-deep);
+  color: var(--color-paper);
+}
+:root[data-dive="on"] .lab-lobby {
+  background: transparent;
+}
+.lab-lobby-pin {
+  position: sticky;
+  top: 0;
+  display: grid;
+  align-items: end;
+  height: 100svh;
+  padding: calc(var(--header-h) + 24px) var(--gutter) clamp(40px, 8svh, 96px);
+}
+.lab-lobby-copy {
+  position: relative;
+  max-width: 34rem;
+}
+/* A local scrim behind the copy only: the lobby stays visible everywhere else. */
+.lab-lobby-copy::before {
+  content: "";
+  position: absolute;
+  inset: -40px -64px -40px -40px;
+  z-index: -1;
+  background: radial-gradient(closest-side, rgb(10 10 93 / 0.72), rgb(10 10 93 / 0));
+  pointer-events: none;
+}
+.lab-lobby-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(2.2rem, 5vw, 4rem);
+  line-height: 1;
+  text-shadow: 0.06em 0.06em 0 var(--color-neon);
+}
+.lab-lobby-lede {
+  margin: 14px 0 22px;
+  max-width: 30rem;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: rgb(246 246 252 / 0.86);
+}
+.lab-lobby-groups {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+.lab-lobby-group {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+.lab-lobby-group dt {
+  font-weight: 700;
+  color: var(--color-lavender);
+}
+.lab-lobby-group dd {
+  margin: 0;
+  line-height: 1.45;
+  color: rgb(246 246 252 / 0.92);
+}
+@media (max-width: 560px) {
+  .lab-lobby-group {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
