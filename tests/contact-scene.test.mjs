@@ -30,8 +30,8 @@ test("contact objects form the word in screen space and return to their original
     from: "frame", to: "frame", mix: 1, built: Infinity, contact };
   journey.apply(input);
   root.updateMatrixWorld(true);
-  for (const p of journey.pieces.filter((p) => p.slot >= 0 && p.slot < CONTACT_WORD_POINTS.length)) {
-    const point = CONTACT_WORD_POINTS[p.slot];
+  for (const p of journey.pieces.filter((p) => p.wordSlot >= 0 && p.wordSlot < CONTACT_WORD_POINTS.length)) {
+    const point = CONTACT_WORD_POINTS[p.wordSlot];
     const projected = p.obj.localToWorld(p.center.clone()).project(camera);
     assert.ok(Math.abs(projected.x - point.x * contact.cellX) < .00001);
     assert.ok(Math.abs(projected.y - (contact.wordY + point.y * contact.cellY)) < .00001);
