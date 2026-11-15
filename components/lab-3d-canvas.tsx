@@ -1013,12 +1013,24 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     const debrisProbe = new THREE.Vector3();
     let debrisFrame = 0;
     const TEXT_DEPTH = 24;
-    const textEuler = new THREE.Euler();
-    const textUp = new THREE.Vector3(0, 1, 0);
-    const waterQuat = new THREE.Quaternion();
-    // A block's thin axis (local z) turned to point up: it lies flat on the water.
-    const flatQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
-    /** Places the clay blocks where the interlude's pixels are; returns whether it drew any. */
+    // The headline's mask on the water: strokes painted at half resolution, then softly blurred.
+    const MASK_W = 1024;
+    const MASK_H = 512;
+    const maskCanvas = document.createElement("canvas");
+    maskCanvas.width = MASK_W;
+    maskCanvas.height = MASK_H;
+    const blurCanvas = document.createElement("canvas");
+    blurCanvas.width = MASK_W;
+    blurCanvas.height = MASK_H;
+    const maskCtx = maskCanvas.getContext("2d")!;
+    const blurCtx = blurCanvas.getContext("2d")!;
+    const textMask = new THREE.CanvasTexture(blurCanvas);
+    textMask.colorSpace = THREE.NoColorSpace; // a height field, not a colour
+    lake.uniforms.uText.value = textMask;
+    const hitX = new Float32Array(CLAY_TEXT_MAX);
+    const hitZ = new Float32Array(CLAY_TEXT_MAX);
+    const hitW = new Float32Array(CLAY_TEXT_MAX);
+    /** Draws the interlude headline: written in the water while over the lake, clay blocks otherwise. */
     const updateClayText = (calm: boolean) => {
       const px = interludeBus.pixels;
       const live = !calm && !!px && px.count > 0 && performance.now() - px.at < 300;
@@ -1026,6 +1038,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       interludeBus.clay = live;
       if (!live || !px) {
         clayText.count = 0;
+        lake.uniforms.uTextAmt.value = 0;
         return;
       }
       const rect = stage.getBoundingClientRect();
@@ -1035,36 +1048,67 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       const perPx = (2 * TEXT_DEPTH * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / height;
       const side = Math.max(0.001, (px.cell - 1) * perPx);
       const count = Math.min(px.count, CLAY_TEXT_MAX);
-      // Over the lake the headline floats on the water: pale clay, so it reads against the blue.
+      // Over the lake the headline is written in the water itself.
       const onWater = diveS > 0.5 && diveS < 1.6;
-      const ink = onWater || document.documentElement.dataset.labTheme === "phosphor" ? textInkDark : textInk;
+      const ink = document.documentElement.dataset.labTheme === "phosphor" ? textInkDark : textInk;
       if (onWater) {
-        // Lying flat, turned to the camera's heading so the rows run across the screen.
-        textEuler.setFromQuaternion(camera.quaternion, "YXZ");
-        waterQuat.setFromAxisAngle(textUp, textEuler.y).multiply(flatQuat);
+        // The letters are made of the water itself: cast each pixel onto the lake, paint the strokes
+        // into the mask the lake shader reads, and draw no blocks.
+        const perPx = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / height;
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        let hits = 0;
+        for (let i = 0; i < count; i++) {
+          const nx = ((px.x[i] + px.cell / 2 - rect.left) / width) * 2 - 1;
+          const ny = -(((px.y[i] + px.cell / 2 - rect.top) / height) * 2 - 1);
+          textRay.set(nx, ny, 0.5).unproject(camera).sub(textCam).normalize();
+          if (textRay.y > -0.02) { hitW[i] = 0; continue; }
+          const t = (WATER_LEVEL - textCam.y) / textRay.y;
+          hitX[i] = textCam.x + textRay.x * t;
+          hitZ[i] = textCam.z + textRay.z * t;
+          hitW[i] = (px.cell - 1) * perPx * t;
+          minX = Math.min(minX, hitX[i]); maxX = Math.max(maxX, hitX[i]);
+          minZ = Math.min(minZ, hitZ[i]); maxZ = Math.max(maxZ, hitZ[i]);
+          hits++;
+        }
+        clayText.count = 0;
+        if (!hits) { lake.uniforms.uTextAmt.value = 0; return; }
+        const pad = 1.2;
+        const rx = minX - pad, rz = minZ - pad;
+        const rw = maxX - minX + pad * 2, rd = maxZ - minZ + pad * 2;
+        lake.uniforms.uTextRect.value.set(rx, rz, rw, rd);
+        maskCtx.clearRect(0, 0, MASK_W, MASK_H);
+        maskCtx.globalCompositeOperation = "lighter";
+        for (let i = 0; i < count; i++) {
+          if (!hitW[i] || px.alpha[i] <= 0) continue;
+          const sx = (hitW[i] / rw) * MASK_W;
+          const sy = (hitW[i] / rd) * MASK_H;
+          const cx = ((hitX[i] - rx) / rw) * MASK_W;
+          const cy = (1 - (hitZ[i] - rz) / rd) * MASK_H; // canvas rows run opposite to world z
+          maskCtx.globalAlpha = px.alpha[i];
+          maskCtx.fillStyle = px.row[i] ? "#00ff00" : "#ff0000";
+          maskCtx.fillRect(cx - sx / 2, cy - sy / 2, sx, sy);
+        }
+        maskCtx.globalAlpha = 1;
+        maskCtx.globalCompositeOperation = "source-over";
+        // A soft blur rounds the strokes into a swell the shader can take a gradient of.
+        blurCtx.clearRect(0, 0, MASK_W, MASK_H);
+        blurCtx.filter = "blur(1px)";
+        blurCtx.drawImage(maskCanvas, 0, 0);
+        blurCtx.filter = "none";
+        textMask.needsUpdate = true;
+        lake.uniforms.uTextAmt.value = 1;
+        return;
       }
-      const perPxAt = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / height;
+      lake.uniforms.uTextAmt.value = 0;
       for (let i = 0; i < count; i++) {
         const a = px.alpha[i];
         const nx = ((px.x[i] + px.cell / 2 - rect.left) / width) * 2 - 1;
         const ny = -(((px.y[i] + px.cell / 2 - rect.top) / height) * 2 - 1);
         textRay.set(nx, ny, 0.5).unproject(camera).sub(textCam).normalize();
-        const grow = a <= 0 ? 0.0001 : 0.35 + 0.65 * a;
-        const hit = onWater && textRay.y < -0.02 ? (WATER_LEVEL - textCam.y) / textRay.y : -1;
-        if (hit > 0) {
-          // Where the pixel's ray meets the lake, sized to its distance so the layout holds on screen.
-          const w = Math.max(0.001, (px.cell - 1) * perPxAt * hit);
-          textPos.copy(textCam).addScaledVector(textRay, hit);
-          // Half-submerged, each block bobbing on its own phase across the water.
-          textPos.y = WATER_LEVEL + w * 0.1 + Math.sin(animT * 1.7 + textPos.x * 0.9 + textPos.z * 0.7) * w * 0.16;
-          textScale.set(w, w, w * 0.8).multiplyScalar(grow);
-          textMatrix.compose(textPos, waterQuat, textScale);
-        } else {
-          textPos.copy(textCam).addScaledVector(textRay, TEXT_DEPTH);
-          // Blocks grow in as they arrive, like debris settling into place.
-          textScale.set(side, side, side * 1.5).multiplyScalar(grow);
-          textMatrix.compose(textPos, textQuat, textScale);
-        }
+        textPos.copy(textCam).addScaledVector(textRay, TEXT_DEPTH);
+        // Blocks grow in as they arrive, like debris settling into place.
+        textScale.set(side, side, side * 1.5).multiplyScalar(a <= 0 ? 0.0001 : 0.35 + 0.65 * a);
+        textMatrix.compose(textPos, textQuat, textScale);
         clayText.setMatrixAt(i, textMatrix);
         textColor.copy(ink[px.row[i]] ?? ink[0]).lerp(textNeon, px.tint[i]);
         clayText.setColorAt(i, textColor);
@@ -1727,6 +1771,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       composer.dispose();
       batcher.dispose();
       lake.dispose();
+      textMask.dispose();
       underwater.dispose();
       lobby.dispose();
       scene.fog = null;

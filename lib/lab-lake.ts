@@ -48,6 +48,11 @@ export function createLake(renderer: THREE.WebGLRenderer, { level, room, sun }: 
     uWaves: { value: spectrum },
     uFade: { value: 1 },
     uDark: { value: 0 },
+    // Lettering written in the water: a mask of the headline laid on the lake (R first line, G accent).
+    uText: { value: null as THREE.Texture | null },
+    uTextRect: { value: new THREE.Vector4(0, 0, 1, 1) },
+    uTextTexel: { value: new THREE.Vector2(1 / 1024, 1 / 512) },
+    uTextAmt: { value: 0 },
   };
 
   const material = new THREE.ShaderMaterial({
@@ -73,6 +78,10 @@ export function createLake(renderer: THREE.WebGLRenderer, { level, room, sun }: 
       uniform vec4 uWaves[WAVES];
       uniform float uFade;
       uniform float uDark;
+      uniform sampler2D uText;
+      uniform vec4 uTextRect;
+      uniform vec2 uTextTexel;
+      uniform float uTextAmt;
       varying vec3 vWorld;
       varying vec4 vMirror;
 
@@ -94,6 +103,26 @@ export function createLake(renderer: THREE.WebGLRenderer, { level, room, sun }: 
           float fade = 1.0 - smoothstep(0.18 * w.z, 0.5 * w.z, footprint);
           float phase = k * dot(w.xy, p) - omega * uTime;
           slope += w.xy * (w.w * k * cos(phase) * fade);
+        }
+        /* Lettering made of water: inside the strokes the surface rises (its gradient bends the
+           reflections and draws the glitter along the edges) and streaks run through each stroke. */
+        vec2 tuv = (p - uTextRect.xy) / uTextRect.zw;
+        /* A soft border, so the mask's area never shows as a rectangle on the water. */
+        vec2 border = smoothstep(0.0, 0.04, tuv) * (1.0 - smoothstep(0.96, 1.0, tuv));
+        float inText = uTextAmt * border.x * border.y;
+        vec2 ink = vec2(0.0);
+        float strokes = 0.0;
+        float flow = 0.5;
+        if (inText > 0.0) {
+          ink = texture2D(uText, tuv).rg;
+          strokes = min(1.0, ink.r + ink.g);
+          vec2 dx = vec2(uTextTexel.x * 1.5, 0.0), dz = vec2(0.0, uTextTexel.y * 1.5);
+          float hx = dot(texture2D(uText, tuv + dx).rg - texture2D(uText, tuv - dx).rg, vec2(1.0));
+          float hz = dot(texture2D(uText, tuv + dz).rg - texture2D(uText, tuv - dz).rg, vec2(1.0));
+          /* Streaks: noise stretched along the stroke into thin running lines, sharpened. */
+          flow = noise(vec2(p.x * 0.9 - uTime * 1.2, p.y * 16.0)) * 0.6 + noise(vec2(p.x * 2.2 - uTime * 2.0, p.y * 31.0)) * 0.4;
+          flow = smoothstep(0.35, 0.8, flow);
+          slope = slope * (1.0 - 0.6 * strokes) + vec2(hx, hz) * 1.4 * inText + vec2(0.0, (flow - 0.5) * 0.5 * strokes);
         }
         vec3 N = normalize(vec3(-slope.x, 1.0, -slope.y));
 
@@ -125,6 +154,14 @@ export function createLake(renderer: THREE.WebGLRenderer, { level, room, sun }: 
         vec3 R = reflect(-V, N);
         float rl = max(dot(R, uSun), 0.0);
         colour += vec3(4.2, 3.4, 2.4) * (pow(rl, 90.0) * 0.6 + pow(rl, 1400.0) * 14.0) * (1.0 - 0.7 * uDark);
+
+        /* The strokes: lighter, clearer water with streaks running through, a foam lip at the edges. */
+        if (strokes > 0.0) {
+          vec3 stroke = mix(vec3(0.80, 0.87, 1.0), vec3(0.62, 0.68, 1.0), ink.g / max(strokes, 1e-3));
+          colour = mix(colour, stroke * (0.55 + 0.75 * flow), strokes * 0.48 * inText);
+          float lip = smoothstep(0.06, 0.28, strokes) * (1.0 - smoothstep(0.3, 0.62, strokes));
+          colour += vec3(0.9, 0.95, 1.0) * lip * 0.4 * inText;
+        }
 
         /* Contact: the slab darkens the water hugging it, and a lacy wet line laps at the edge. */
         colour *= mix(0.55, 1.0, smoothstep(0.0, 0.9, edge));
