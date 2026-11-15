@@ -17,6 +17,7 @@ import { interludeBus } from "@/lib/interlude-bus";
 import { createGovernor, qualityTiers, type QualityTier } from "@/lib/render-quality";
 import { steelMaterial, studioEnvironment } from "@/lib/lab-materials";
 import { batchScene, PROXY_LAYER } from "@/lib/batch-scene";
+import { createLake } from "@/lib/lab-lake";
 
 export type FocusStation = "terminal" | "core" | "tank" | "bench" | "rack";
 export type StationId = "overview" | FocusStation | "free";
@@ -850,6 +851,20 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     // ~900 meshes become ~40 draws: the scene graph stays as proxies, the batches draw it.
     const batcher = batchScene(root, scene);
     host.dataset.batched = String(batcher.saved);
+    // The lab stands in a still lake that dissolves into the page.
+    const lake = createLake(renderer, {
+      level: -0.26,
+      room: { x: ROOM_CENTER_X, z: ROOM_CENTER_Z, halfW: ROOM_WIDTH / 2, halfD: ROOM_DEPTH / 2 },
+      sun: SUN_DIR,
+    });
+    scene.add(lake.mesh);
+    const drawingSize = new THREE.Vector2();
+    /** The page colour is the scene's backdrop; on the dark theme the lake turns to night water. */
+    const paintBackdrop = () => {
+      const bg = new THREE.Color(getComputedStyle(document.body).backgroundColor || BACKDROP);
+      scene.background = bg;
+      lake.uniforms.uDark.value = bg.getHSL({ h: 0, s: 0, l: 0 }).l < 0.5 ? 1 : 0;
+    };
 
     // ---------- The interlude headline, in clay ----------
     // lab-interlude simulates the pixel headline; here every pixel becomes a small rounded clay block
@@ -1089,11 +1104,13 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       stage.style.top = `${host.getBoundingClientRect().top + window.scrollY}px`;
       stage.style.width = `${width}px`;
       stage.style.height = `${height}px`;
-      scene.background = new THREE.Color(getComputedStyle(document.body).backgroundColor || BACKDROP);
+      paintBackdrop();
       keys = timeline();
       measureContent();
       composer.setPixelRatio(renderer.getPixelRatio());
       composer.setSize(width, height);
+      renderer.getDrawingBufferSize(drawingSize);
+      lake.setSize(drawingSize.x, drawingSize.y);
       if (stationRef.current === "overview" && !zoomedRef.current) goal.radius = overviewRadius();
       else goal.radius = Math.min(goal.radius, overviewRadius());
     };
@@ -1408,6 +1425,12 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       if (stageOpacity > 0 && !coveredByJournal) {
         scene.updateMatrixWorld();
         batcher.sync();
+        // The lake belongs to the whole room: it drains away as the room bursts apart.
+        const lakeFade = from === 0 ? clamp(1 - mix / 0.45, 0, 1) : 0;
+        lake.uniforms.uFade.value = lakeFade;
+        lake.mesh.visible = lakeFade > 0.01;
+        if (!calm) lake.uniforms.uTime.value = animT;
+        if (lake.mesh.visible) lake.renderReflection(scene, camera, [sunShaft, clayText]);
         // AO only while the assembled room is on screen; the debris reads fine without it.
         if (useAO && nearRoom) composer.render(dt);
         else renderer.render(scene, camera);
@@ -1430,7 +1453,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     };
     // A theme change repaints the page colour; the scene's backdrop follows it.
     const onMotionChange = () => {
-      scene.background = new THREE.Color(getComputedStyle(document.body).backgroundColor || BACKDROP);
+      paintBackdrop();
       wake();
     };
     // The sticky hero is still intersecting when the content sheet completely covers it.
@@ -1497,6 +1520,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       gtao.dispose();
       composer.dispose();
       batcher.dispose();
+      lake.dispose();
       renderer.dispose();
       // Hand the GPU context back now. Without this every hot reload leaks one, and the
       // browser eventually refuses to create any more.
