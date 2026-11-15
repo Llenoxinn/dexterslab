@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { ensurePixelBuffers, interludeBus } from "@/lib/interlude-bus";
 
 const BEATS = [
   { lines: ["LET THE", "CODE BEGIN!"], label: "Begin" },
@@ -102,16 +103,18 @@ export function LabInterlude() {
       o.textBaseline = "middle";
       // One size for all four phrases, so the type doesn't jump between beats.
       o.font = `${weight} ${wanted}px ${family}`;
-      o.letterSpacing = `${-0.04 * wanted}px`;
+      o.letterSpacing = `${0.005 * wanted}px`;
       const widest = Math.max(...BEATS.flatMap((b) => b.lines.map((l) => o.measureText(l).width)));
       const size = Math.min(wanted, (wanted * width * 0.88) / Math.max(1, widest));
       o.font = `${weight} ${size}px ${family}`;
-      o.letterSpacing = `${-0.04 * size}px`;
+      // Pixelated letters need a little air, or neighbours merge into one blob.
+      o.letterSpacing = `${0.005 * size}px`;
       o.textBaseline = "alphabetic";
       // The grid is locked to the cap height: exactly `rows` cells from cap line to baseline, so
       // every letter is the same number of pixels tall and round letters can't poke out of the band.
       const capH = o.measureText("H").actualBoundingBoxAscent || size * 0.72;
-      const rows = Math.max(7, Math.round(capH / Math.max(4, size / 13)));
+      // ~13 blocks per cap height: fine enough that round letters keep their shape.
+      const rows = Math.max(9, Math.round(capH / Math.max(4, size / 18)));
       cell = Math.max(4, Math.round(capH / rows));
       const band = rows * cell;
       const gap = band * 0.42;
@@ -174,10 +177,20 @@ export function LabInterlude() {
       pixels.forEach((p, i) => {
         home(p, i, b);
         if (fromEdges) {
-          const a = rand() * Math.PI * 2;
-          const reach = Math.max(width, height) * (0.65 + rand() * 0.5);
-          p.x = width / 2 + Math.cos(a) * reach;
-          p.y = height / 2 + Math.sin(a) * reach * 0.8;
+          // Start from the exploded lab: each block sets off from a real piece of debris on screen
+          // (shared by the 3D scene), so the wreckage visibly becomes the words.
+          const debris = interludeBus.debris;
+          if (debris.length) {
+            const [dx, dy] = debris[Math.floor(rand() * debris.length)];
+            const r = stage.getBoundingClientRect();
+            p.x = dx - r.left + (rand() - 0.5) * 40;
+            p.y = dy - r.top + (rand() - 0.5) * 40;
+          } else {
+            const a = rand() * Math.PI * 2;
+            const reach = Math.max(width, height) * (0.65 + rand() * 0.5);
+            p.x = width / 2 + Math.cos(a) * reach;
+            p.y = height / 2 + Math.sin(a) * reach * 0.8;
+          }
         }
         p.sx = p.x;
         p.sy = p.y;
@@ -188,6 +201,10 @@ export function LabInterlude() {
       });
       flightAt = performance.now();
       flightEnd = pixels.reduce((m, p) => Math.max(m, p.delay), 0) + FLY;
+      if (fromEdges) {
+        interludeBus.assembleAt = flightAt;
+        interludeBus.landAt = flightAt + flightEnd * 1000;
+      }
       hitDone = false;
       beat = b;
       wake();
@@ -246,11 +263,19 @@ export function LabInterlude() {
       const damp = Math.exp(-dt * 9);
       const reach = Math.max(70, cell * 18);
       const size = cell - 1; // the 1px gap is what makes it read as pixels
-      const tints = new Float32Array(pixels.length);
+      // The simulation also feeds the 3D scene, which renders these blocks as clay when it can.
+      const bus = ensurePixelBuffers(pixels.length);
+      const origin = stage.getBoundingClientRect();
+      bus.cell = cell;
+      bus.at = now;
+      const flat = !interludeBus.clay; // draw the 2D pixels only when the clay version isn't showing
+      const tints = bus.tint;
 
       for (let i = 0; i < pixels.length; i++) {
         const p = pixels[i];
         const local = (t - p.delay) / FLY;
+        tints[i] = 0;
+        bus.alpha[i] = 1;
         if (local < 1) {
           const e = local <= 0 ? 0 : first ? easeOut(local) : easeInOut(local);
           // A curved path: the pixel bows out sideways mid-flight, so the words swirl into each other.
@@ -259,8 +284,13 @@ export function LabInterlude() {
           const bow = Math.sin(e * Math.PI) * p.curl;
           p.x = p.sx + dx * e - dy * bow;
           p.y = p.sy + dy * e + dx * bow;
-          ctx.globalAlpha = first ? Math.min(1, 0.35 + Math.max(0, local)) : 1;
-          if (first && local <= 0) continue;
+          const alpha = first ? (local <= 0 ? 0 : Math.min(1, 0.35 + local)) : 1;
+          bus.alpha[i] = alpha;
+          bus.x[i] = origin.left + p.x;
+          bus.y[i] = origin.top + p.y;
+          bus.row[i] = p.row;
+          ctx.globalAlpha = alpha;
+          if (alpha <= 0) continue;
         } else {
           let fx = 0;
           let fy = 0;
@@ -281,13 +311,17 @@ export function LabInterlude() {
           p.x += p.vx * dt * 10;
           p.y += p.vy * dt * 10;
           tints[i] = Math.max(flash, lift * 0.85);
+          bus.x[i] = origin.left + p.x;
+          bus.y[i] = origin.top + p.y;
+          bus.row[i] = p.row;
           ctx.globalAlpha = 1;
         }
+        if (!flat) continue;
         ctx.fillStyle = colors[p.row] ?? colors[0];
         ctx.fillRect(Math.round(p.x), Math.round(p.y), size, size);
       }
       ctx.fillStyle = neon;
-      for (let i = 0; i < pixels.length; i++) {
+      for (let i = 0; flat && i < pixels.length; i++) {
         if (tints[i] < 0.02) continue;
         ctx.globalAlpha = tints[i];
         ctx.fillRect(Math.round(pixels[i].x), Math.round(pixels[i].y), size, size);
@@ -327,6 +361,7 @@ export function LabInterlude() {
         armed = false;
         first = true;
         beat = -1;
+        if (interludeBus.pixels) interludeBus.pixels.count = 0;
         ctx.clearRect(0, 0, width, height);
       }
     }, { rootMargin: "0px 0px -45% 0px" });
@@ -357,6 +392,7 @@ export function LabInterlude() {
     document.addEventListener("visibilitychange", wake);
     return () => {
       cancelAnimationFrame(raf);
+      interludeBus.pixels = null;
       trigger.disconnect();
       onScreen.disconnect();
       ro.disconnect();

@@ -13,6 +13,7 @@ import { ASSEMBLE_SECONDS, STAGES, STAGE_OPACITY, createJourney } from "@/lib/la
 import { addLabProps } from "@/lib/lab-props";
 import { CONTACT_SPIRAL_SECONDS, CONTACT_WORD_COLUMNS, type ContactChoreography } from "@/lib/contact-choreography";
 import { createStudioWindows, STUDIO_BACK_WINDOW, STUDIO_SUN_DIRECTION } from "@/lib/studio-daylight";
+import { interludeBus } from "@/lib/interlude-bus";
 
 export type FocusStation = "terminal" | "core" | "tank" | "bench" | "rack";
 export type StationId = "overview" | FocusStation | "free";
@@ -31,6 +32,7 @@ const LAVENDER = 0xcbcbef;
 const PAPER = 0xf6f6fc;
 
 const DEG = Math.PI / 180;
+const smoothstep01 = (t: number) => { const x = Math.min(1, Math.max(0, t)); return x * x * (3 - 2 * x); };
 const LIMITS = { thetaMin: -60 * DEG, thetaMax: 60 * DEG, phiMin: 38 * DEG, phiMax: 88 * DEG, radiusMin: 2.6 };
 /** The lab is a diorama seen from outside; these bounds only keep the camera above the table and out of the back wall. */
 const ROOM = { x: 40, zFront: 40, yMin: 0.6, yMax: 40 };
@@ -49,7 +51,7 @@ const BACKDROP = 0xeef0f6;
 type Preset = { target: [number, number, number]; theta: number; phi: number; radius: number };
 
 // Slight three-quarter corner view (matching the diorama's natural front-left-wall framing).
-const OVERVIEW: Preset = { target: [2.6, 1.4, 2.4], theta: 16 * DEG, phi: 56 * DEG, radius: 34.5 };
+const OVERVIEW: Preset = { target: [2.6, 1.4, 2.4], theta: 16 * DEG, phi: 56 * DEG, radius: 33.5 };
 
 const PRESETS: Record<FocusStation, Preset> = {
   terminal: { target: [0.75, 1.75, -3.3], theta: 14 * DEG, phi: 80 * DEG, radius: 4.6 },
@@ -699,7 +701,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, roomy ? 2 : 1.5));
     renderer.setClearColor(0x000000, 0);
     renderer.toneMapping = THREE.NeutralToneMapping;
-    renderer.toneMappingExposure = 1;
+    renderer.toneMappingExposure = 1.14; // the room sits in wall shade now; lift it so the clay reads light
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.shadowMap.autoUpdate = false;
@@ -709,26 +711,27 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
 
     // Daylight on a white model: a soft sky fill, and one low sun through the window doing the drawing.
     scene.background = new THREE.Color(BACKDROP);
-    scene.add(new THREE.HemisphereLight(0xf0f5ff, 0xd9d9e4, 1.25));
+    scene.add(new THREE.HemisphereLight(0xf0f5ff, 0xd9d9e4, 1.05));
     const SUN_DIR = STUDIO_SUN_DIRECTION;
     const SUN_AT = new THREE.Vector3(ROOM_CENTER_X, 0, ROOM_CENTER_Z);
-    const key = new THREE.DirectionalLight(0xfff1e2, 2.7);
-    key.position.copy(SUN_AT).addScaledVector(SUN_DIR, 26);
+    const key = new THREE.DirectionalLight(0xfff1e2, 4.6);
+    key.position.copy(SUN_AT).addScaledVector(SUN_DIR, 32);
     key.target.position.copy(SUN_AT);
     key.castShadow = true;
     // Keep small props and window slats crisp; cap the map for smaller GPUs.
     key.shadow.mapSize.setScalar(Math.min(renderer.capabilities.maxTextureSize, roomy ? 4096 : 2048));
-    key.shadow.camera.left = -13.5;
-    key.shadow.camera.right = 13.5;
-    key.shadow.camera.top = 11;
-    key.shadow.camera.bottom = -11;
-    key.shadow.camera.near = 8;
-    key.shadow.camera.far = 46;
+    // The low sun sees the room at a grazing angle, so its shadow box is longer than the floor.
+    key.shadow.camera.left = -15;
+    key.shadow.camera.right = 15;
+    key.shadow.camera.top = 13;
+    key.shadow.camera.bottom = -13;
+    key.shadow.camera.near = 10;
+    key.shadow.camera.far = 62;
     key.shadow.bias = -0.00012;
     key.shadow.normalBias = 0.012;
     // A slightly soft edge and a touch of fill inside the shadow: sunlit, not cut out.
     key.shadow.radius = roomy ? 3 : 1.5;
-    key.shadow.intensity = 0.76;
+    key.shadow.intensity = 0.88;
     scene.add(key, key.target);
     // A shadowless fill from the viewer's side keeps the inside of the walls white, not grey.
     const fill = new THREE.DirectionalLight(0xe9efff, 0.7);
@@ -785,6 +788,95 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       ),
     });
     const sunShaft = scene.getObjectByName("sun-shaft");
+
+    // ---------- The interlude headline, in clay ----------
+    // lab-interlude simulates the pixel headline; here every pixel becomes a small rounded clay block
+    // in the same matte material as the lab's DOS-blue hardware, lit by the same sun and sky.
+    const CLAY_TEXT_MAX = 6000;
+    const clayText = new THREE.InstancedMesh(
+      new RoundedBoxGeometry(1, 1, 1, 2, 0.16),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0 }),
+      CLAY_TEXT_MAX,
+    );
+    clayText.name = "interlude-clay-text";
+    clayText.frustumCulled = false;
+    clayText.count = 0;
+    clayText.visible = false;
+    clayText.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(clayText);
+    const textInk = [new THREE.Color(0x14168a), new THREE.Color(ACCENT)];
+    // On the dark theme the headline turns to pale clay, so it reads against the night page.
+    const textInkDark = [new THREE.Color(0xeef0ff), new THREE.Color(0xa9b1ff)];
+    const textNeon = new THREE.Color(0x8c9df5);
+    const textColor = new THREE.Color();
+    const textCam = new THREE.Vector3();
+    const textRay = new THREE.Vector3();
+    const textPos = new THREE.Vector3();
+    const textQuat = new THREE.Quaternion();
+    const textTilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.32, 0, 0));
+    const textScale = new THREE.Vector3();
+    const textMatrix = new THREE.Matrix4();
+    const debrisProbe = new THREE.Vector3();
+    let debrisFrame = 0;
+    const TEXT_DEPTH = 24;
+    /** 0..1: debris diving into the headline. Dives in over the flight, holds, then drifts back out. */
+    const absorbAmount = (now: number) => {
+      const { assembleAt, landAt } = interludeBus;
+      if (!assembleAt || isCalm()) return 0;
+      const fly = Math.max(1, landAt - assembleAt);
+      const t = now - assembleAt;
+      if (t < 0 || t > fly + 2200) return 0;
+      if (t < fly * 0.6) return smoothstep01(t / (fly * 0.6));
+      if (t < fly + 400) return 1;
+      return 1 - smoothstep01((t - fly - 400) / 1800);
+    };
+    /** Places the clay blocks where the interlude's pixels are; returns whether it drew any. */
+    const updateClayText = (calm: boolean) => {
+      const px = interludeBus.pixels;
+      const live = !calm && !!px && px.count > 0 && performance.now() - px.at < 300;
+      clayText.visible = live;
+      interludeBus.clay = live;
+      if (!live || !px) {
+        clayText.count = 0;
+        return;
+      }
+      const rect = stage.getBoundingClientRect();
+      camera.getWorldPosition(textCam);
+      textQuat.copy(camera.quaternion).multiply(textTilt);
+      // World units per CSS pixel at the text's distance from the lens.
+      const perPx = (2 * TEXT_DEPTH * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / height;
+      const side = Math.max(0.001, (px.cell - 1) * perPx);
+      const count = Math.min(px.count, CLAY_TEXT_MAX);
+      const ink = document.documentElement.dataset.labTheme === "phosphor" ? textInkDark : textInk;
+      for (let i = 0; i < count; i++) {
+        const a = px.alpha[i];
+        const nx = ((px.x[i] + px.cell / 2 - rect.left) / width) * 2 - 1;
+        const ny = -(((px.y[i] + px.cell / 2 - rect.top) / height) * 2 - 1);
+        textRay.set(nx, ny, 0.5).unproject(camera).sub(textCam).normalize();
+        textPos.copy(textCam).addScaledVector(textRay, TEXT_DEPTH);
+        // Blocks grow in as they arrive, like debris settling into place.
+        textScale.set(side, side, side * 1.5).multiplyScalar(a <= 0 ? 0.0001 : 0.35 + 0.65 * a);
+        textMatrix.compose(textPos, textQuat, textScale);
+        clayText.setMatrixAt(i, textMatrix);
+        textColor.copy(ink[px.row[i]] ?? ink[0]).lerp(textNeon, px.tint[i]);
+        clayText.setColorAt(i, textColor);
+      }
+      clayText.count = count;
+      clayText.instanceMatrix.needsUpdate = true;
+      if (clayText.instanceColor) clayText.instanceColor.needsUpdate = true;
+    };
+    /** Screen positions of the exploded pieces, so the interlude's first blocks start from the debris. */
+    const shareDebris = () => {
+      const rect = stage.getBoundingClientRect();
+      const out: Array<[number, number]> = [];
+      for (const piece of journey.pieces) {
+        if (!piece.obj.visible || out.length >= 220) continue;
+        debrisProbe.setFromMatrixPosition(piece.obj.matrixWorld).project(camera);
+        if (Math.abs(debrisProbe.x) > 1.1 || Math.abs(debrisProbe.y) > 1.1 || debrisProbe.z > 1) continue;
+        out.push([rect.left + ((debrisProbe.x + 1) / 2) * width, rect.top + ((1 - debrisProbe.y) / 2) * height]);
+      }
+      interludeBus.debris = out;
+    };
     let journeyWasOn = false;
     let journalEl: HTMLElement | null = null;
     const interludeEl = document.getElementById("interlude");
@@ -921,8 +1013,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       camera.lookAt(cur.target);
       // The overview shifts the room slightly left on wide screens so /dev/dexter sits in clean space on the right.
       const wide = width >= 900;
-      const dx = (wide ? 0.11 : 0) * width * cur.shift;
-      const dy = (wide ? -0.03 : -0.14) * height * cur.shift;
+      const dx = (wide ? 0.17 : 0) * width * cur.shift;
+      const dy = (wide ? -0.065 : -0.14) * height * cur.shift;
       camera.setViewOffset(width, height, dx, dy, width, height);
     };
 
@@ -1090,6 +1182,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     const onContextLost = (e: Event) => {
       e.preventDefault();
       contextLost = true;
+      interludeBus.clay = false; // let the flat headline take over while the GPU is gone
       // A GPU that can't keep up with AO drops the context; come back without it.
       useAO = false;
     };
@@ -1182,6 +1275,14 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         time: animT,
         scroll: scrolled,
         interlude: clamp((scrolled - interludeTop) / interludeSpan, 0, 1),
+        dt,
+        absorb: absorbAmount(now),
+        absorbY: (() => {
+          const pin = interludeEl?.querySelector(".lab-interlude-pin")?.getBoundingClientRect();
+          const top = stage.getBoundingClientRect().top;
+          return pin ? 1 - ((pin.top + pin.height * 0.49 - top) / height) * 2 : 0;
+        })(),
+        contactTop: contactEl ? 1 - ((contactEl.getBoundingClientRect().top - stage.getBoundingClientRect().top) / height) * 2 : 1,
         contentEdge,
         pointer: pointerOn ? pointerNdc : null,
         contact: contactPose,
@@ -1191,6 +1292,9 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         built,
       });
       journeyWasOn = journeyOn;
+      updateClayText(calm);
+      // Around the burst and the spiral, keep the debris positions fresh for the interlude.
+      if (!calm && from >= 1 && from <= 2 && debrisFrame++ % 10 === 0) shareDebris();
       // The station buttons only make sense while the room is whole.
       heroShell?.classList.toggle("is-burst", from > 0 || mix > 0.04);
       if (sunShaft) sunShaft.visible = from === 0 && mix < 0.5 && shellOpacity > 0.5;
@@ -1202,7 +1306,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       }
 
       // Shadows follow every frame while pieces are landing or leaving the floor.
-      if (shadowFrame % (from === 0 ? 1 : 4) === 0) renderer.shadowMap.needsUpdate = true;
+      // Only the room needs its shadows; once it has blown apart, the GPU can skip them entirely.
+      if (from === 0 && (mix < 0.6 || shadowFrame % 4 === 0)) renderer.shadowMap.needsUpdate = true;
       shadowFrame += 1;
       // The journal is a full-screen scene of its own with an opaque backdrop. While it covers the
       // viewport this layer is invisible, so it stops drawing and leaves the GPU to the journal.
@@ -1227,7 +1332,11 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       last = performance.now();
       raf = requestAnimationFrame(frame);
     };
-    const onMotionChange = () => wake();
+    // A theme change repaints the page colour; the scene's backdrop follows it.
+    const onMotionChange = () => {
+      scene.background = new THREE.Color(getComputedStyle(document.body).backgroundColor || BACKDROP);
+      wake();
+    };
     // The sticky hero is still intersecting when the content sheet completely covers it.
     const coverObserver = new IntersectionObserver(([entry]) => {
       covered = entry.boundingClientRect.bottom <= 64;
@@ -1297,6 +1406,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       renderer.forceContextLoss();
       renderer.domElement.remove();
       stage.remove();
+      interludeBus.clay = false;
+      interludeBus.debris = [];
     };
   }, []);
 
@@ -1308,14 +1419,6 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     <>
       <div ref={hostRef} className="lab-3d-viewport-canvas" aria-hidden="true">
         <div ref={tipRef} className="lab-3d-tip" hidden />
-      </div>
-      <div className="lab-3d-zoom" role="group" aria-label="Zoom the 3D lab" hidden={zoomed}>
-        <button type="button" className="ndev-specimen-btn" aria-label="Zoom in" onClick={() => apiRef.current?.zoomBy(0.7)}>
-          +
-        </button>
-        <button type="button" className="ndev-specimen-btn" aria-label="Zoom out" onClick={() => apiRef.current?.zoomBy(1 / 0.7)}>
-          −
-        </button>
       </div>
     </>
   );
