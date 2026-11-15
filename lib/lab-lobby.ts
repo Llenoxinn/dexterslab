@@ -77,6 +77,7 @@ type Piece = {
   obj: THREE.Object3D;
   homePos: THREE.Vector3;
   homeQuat: THREE.Quaternion;
+  homeScale: THREE.Vector3;
   dir: THREE.Vector3;
   spin: THREE.Vector3;
   sink: number;
@@ -189,6 +190,7 @@ export function createLobby(options: {
       obj,
       homePos: obj.position.clone(),
       homeQuat: obj.quaternion.clone(),
+      homeScale: obj.scale.clone(),
       dir,
       spin: new THREE.Vector3(rand() - 0.5, rand() - 0.5, rand() - 0.5).multiplyScalar(5),
       sink: 1 + rand() * 2.5,
@@ -254,6 +256,8 @@ export function createLobby(options: {
       for (const p of pieces) {
         p.obj.position.copy(p.homePos).add(blastOffset(thrown, p.dir, p.sink, offset));
         p.obj.quaternion.copy(p.homeQuat);
+        // Scale too: the journey rescales the guests, and reads this pose back as their home.
+        p.obj.scale.copy(p.homeScale);
         if (p.emblem >= 0) {
           turn.setFromAxisAngle(UP, time * (0.25 + p.emblem * 0.04) + p.emblem);
           p.obj.quaternion.multiply(turn);
