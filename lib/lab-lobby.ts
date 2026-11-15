@@ -3,9 +3,10 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 
 /*
  * The lobby under the lake: the room you pass through before the lab. A clay hall with a curved back
- * wall ribbed in steel, and one plinth for each group of the toolkit (the prerequisites), each with
- * its name cut into the face and a clay emblem on top. Built from the lab's own materials: the clay
- * ramp, DOS blue and brushed steel, so it reads as the same world one level down.
+ * wall ribbed in steel, and one plinth for each group of the toolkit (the prerequisites), each with a
+ * clay or steel emblem on top; the page beside it names the groups in the same order. Built from the
+ * lab's own materials (the clay ramp, DOS blue, brushed steel) so it reads as the same world one level
+ * down, with marine snow drifting through the light.
  */
 
 export type LobbyMaterials = {
@@ -14,27 +15,6 @@ export type LobbyMaterials = {
   accent: THREE.Material;
   steel: THREE.Material;
 };
-
-const LABEL_INK = "#14168a";
-
-function labelTexture(text: string, font: string) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 160;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas 2D is unavailable.");
-  ctx.fillStyle = "#e8e9f0";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = LABEL_INK;
-  ctx.font = `700 64px ${font}`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 4);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
-  return texture;
-}
 
 /** One emblem per toolkit group: simple clay forms, distinct in silhouette. */
 function emblem(index: number, m: LobbyMaterials): THREE.Object3D {
@@ -81,13 +61,11 @@ export function createLobby(options: {
   center: THREE.Vector3;
   groups: readonly string[];
   materials: LobbyMaterials;
-  font: string;
 }) {
   const { center, groups, materials: m } = options;
   const lobby = new THREE.Group();
   lobby.name = "lobby";
   lobby.position.copy(center);
-  const textures: THREE.Texture[] = [];
   const spinners: THREE.Object3D[] = [];
 
   // Floor: a round clay slab with a darker inset ring.
@@ -127,26 +105,30 @@ export function createLobby(options: {
     body.position.y = 0.85;
     const cap = new THREE.Mesh(new RoundedBoxGeometry(1.7, 0.14, 1.7, 2, 0.05), m.clay[3]);
     cap.position.y = 1.77;
-    const texture = labelTexture(name, options.font);
-    textures.push(texture);
-    const label = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.36, 0.425),
-      new THREE.MeshStandardMaterial({ map: texture, roughness: 0.9, metalness: 0 }),
-    );
-    label.position.set(0, 1.2, 0.752);
+    plinth.name = name;
     const mark = emblem(i, m);
     mark.position.y = 2.45;
     spinners.push(mark);
-    plinth.add(body, cap, label, mark);
+    plinth.add(body, cap, mark);
     lobby.add(plinth);
   });
 
-  // A reception desk at the centre front, where the path from the surface lands.
-  const desk = new THREE.Mesh(new RoundedBoxGeometry(3.2, 1.1, 1.0, 3, 0.1), m.accent);
-  desk.position.set(0, 0.55, 3.6);
-  const top = new THREE.Mesh(new RoundedBoxGeometry(3.4, 0.1, 1.2, 2, 0.04), m.steel);
-  top.position.set(0, 1.15, 3.6);
-  lobby.add(desk, top);
+  // Marine snow: motes drifting slowly through the beams, so the water reads as a volume.
+  const SNOW = 420;
+  const snowPositions = new Float32Array(SNOW * 3);
+  let seed = 5;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+  for (let i = 0; i < SNOW; i++) {
+    const a = rand() * Math.PI * 2;
+    const r = Math.sqrt(rand()) * 11;
+    snowPositions.set([Math.sin(a) * r, rand() * 9, Math.cos(a) * r + 2], i * 3);
+  }
+  const snowGeometry = new THREE.BufferGeometry();
+  snowGeometry.setAttribute("position", new THREE.BufferAttribute(snowPositions, 3));
+  const snowMaterial = new THREE.PointsMaterial({ color: 0xc9cfef, size: 0.05, transparent: true, opacity: 0.55, depthWrite: false });
+  const snow = new THREE.Points(snowGeometry, snowMaterial);
+  snow.frustumCulled = false;
+  lobby.add(snow);
 
   lobby.traverse((o) => {
     if (o instanceof THREE.Mesh) {
@@ -160,18 +142,20 @@ export function createLobby(options: {
     group: lobby,
     /** Emblems turn slowly, each at its own rate. */
     tick(time: number) {
+      snow.rotation.y = time * 0.012;
+      snow.position.y = Math.sin(time * 0.15) * 0.25;
       spinners.forEach((s, i) => {
         s.rotation.y = time * (0.25 + i * 0.04) + i;
         s.position.y = 2.45 + Math.sin(time * 0.8 + i) * 0.06;
       });
     },
     dispose() {
-      textures.forEach((t) => t.dispose());
       wallMaterial.dispose();
+      snowGeometry.dispose();
+      snowMaterial.dispose();
       lobby.traverse((o) => {
         if (o instanceof THREE.Mesh) {
           o.geometry.dispose();
-          if (o.material instanceof THREE.MeshStandardMaterial && o.material.map) o.material.dispose();
         }
       });
     },

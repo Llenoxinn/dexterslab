@@ -764,7 +764,8 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
 
     // Daylight on a white model: a soft sky fill, and one low sun through the window doing the drawing.
     scene.background = new THREE.Color(BACKDROP);
-    scene.add(new THREE.HemisphereLight(0xf4f7ff, 0xe4e4ee, 1.55));
+    const hemi = new THREE.HemisphereLight(0xf4f7ff, 0xe4e4ee, 1.55);
+    scene.add(hemi);
     const SUN_DIR = STUDIO_SUN_DIRECTION;
     const SUN_AT = new THREE.Vector3(ROOM_CENTER_X, 0, ROOM_CENTER_Z);
     const key = new THREE.DirectionalLight(0xfff1e2, 4.6);
@@ -940,9 +941,10 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       target: new THREE.Vector3(ROOM_CENTER_X + 1, WATER_LEVEL, ROOM_FRONT + 6.5),
     };
     const lobbyCenter = new THREE.Vector3(ROOM_CENTER_X, -16, ROOM_FRONT + 4);
+    // Aimed left of the hall's centre, so the plinths fill the right two-thirds and the copy owns the left.
     const lobbyBase: Pose = {
-      position: lobbyCenter.clone().add(new THREE.Vector3(0, 3.4, 13.5)),
-      target: lobbyCenter.clone().add(new THREE.Vector3(0, 1.7, -1)),
+      position: lobbyCenter.clone().add(new THREE.Vector3(-1.5, 3.6, 14.5)),
+      target: lobbyCenter.clone().add(new THREE.Vector3(-5.2, 1.8, -1)),
     };
     const lobbyPose: Pose = { position: lobbyBase.position.clone(), target: lobbyBase.target.clone() };
     const rigPose: Pose = { position: new THREE.Vector3(), target: new THREE.Vector3() };
@@ -952,11 +954,17 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       center: lobbyCenter,
       groups: STACK_GROUPS,
       materials: { clay: clayKit.steps, accent: clayKit.accent, steel },
-      font: getComputedStyle(document.body).fontFamily || "sans-serif",
     });
     scene.add(lobby.group);
     // Refracted sun: steeper under the surface, still from behind the room.
     const underwater = createUnderwater(renderer, { surfaceY: WATER_LEVEL, sun: new THREE.Vector3(-0.22, 0.8, -0.55) });
+    const lobbyCaustics = underwater.caustics(lobbyCenter, 9.6);
+    lobbyCaustics.visible = false;
+    scene.add(lobbyCaustics);
+    // Daylight as authored for the room above; under the surface it dims and cools toward the water.
+    const daylight = { hemi: hemi.intensity, fill: fill.intensity, key: key.intensity, sky: hemi.color.clone(), ground: hemi.groundColor.clone() };
+    const waterSky = new THREE.Color(0x3a4fb8);
+    const waterGround = new THREE.Color(0x0b1450);
     // Fog is always declared (one shader variant) and only thickens under the surface.
     const deepWater = new THREE.Color(0x0b1450);
     scene.fog = new THREE.FogExp2(deepWater, 0);
@@ -1482,7 +1490,12 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         camera.updateMatrixWorld();
       }
       const uw = underwaterAmount(camera.position.y, WATER_LEVEL);
-      (scene.fog as THREE.FogExp2).density = 0.06 * uw;
+      (scene.fog as THREE.FogExp2).density = 0.075 * uw;
+      hemi.intensity = daylight.hemi * (1 - 0.55 * uw);
+      hemi.color.copy(daylight.sky).lerp(waterSky, uw);
+      hemi.groundColor.copy(daylight.ground).lerp(waterGround, uw);
+      fill.intensity = daylight.fill * (1 - 0.8 * uw);
+      key.intensity = daylight.key * (1 - 0.65 * uw);
       (scene.background as THREE.Color).copy(pageColour).lerp(deepWater, uw);
       // The lobby's copy is only present while the lens is actually under the water, so it never
       // floats over the room above (surfacing for the BOOM, or scrolling back up with the lag).
@@ -1491,6 +1504,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         lobbySection.style.setProperty("--lobby-presence", presence);
       }
       lobby.group.visible = diveS > 1.02 && diveS < 2.98;
+      lobbyCaustics.visible = lobby.group.visible;
       if (lobby.group.visible && !calm) lobby.tick(animT);
       // Fully under: the lab above is out of sight, so it stops drawing (its batches follow root).
       root.visible = uw < 1;

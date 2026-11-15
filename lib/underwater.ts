@@ -120,7 +120,8 @@ export function createUnderwater(renderer: THREE.WebGLRenderer, options: { surfa
     uShaftScale: { value: 1.3 },
   };
   const march = new THREE.ShaderMaterial({
-    uniforms: { ...shared, uShaftColor: { value: new THREE.Color(0.2, 0.3, 0.62) }, uShaftGain: { value: 3.6 } },
+    // Gain 2, not the module's 3.6: the clay lobby is pale, and at 3.6 the beams flooded it.
+    uniforms: { ...shared, uShaftColor: { value: new THREE.Color(0.2, 0.3, 0.62) }, uShaftGain: { value: 2 } },
     vertexShader: VERTEX,
     fragmentShader: MARCH,
     depthTest: false,
@@ -147,7 +148,49 @@ export function createUnderwater(renderer: THREE.WebGLRenderer, options: { surfa
   quadScene.add(quad);
   const quadCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
+  /**
+   * Caustics on a floor: the same swell field focused into a moving web, so the light patterns on
+   * the ground and the beams overhead belong together. Additive, just above the floor.
+   */
+  const caustics = (center: THREE.Vector3, radius: number) => {
+    const material = new THREE.ShaderMaterial({
+      uniforms: { ...shared, uCenter: { value: center.clone() }, uRadius: { value: radius } },
+      vertexShader: "varying vec3 vWorld; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vWorld = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }",
+      fragmentShader: /* glsl */ `
+        uniform vec3 uSunDirection, uCenter;
+        uniform float uTime, uRadius;
+        varying vec3 vWorld;
+        ${LIGHT_GLSL}
+        void main() {
+          vec2 q = acrossSun(vWorld);
+          float web = pow(1. - abs(swell(q * 2.2, uTime * 1.3)), 7.) * .9 + pow(1. - abs(swell(q * 3.7 + vec2(2.3, 5.1), uTime * 1.7)), 9.) * .6;
+          float light = shaftFocus(vWorld, uTime) * 1.2 + web * .55;
+          float edge = 1. - smoothstep(uRadius * .6, uRadius, length(vWorld.xz - uCenter.xz));
+          gl_FragColor = vec4(vec3(.42, .55, .95) * light * edge * .55, 1.);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+    });
+    const mesh = new THREE.Mesh(new THREE.CircleGeometry(radius, 64), material);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.copy(center).add(new THREE.Vector3(0, 0.02, 0));
+    mesh.name = "lobby-caustics";
+    disposables.push(material, mesh.geometry);
+    return mesh;
+  };
+  const disposables: { dispose(): void }[] = [];
+
   return {
+    caustics,
+    /** Keeps the shared clock running for anything lit by the water, even on frames without the march. */
+    tick(time: number) {
+      shared.uTime.value = time;
+    },
     setSize(drawingWidth: number, drawingHeight: number) {
       const w = Math.max(1, Math.ceil(drawingWidth * 0.35));
       const h = Math.max(1, Math.ceil(drawingHeight * 0.35));
@@ -175,6 +218,7 @@ export function createUnderwater(renderer: THREE.WebGLRenderer, options: { surfa
       renderer.autoClear = autoClear;
     },
     dispose() {
+      disposables.forEach((d) => d.dispose());
       target.dispose();
       march.dispose();
       composite.dispose();
