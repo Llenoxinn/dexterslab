@@ -161,9 +161,10 @@ export function createLake(renderer: THREE.WebGLRenderer, { level, room, sun }: 
     },
     /** Mirror the scene through the water plane into the reflection target. Call before the main pass. */
     renderReflection(scene: THREE.Scene, camera: THREE.PerspectiveCamera, alsoHide: (THREE.Object3D | null | undefined)[] = []) {
-      // A still camera re-mirrors every other frame; any camera move re-mirrors at once.
-      const moved = !lastView.equals(camera.matrixWorld);
-      if (!moved && frame++ % 2 === 1) return;
+      // The idle drift moves the camera a hair every frame. Below that, re-mirror every third frame;
+      // a real move (orbit, zoom, fly-to) re-mirrors at once.
+      const moved = !lastView.elements.every((v, i) => Math.abs(v - camera.matrixWorld.elements[i]) < 4e-3);
+      if (!moved && ++frame % 3 !== 0) return;
       lastView.copy(camera.matrixWorld);
       mirror.position.set(camera.position.x, 2 * level - camera.position.y, camera.position.z);
       forward.set(0, 0, -1).applyQuaternion(camera.quaternion);

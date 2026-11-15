@@ -723,7 +723,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
 
     // Daylight on a white model: a soft sky fill, and one low sun through the window doing the drawing.
     scene.background = new THREE.Color(BACKDROP);
-    scene.add(new THREE.HemisphereLight(0xf0f5ff, 0xd9d9e4, 1.05));
+    scene.add(new THREE.HemisphereLight(0xf4f7ff, 0xe4e4ee, 1.55));
     const SUN_DIR = STUDIO_SUN_DIRECTION;
     const SUN_AT = new THREE.Vector3(ROOM_CENTER_X, 0, ROOM_CENTER_Z);
     const key = new THREE.DirectionalLight(0xfff1e2, 4.6);
@@ -746,7 +746,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     key.shadow.intensity = 0.88;
     scene.add(key, key.target);
     // A shadowless fill from the viewer's side keeps the inside of the walls white, not grey.
-    const fill = new THREE.DirectionalLight(0xe9efff, 0.7);
+    const fill = new THREE.DirectionalLight(0xeef2ff, 1.05);
     fill.position.set(10, 6, 14);
     scene.add(fill);
 
@@ -785,7 +785,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     // Occlusion only changes when the camera or the room moves. While both hold still, the last
     // denoised AO is blended again and recomputed every few frames: the clay keeps its contact
     // shading at a fraction of the cost (it was the hero's stutter on integrated GPUs).
-    const AO_REUSE_FRAMES = 12;
+    const AO_REUSE_FRAMES = 8;
     let aoAge = Infinity;
     const aoView = new THREE.Matrix4();
     const gtaoInternals = gtao as unknown as {
@@ -795,7 +795,9 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       _renderPass: (r: THREE.WebGLRenderer, m: THREE.Material, t: THREE.WebGLRenderTarget | null) => void;
     };
     const gtaoRender = gtao.render.bind(gtao);
-    const sameView = (a: THREE.Matrix4, b: THREE.Matrix4) => a.elements.every((v, i) => Math.abs(v - b.elements[i]) < 1e-5);
+    // The idle drift moves the camera a hair every frame; AO is blurred at half resolution, so only a
+    // real move (orbit, zoom, fly-to) needs it at once. Anything smaller waits for the next refresh.
+    const sameView = (a: THREE.Matrix4, b: THREE.Matrix4) => a.elements.every((v, i) => Math.abs(v - b.elements[i]) < 4e-3);
     gtao.render = (r, writeBuffer, readBuffer, delta, mask) => {
       if (aoAge >= AO_REUSE_FRAMES || !sameView(aoView, camera.matrixWorld)) {
         aoView.copy(camera.matrixWorld);
