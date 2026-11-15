@@ -159,11 +159,41 @@ export function paperFibreTexture(size = 1024): THREE.Texture {
   return texture;
 }
 
-/** Fibre bump on a printed page. Shared texture; each page keeps its own map. */
-export function paperSurface(material: THREE.MeshStandardMaterial, fibre: THREE.Texture) {
+/**
+ * A printed page as paper: the fibre field bumps the surface, mottles the albedo (cloudier and
+ * thinner pulp, pale strands) and a faint warm toast ages the edges, fading to nothing inside.
+ * `extra` lets the turning leaf add its own terms to the same shader.
+ */
+export function paperSurface(
+  material: THREE.MeshStandardMaterial,
+  fibre: THREE.Texture,
+  extra?: { uniforms: Record<string, THREE.IUniform>; shader: (s: THREE.WebGLProgramParametersWithUniforms) => void; key: string },
+) {
   material.bumpMap = fibre;
   material.bumpScale = 0.9;
   material.roughness = 0.93;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uPaperFibre = { value: fibre };
+    if (extra) Object.assign(shader.uniforms, extra.uniforms);
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform sampler2D uPaperFibre;")
+      .replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>
+        #ifdef USE_MAP
+        {
+          /* The page is 1.72 x 2.36: stretch V so the fibres stay round, not tall. */
+          vec4 pf = texture2D(uPaperFibre, vMapUv * vec2(1.0, 1.37));
+          diffuseColor.rgb *= 0.965 + (pf.g - 0.5) * 0.08 + (pf.r - 0.5) * 0.05;
+          vec2 e = min(vMapUv, 1.0 - vMapUv);
+          float toast = 1.0 - smoothstep(0.0, 0.035, min(e.x, e.y));
+          diffuseColor.rgb *= mix(vec3(1.0), vec3(0.93, 0.88, 0.78), toast * 0.55);
+        }
+        #endif`,
+      );
+    extra?.shader(shader);
+  };
+  material.customProgramCacheKey = () => `lab-paper${extra ? `-${extra.key}` : ""}`;
 }
 
 /**
@@ -171,37 +201,34 @@ export function paperSurface(material: THREE.MeshStandardMaterial, fibre: THREE.
  * from behind, thinner where the formation is thin, and the ink on its other face shows through.
  */
 export function paperLeaf(material: THREE.MeshStandardMaterial, fibre: THREE.Texture) {
-  paperSurface(material, fibre);
   const uniforms = {
     uLift: { value: 0 },
     uOther: { value: null as THREE.Texture | null },
     uFibre: { value: fibre },
   };
-  material.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, uniforms);
-    shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nuniform float uLift;\nuniform sampler2D uOther;\nuniform sampler2D uFibre;")
-      .replace(
-        "#include <map_fragment>",
-        `#include <map_fragment>
-        #ifdef USE_MAP
-        float leafForm = texture2D(uFibre, vMapUv).g;
-        /* Show-through: the other face, mirrored across the leaf, is a faint grey ghost under the ink. */
-        vec3 otherInk = texture2D(uOther, vec2(1.0 - vMapUv.x, vMapUv.y)).rgb;
-        float ghost = clamp(1.0 - dot(otherInk, vec3(0.333)), 0.0, 1.0) * uLift * (0.18 + (leafForm - 0.5) * 0.2);
-        diffuseColor.rgb *= 1.0 - ghost;
-        #else
-        float leafForm = 0.5;
-        #endif`,
-      )
-      .replace(
-        "#include <emissivemap_fragment>",
-        `#include <emissivemap_fragment>
-        /* Transmitted sun: thin pulp glows warm, fibre bundles and ink hold light back. */
-        float tr = clamp(0.74 + (0.5 - leafForm) * 0.85, 0.0, 1.2);
-        totalEmissiveRadiance += vec3(1.0, 0.93, 0.8) * tr * uLift * 0.22 * (0.35 + 0.65 * dot(diffuseColor.rgb, vec3(0.333)));`,
-      );
-  };
-  material.customProgramCacheKey = () => "lab-paper-leaf";
+  paperSurface(material, fibre, {
+    uniforms,
+    key: "leaf",
+    shader: (shader) => {
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", "#include <common>\nuniform float uLift;\nuniform sampler2D uOther;\nuniform sampler2D uFibre;")
+        .replace(
+          "#include <emissivemap_fragment>",
+          `#include <emissivemap_fragment>
+          #ifdef USE_MAP
+          float leafForm = texture2D(uFibre, vMapUv).g;
+          /* Show-through: the other face, mirrored across the leaf, is a faint grey ghost under the ink. */
+          vec3 otherInk = texture2D(uOther, vec2(1.0 - vMapUv.x, vMapUv.y)).rgb;
+          float ghost = clamp(1.0 - dot(otherInk, vec3(0.333)), 0.0, 1.0) * uLift * (0.18 + (leafForm - 0.5) * 0.2);
+          diffuseColor.rgb *= 1.0 - ghost;
+          #else
+          float leafForm = 0.5;
+          #endif
+          /* Transmitted sun: thin pulp glows warm, fibre bundles and ink hold light back. */
+          float tr = clamp(0.74 + (0.5 - leafForm) * 0.85, 0.0, 1.2);
+          totalEmissiveRadiance += vec3(1.0, 0.93, 0.8) * tr * uLift * 0.22 * (0.35 + 0.65 * dot(diffuseColor.rgb, vec3(0.333)));`,
+        );
+    },
+  });
   return uniforms;
 }
