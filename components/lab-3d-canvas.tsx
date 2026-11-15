@@ -1577,8 +1577,9 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
         camera.position.y += Math.cos(animT * 47) * flash * 0.08;
         camera.updateMatrixWorld();
       }
-      // Silt thickens the water as the lobby blows, so the hall dissolves before the water clears.
-      const murk = 1 + 1.6 * clamp((boom - 0.3) / 0.45, 0, 1);
+      // Silt thickens the water as the lobby blows until the hall is gone from sight; only then does it
+      // stop drawing and the water clear (the hall must never be seen out of the water).
+      const murk = 1 + 5 * clamp((boom - 0.3) / 0.35, 0, 1);
       (scene.fog as THREE.FogExp2).density = 0.05 * water * murk;
       hemi.intensity = daylight.hemi * (1 - 0.55 * water) + flash * 2.5;
       hemi.color.copy(daylight.sky).lerp(waterSky, water);
@@ -1592,7 +1593,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       if (lobbySection && lobbySection.style.getPropertyValue("--lobby-presence") !== presence) {
         lobbySection.style.setProperty("--lobby-presence", presence);
       }
-      lobby.group.visible = diveS > 1.02 && clear < 1;
+      lobby.group.visible = diveS > 1.02 && clear < 0.05;
       lobbyCaustics.visible = lobby.group.visible && boom < 0.35;
       // Keeps ticking after the lobby hides: its guests' blast pose is where the journey picks them up.
       if (diveS > 1.02 && !calm) lobby.tick(animT, boom);
