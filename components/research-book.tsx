@@ -102,55 +102,59 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
 
   const manuscript = (entry: ResearchEntry, titleId: string, index: number) => (
     <article className="paper">
+      {/* Set like a journal's article page: discipline, title, then the citation line. */}
       <header className="paper-head">
         <p className="paper-domain">{entry.domain}</p>
         <h3 id={titleId} className="paper-title">
           {entry.shortName}
         </h3>
+        <p className="paper-citation">
+          {entry.authors.join(", ")}. {entry.institution}
+          {entry.date ? `. ${entry.date}` : ""}.
+        </p>
       </header>
 
-      <p className="paper-problem">{emphasize(entry.problem)}</p>
-
-      <section className="paper-results" aria-label="Key results">
-        {entry.results.map((r) => (
-          <div key={r.value} className="paper-result">
-            <p className="paper-result-value">{withUnit(r.value)}</p>
-            <p className="paper-result-label">{r.label}</p>
-          </div>
-        ))}
-      </section>
-
-      <div className="paper-brief">
-        <section>
-          <h4>Methods</h4>
-          <ol className="paper-methods">
-            {entry.methods.map((m) => <li key={m}>{m}</li>)}
-          </ol>
-        </section>
-        <section className="paper-conclusion">
-          <h4>Conclusion</h4>
-          <p>{emphasize(entry.conclusion)}</p>
-        </section>
-      </div>
-
-      <dl className="paper-facts">
-        <div className="paper-facts-wide">
-          <dt>Proponents</dt>
-          <dd>{entry.authors.join(" · ")}</dd>
-        </div>
-        <div className="paper-facts-wide">
-          <dt>Institution{entry.date ? " & date" : ""}</dt>
-          <dd>{entry.institution}{entry.date ? ` · ${entry.date}` : ""}</dd>
+      <dl className="paper-sections">
+        <div>
+          <dt>Problem</dt>
+          <dd><p>{emphasize(entry.problem)}</p></dd>
         </div>
         <div>
+          <dt>Methods</dt>
+          <dd>
+            <ol className="paper-methods">
+              {entry.methods.map((m) => <li key={m}>{m}</li>)}
+            </ol>
+          </dd>
+        </div>
+        <div>
+          <dt>Key results</dt>
+          <dd>
+            <table className="paper-results">
+              <tbody>
+                {entry.results.map((r) => (
+                  <tr key={r.value}>
+                    <th scope="row">{withUnit(r.value)}</th>
+                    <td>{r.label}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </dd>
+        </div>
+        <div>
+          <dt>Conclusion</dt>
+          <dd><p>{emphasize(entry.conclusion)}</p></dd>
+        </div>
+        <div className="paper-sections-meta">
           <dt>Approach</dt>
           <dd>{entry.modality}</dd>
         </div>
-        <div>
+        <div className="paper-sections-meta">
           <dt>Keywords</dt>
           <dd>{entry.tags.join(", ")}</dd>
         </div>
-        <div className="paper-facts-wide">
+        <div className="paper-sections-meta">
           <dt>Full title</dt>
           <dd>{entry.title}</dd>
         </div>
