@@ -1,6 +1,8 @@
 import * as THREE from "three";
 
-export const STUDIO_SUN_DIRECTION = new THREE.Vector3(-6, 8, -9).normalize();
+// A low afternoon sun behind the back wall: the walls shade the room and the light only gets in
+// through the windows, laying long window-and-blind patches across the floor toward the viewer.
+export const STUDIO_SUN_DIRECTION = new THREE.Vector3(-2.2, 3.7, -9).normalize();
 export const STUDIO_BACK_WINDOW = { x: 6.35, y: 4.475, z: -4.15, width: 6, height: 3.55 } as const;
 
 export function studioSunPatch() {
@@ -42,8 +44,9 @@ export function createStudioWindows(root: THREE.Group, wall: THREE.Material, sid
     }
     put(w + 0.5, 0.14, 0.65, openingX, bottom - 0.1, 0.2, frame);
     for (const offset of [-1, 1]) put(0.085, top - bottom, 0.16, openingX + offset, (bottom + top) / 2, 0.08, frame);
-    // Visible louvres cast the same stripes the visitor sees on the floor.
-    for (let i = 0; i < 8; i++) {
+    // Blinds half raised: the louvres fill the upper window (striped light), the lower panes are
+    // clear (a clean window-shaped patch with the mullion shadows).
+    for (let i = 4; i < 8; i++) {
       const slat = put(w, 0.07, 0.28, openingX, bottom + 0.35 + i * 0.4, 0.1, frame);
       slat.rotation.x = -0.35;
     }
