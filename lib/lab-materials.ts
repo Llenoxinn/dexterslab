@@ -241,3 +241,98 @@ export function paperLeaf(material: THREE.MeshStandardMaterial, fibre: THREE.Tex
   });
   return uniforms;
 }
+
+/*
+ * The sunken lobby. Both are MeshPhysicalMaterial: the clearcoat is the film of water over the
+ * surface, a sharp second highlight on top of the base response. Noise runs in object space, so the
+ * rust and the silt ride with a piece when the blast throws it. Comments in GLSL are block comments
+ * only: a line comment in an injected chunk can swallow the code after it.
+ */
+const SUNKEN_VERTEX = (shader: { vertexShader: string }) => {
+  shader.vertexShader = shader.vertexShader
+    .replace("#include <common>", "#include <common>\nvarying vec3 vSunkP;\nvarying vec3 vSunkN;")
+    .replace("#include <begin_vertex>", "#include <begin_vertex>\nvSunkP = position;\nvSunkN = normal;");
+};
+const SUNKEN_COMMON = `#include <common>\nvarying vec3 vSunkP;\nvarying vec3 vSunkN;\n${NOISE}
+  float sFbm(vec3 p) { return mNoise(p) * 0.5 + mNoise(p * 2.03) * 0.3 + mNoise(p * 4.11) * 0.2; }`;
+
+/** Clay soaked dark, with a glossy water film and a grey-brown silt crust settled on up-facing faces. */
+export function wetClayMaterial(env: THREE.Texture, color: THREE.Color): THREE.MeshPhysicalMaterial {
+  const material = new THREE.MeshPhysicalMaterial({
+    color: color.clone().multiplyScalar(0.55),
+    roughness: 0.3,
+    metalness: 0,
+    clearcoat: 1,
+    clearcoatRoughness: 0.06,
+    envMap: env,
+    envMapIntensity: 0.9,
+  });
+  material.onBeforeCompile = (shader) => {
+    SUNKEN_VERTEX(shader);
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", SUNKEN_COMMON)
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        float sUp = smoothstep(0.55, 0.9, normalize(vSunkN).y);
+        float sSilt = sUp * smoothstep(0.35, 0.7, sFbm(vSunkP * 2.4));
+        diffuseColor.rgb = mix(diffuseColor.rgb * (0.8 + 0.4 * sFbm(vSunkP * 5.0)), vec3(0.36, 0.33, 0.28), sSilt * 0.75);`,
+      )
+      .replace(
+        "#include <roughnessmap_fragment>",
+        `#include <roughnessmap_fragment>
+        roughnessFactor = clamp(0.15 + 0.3 * sFbm(vSunkP * 3.3) + sSilt * 0.3, 0.12, 0.8);`,
+      )
+      .replace(
+        "#include <lights_physical_fragment>",
+        `#include <lights_physical_fragment>
+        /* silt is matte: the water film breaks up where it has settled */
+        material.clearcoat *= 1.0 - sSilt * 0.8;`,
+      );
+  };
+  material.customProgramCacheKey = () => "lobby-wet-clay";
+  return material;
+}
+
+/** Steel after a long time under water: rust patches worn off the edges, optional verdigris, wet. */
+export function rustedSteelMaterial(env: THREE.Texture, opts: { verdigris?: boolean } = {}): THREE.MeshPhysicalMaterial {
+  const material = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color().setRGB(0.56, 0.57, 0.58, THREE.LinearSRGBColorSpace),
+    metalness: 1,
+    roughness: 0.36,
+    clearcoat: 0.6,
+    clearcoatRoughness: 0.12,
+    envMap: env,
+    envMapIntensity: 0.85,
+  });
+  const verdigris = opts.verdigris ? 1 : 0;
+  material.onBeforeCompile = (shader) => {
+    SUNKEN_VERTEX(shader);
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", SUNKEN_COMMON)
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        vec3 sN = abs(normalize(vSunkN));
+        float sEdge = 1.0 - max(sN.x, max(sN.y, sN.z));
+        float sFw = max(length(dFdx(vSunkP)), length(dFdy(vSunkP)));
+        float sFine = mix(0.5, sFbm(vSunkP * 70.0), 1.0 - smoothstep(0.15, 0.8, sFw * 70.0));
+        float sRust = smoothstep(0.35, 0.65, sFbm(vSunkP * 1.3) * 0.7 + sFine * 0.45) * (1.0 - smoothstep(0.05, 0.25, sEdge));
+        float sGreen = ${verdigris.toFixed(1)} * smoothstep(0.55, 0.75, sFbm(vSunkP * 2.7 + 9.0)) * sRust;
+        vec3 sPatina = mix(vec3(0.16, 0.055, 0.02) * (0.6 + 0.8 * sFine), vec3(0.10, 0.34, 0.27), sGreen);
+        diffuseColor.rgb = mix(diffuseColor.rgb, sPatina, sRust);`,
+      )
+      .replace(
+        "#include <roughnessmap_fragment>",
+        `#include <roughnessmap_fragment>
+        roughnessFactor = clamp(roughnessFactor + sRust * 0.42 + (sFine - 0.5) * 0.1, 0.1, 0.95);`,
+      )
+      .replace(
+        "#include <metalnessmap_fragment>",
+        `#include <metalnessmap_fragment>
+        metalnessFactor = mix(metalnessFactor, 0.28, sRust);`,
+      );
+  };
+  material.customProgramCacheKey = () => `lobby-rust-${verdigris}`;
+  return material;
+}
