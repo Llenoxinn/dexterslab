@@ -232,7 +232,8 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
   let field: ContactField = { points: [], cellX: 0.1, cellY: 0.1 };
   const fieldFor = (c: { camera: THREE.PerspectiveCamera; contactTop?: number }, contact: { orbitX: number; orbitY: number; orbitRadiusX: number; orbitRadiusY: number }) => {
     // The orbit radii were sized to clear the box with margin; the box itself sits inside them.
-    const box = { x: contact.orbitX, y: contact.orbitY, halfW: contact.orbitRadiusX * 0.8, halfH: contact.orbitRadiusY * 0.8 };
+    // The orbit radii pad the panel generously; the field hugs the panel itself, so no band stays empty.
+    const box = { x: contact.orbitX, y: contact.orbitY, halfW: contact.orbitRadiusX * 0.62, halfH: contact.orbitRadiusY * 0.66 };
     const top = (c.contactTop ?? 1) - 0.06;
     const key = [box.x, box.y, box.halfW, box.halfH, top, c.camera.aspect].map((v) => v.toFixed(3)).join("|");
     if (key !== fieldKey) {

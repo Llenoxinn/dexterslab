@@ -25,7 +25,7 @@ export function pingConversion(seconds: number, slot: number, count: number): nu
 }
 
 /** Extra PING words that fill the free space around the box, beyond the props' spiral. */
-export const PING_FIELD_COUNT = 96;
+export const PING_FIELD_COUNT = 150;
 
 /** The field words pop in one at a time, starting just after the props begin to convert. */
 export function pingFieldPop(seconds: number, index: number, count = PING_FIELD_COUNT): number {
