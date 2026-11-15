@@ -3,116 +3,367 @@
 import { useEffect, useRef } from "react";
 
 const BEATS = [
-  { top: "LET THE", bottom: "CODE BEGIN!", label: "Begin" },
-  { top: "THE CODING", bottom: "HAS BEGUN!", label: "Build" },
-  { top: "LET THE CODE", bottom: "BE GONE!", label: "Release" },
-  { top: "LET’S CODE", bottom: "TOGETHER.", label: "Together" },
+  { lines: ["LET THE", "CODE BEGIN!"], label: "Begin" },
+  { lines: ["THE CODING", "HAS BEGUN!"], label: "Build" },
+  { lines: ["LET THE CODE", "BE GONE!"], label: "Ship" },
+  { lines: ["LET’S CODE", "TOGETHER."], label: "Together" },
 ] as const;
 
-/** Reversible, scroll-scrubbed titles. Paused WAAPI timelines avoid React renders per frame. */
+type Pixel = {
+  x: number; y: number; // current, CSS px inside the stage
+  sx: number; sy: number; // start of the current flight
+  tx: number; ty: number; // home in the current phrase
+  vx: number; vy: number;
+  delay: number; // seconds into the current flight before this pixel leaves
+  row: number;
+  curl: number; // which way its arc bends (-1 | 1) and how much
+};
+
+const FLY = 0.8; // seconds per pixel flight
+const HOLD = 3.2; // seconds a line rests (and can be played with) before the next one forms
+const easeOut = (t: number) => 1 - Math.pow(1 - t, 4);
+const easeInOut = (t: number) => (t < 0.5 ? 8 * t ** 4 : 1 - (-2 * t + 2) ** 4 / 2);
+
+/**
+ * The interlude: a long pinned scroll where four lines are built out of the exploded lab's pixels.
+ *
+ *   01 LET THE CODE BEGIN!  →  02 THE CODING HAS BEGUN!  →  03 LET THE CODE BE GONE!  →  04 LET’S CODE TOGETHER.
+ *
+ * - First arrival: pixel blocks fly in from every edge and lock into the words left to right; on
+ *   the last landing the words flash neon and the page takes a hard, decaying camera shake.
+ * - Then it runs on its own clock: every few seconds the same pixels peel off in a sweep and swirl
+ *   along curved paths into another line, picked at random, so the text keeps re-organizing
+ *   itself for as long as you stay. The section is a long pinned scroll, so there's time to watch.
+ * - Idle: the cursor pushes pixels away and they spring home; a refresh scanline passes now and then.
+ *
+ * One 2D canvas, no WebGL. A real <h2> holds all four lines for screen readers, and with reduced
+ * motion the section is a short, static stack of the four lines.
+ */
 export function LabInterlude() {
   const ref = useRef<HTMLElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const section = ref.current;
-    if (!section) return;
+    const canvas = canvasRef.current;
+    const stage = canvas?.parentElement;
+    const ctx = canvas?.getContext("2d");
+    if (!section || !canvas || !stage || !ctx) return;
     const media = matchMedia("(prefers-reduced-motion: reduce)");
-    const panels = [...section.querySelectorAll<HTMLElement>(".lab-interlude-beat")];
-    const marks = [...section.querySelectorAll<HTMLElement>(".lab-interlude-step")];
-    const meter = section.querySelector<HTMLElement>(".lab-interlude-meter-fill");
-    const animations: Animation[] = [];
-    const easing = getComputedStyle(section).getPropertyValue("--ease-in-out").trim() || "cubic-bezier(0.77, 0, 0.175, 1)";
-    let calm = false;
-    let visible = false;
-    let raf = 0;
-    let progress = 0;
-    let last = 0;
+    const calm = () => media.matches || document.documentElement.dataset.labFx === "calm";
 
-    const readProgress = () => {
-      const rect = section.getBoundingClientRect();
-      return Math.max(0, Math.min(1, -rect.top / Math.max(1, section.offsetHeight - window.innerHeight)));
-    };
-    const paint = () => {
-      for (const animation of animations) animation.currentTime = progress * 1000;
-      if (meter) meter.style.transform = `scaleX(${progress})`;
-      const active = progress < .235 ? 0 : progress < .505 ? 1 : progress < .765 ? 2 : 3;
-      marks.forEach((mark, i) => { mark.dataset.active = String(i === active); });
-    };
-    const frame = (now: number) => {
-      raf = 0;
-      if (!visible || document.hidden || calm) return;
-      const target = readProgress();
-      const dt = Math.min((now - last) / 1000, .05);
-      last = now;
-      progress += (target - progress) * (1 - Math.exp(-dt * 12));
-      if (Math.abs(target - progress) < .0001) progress = target;
-      paint();
-      if (progress !== target) raf = requestAnimationFrame(frame);
-    };
-    const wake = () => {
-      if (!raf && visible && !calm && !document.hidden) {
-        last = performance.now();
-        raf = requestAnimationFrame(frame);
-      }
-    };
-    const syncMotion = () => {
-      cancelAnimationFrame(raf);
-      raf = 0;
-      animations.splice(0).forEach((animation) => animation.cancel());
-      calm = media.matches || document.documentElement.dataset.labFx === "calm";
-      section.dataset.motion = calm ? "calm" : "full";
-      if (calm) return;
-      panels.forEach((panel, beat) => {
-        const pieces = [...panel.querySelectorAll<HTMLElement>("[data-title-piece]")];
-        pieces.forEach((piece, index) => {
-          // Letter offsets form one continuous wave, without random scrambling or layout changes.
-          const stagger = index * .003;
-          const enter = beat === 0 ? 0 : [0, .18, .45, .71][beat] + stagger;
-          const settled = beat === 0 ? 0 : enter + .09;
-          const leave = [.16, .43, .69, 1][beat] + (beat === 3 ? 0 : stagger);
-          const gone = Math.min(1, leave + .09);
-          const rest = { opacity: 1, transform: "translate3d(0, 0, 0) rotateX(0deg) scale(1)" };
-          const below = { opacity: 0, transform: "translate3d(0, 110%, 0) rotateX(-35deg) scale(.97)" };
-          const above = {
-            opacity: 0,
-            transform: beat === 2 && index > 0
-              ? `translate3d(${(index - pieces.length / 2) * 10}%, -110%, 0) rotate(${(index - pieces.length / 2) * 3}deg) scale(.94)`
-              : "translate3d(0, -110%, 0) rotateX(25deg) scale(.97)",
-          };
-          const keyframes: Keyframe[] = beat === 0
-            ? [{ ...rest, offset: 0, easing }]
-            : [{ ...below, offset: 0 }, { ...below, offset: enter, easing }, { ...rest, offset: settled }];
-          keyframes.push({ ...rest, offset: leave, easing });
-          if (beat !== 3) keyframes.push({ ...above, offset: gone }, { ...above, offset: 1 });
-          const animation = piece.animate(keyframes, { duration: 1000, fill: "both" });
-          animation.pause();
-          animations.push(animation);
+    let phrases: Array<Array<{ x: number; y: number; row: number }>> = [];
+    let pixels: Pixel[] = [];
+    let cell = 6;
+    let colors = ["#0a0a5d", "#1313ba"];
+    let neon = "#6666fd";
+    let width = 0;
+    let height = 0;
+    let beat = -1; // phrase on screen (or flying in), -1 = nothing yet
+    let flightAt = 0; // performance.now() when the current flight began
+    let flightEnd = 0; // seconds into the flight when the last pixel lands
+    let first = true; // the very first arrival comes in from the edges and lands with the big hit
+    let hitDone = true;
+    let raf = 0;
+    let last = 0;
+    let visible = false;
+    let armed = false; // the section has reached the trigger line
+    const pointer = { x: 0, y: 0, on: false };
+    let seed = 7;
+    const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+
+    /** Rasterize each phrase (two centred lines, fitted to the stage) into a sorted grid of homes. */
+    const build = () => {
+      const rect = stage.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      const dpr = Math.min(2, devicePixelRatio || 1);
+      canvas.width = Math.max(1, Math.round(width * dpr));
+      canvas.height = Math.max(1, Math.round(height * dpr));
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const tokens = getComputedStyle(section);
+      const token = (name: string, fallback: string) => tokens.getPropertyValue(name).trim() || fallback;
+      colors = [token("--color-ink-deep", colors[0]), token("--color-ink", colors[1])];
+      neon = token("--color-neon", neon);
+      const probe = section.querySelector<HTMLElement>(".lab-interlude-probe");
+      const style = getComputedStyle(probe ?? section);
+      const family = style.fontFamily;
+      const weight = style.fontWeight;
+      const wanted = parseFloat(style.fontSize) || 96;
+
+      const off = document.createElement("canvas");
+      off.width = Math.max(1, Math.ceil(width));
+      off.height = Math.max(1, Math.ceil(height));
+      const o = off.getContext("2d", { willReadFrequently: true })!;
+      o.textAlign = "center";
+      o.textBaseline = "middle";
+      // One size for all four phrases, so the type doesn't jump between beats.
+      o.font = `${weight} ${wanted}px ${family}`;
+      o.letterSpacing = `${-0.04 * wanted}px`;
+      const widest = Math.max(...BEATS.flatMap((b) => b.lines.map((l) => o.measureText(l).width)));
+      const size = Math.min(wanted, (wanted * width * 0.88) / Math.max(1, widest));
+      o.font = `${weight} ${size}px ${family}`;
+      o.letterSpacing = `${-0.04 * size}px`;
+      o.textBaseline = "alphabetic";
+      // The grid is locked to the cap height: exactly `rows` cells from cap line to baseline, so
+      // every letter is the same number of pixels tall and round letters can't poke out of the band.
+      const capH = o.measureText("H").actualBoundingBoxAscent || size * 0.72;
+      const rows = Math.max(7, Math.round(capH / Math.max(4, size / 13)));
+      cell = Math.max(4, Math.round(capH / rows));
+      const band = rows * cell;
+      const gap = band * 0.42;
+      // Optical centre: a hair above the middle.
+      const blockTop = Math.round(height * 0.49 - band - gap / 2);
+
+      phrases = BEATS.map((b) => {
+        const homes: Array<{ x: number; y: number; row: number }> = [];
+        b.lines.forEach((line, r) => {
+          o.clearRect(0, 0, off.width, off.height);
+          const top = blockTop + r * (band + gap);
+          const baseline = top + band;
+          o.fillText(line, width / 2, baseline);
+          const d = o.getImageData(0, 0, off.width, off.height).data;
+          // Coverage, not a single point: a cell lights when most of its 3×3 samples are ink.
+          const at = (x: number, y: number) => d[(Math.min(off.height - 1, Math.max(0, Math.floor(y))) * off.width + Math.min(off.width - 1, Math.floor(x))) * 4 + 3] > 128;
+          for (let py = top; py < baseline; py += cell) {
+            for (let px = 0; px < off.width; px += cell) {
+              let ink = 0;
+              for (let sy = 1; sy <= 3; sy++) for (let sx = 1; sx <= 3; sx++) if (at(px + (sx * cell) / 4, py + (sy * cell) / 4)) ink++;
+              if (ink >= 5) homes.push({ x: px, y: py, row: r });
+            }
+          }
         });
+        // Left to right, then top to bottom: pixel i of one phrase maps to the same reading
+        // position in the next, so the words flow into each other instead of shuffling.
+        return homes.sort((a, b2) => a.x - b2.x || a.y - b2.y);
       });
-      progress = readProgress();
-      paint();
+
+      const pool = Math.max(...phrases.map((p) => p.length));
+      while (pixels.length < pool) {
+        pixels.push({ x: -999, y: -999, sx: 0, sy: 0, tx: 0, ty: 0, vx: 0, vy: 0, delay: 0, row: 0, curl: rand() < 0.5 ? -1 : 1 });
+      }
+      pixels.length = pool;
+      if (beat >= 0) settle(beat); // a resize snaps everything to the new layout
+    };
+
+    const home = (p: Pixel, i: number, b: number) => {
+      const list = phrases[b];
+      const h = list[Math.floor((i * list.length) / pixels.length)];
+      p.tx = h.x;
+      p.ty = h.y;
+      p.row = h.row;
+    };
+    const settle = (b: number) => {
+      pixels.forEach((p, i) => {
+        home(p, i, b);
+        p.x = p.sx = p.tx;
+        p.y = p.sy = p.ty;
+        p.vx = p.vy = 0;
+        p.delay = -FLY;
+      });
+      flightAt = performance.now() - FLY * 2000;
+      flightEnd = 0;
+    };
+
+    /** Send every pixel from where it is now to its home in phrase `b`. */
+    const fly = (b: number) => {
+      const fromEdges = first;
+      pixels.forEach((p, i) => {
+        home(p, i, b);
+        if (fromEdges) {
+          const a = rand() * Math.PI * 2;
+          const reach = Math.max(width, height) * (0.65 + rand() * 0.5);
+          p.x = width / 2 + Math.cos(a) * reach;
+          p.y = height / 2 + Math.sin(a) * reach * 0.8;
+        }
+        p.sx = p.x;
+        p.sy = p.y;
+        p.vx = p.vy = 0;
+        p.curl = (rand() < 0.5 ? -1 : 1) * (0.25 + rand() * 0.35);
+        // A sweep across the line: the left of the words leaves first.
+        p.delay = ((fromEdges ? p.tx : p.sx) / Math.max(1, width)) * (fromEdges ? 0.42 : 0.5) + p.row * 0.08 + rand() * 0.07;
+      });
+      flightAt = performance.now();
+      flightEnd = pixels.reduce((m, p) => Math.max(m, p.delay), 0) + FLY;
+      hitDone = false;
+      beat = b;
       wake();
     };
-    const observer = new IntersectionObserver(([entry]) => {
+
+    // The hit: page and 3D layer jolt together, hard first then dying out, like a camera taking it.
+    const shake = (strength: number) => {
+      const targets = [document.getElementById("lab"), document.querySelector<HTMLElement>(".lab-scene-layer")]
+        .filter(Boolean) as HTMLElement[];
+      const frames: Keyframe[] = [];
+      const steps = 12;
+      for (let i = 0; i <= steps; i++) {
+        const d = Math.pow(1 - i / steps, 2) * strength;
+        const end = i === steps;
+        const x = end ? 0 : (i % 2 ? 1 : -1) * (10 + rand() * 16) * d;
+        const y = end ? 0 : (rand() - 0.5) * 22 * d;
+        const r = end ? 0 : (rand() - 0.5) * 1.6 * d;
+        frames.push({ translate: `${x.toFixed(1)}px ${y.toFixed(1)}px`, rotate: `${r.toFixed(2)}deg` });
+      }
+      for (const el of targets) el.animate(frames, { duration: 480, easing: "linear" });
+    };
+
+    /** Any line but the one showing. */
+    const another = () => {
+      const next = Math.floor(rand() * (BEATS.length - 1));
+      return next >= beat ? next + 1 : next;
+    };
+
+    const draw = (now: number) => {
+      raf = 0;
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      ctx.clearRect(0, 0, width, height);
+      if (beat < 0) return;
+      const t = (now - flightAt) / 1000;
+
+      if (!hitDone && t >= flightEnd) {
+        hitDone = true;
+        shake(first ? 1 : 0.35);
+        first = false;
+      }
+      const sinceLand = t - flightEnd;
+      // The clock moves the story on: after a rest, the pixels re-form into another line.
+      if (hitDone && sinceLand > HOLD) {
+        fly(another()); // schedules the next frame itself
+        return;
+      }
+      // Neon flash on contact, back to ink over 260ms.
+      const flash = hitDone && sinceLand < 0.26 ? 1 - sinceLand / 0.26 : 0;
+      // Refresh scanline: every 4.5s a soft band crosses the words, lifting and tinting pixels.
+      const since = sinceLand - 1.4;
+      const scanT = hitDone && since > 0 ? (since % 4.5) / 1.4 : -1;
+      const scanX = scanT >= 0 && scanT <= 1 ? -80 + scanT * (width + 160) : -9999;
+
+      const k = 1 - Math.exp(-dt * 14);
+      const damp = Math.exp(-dt * 9);
+      const reach = Math.max(70, cell * 18);
+      const size = cell - 1; // the 1px gap is what makes it read as pixels
+      const tints = new Float32Array(pixels.length);
+
+      for (let i = 0; i < pixels.length; i++) {
+        const p = pixels[i];
+        const local = (t - p.delay) / FLY;
+        if (local < 1) {
+          const e = local <= 0 ? 0 : first ? easeOut(local) : easeInOut(local);
+          // A curved path: the pixel bows out sideways mid-flight, so the words swirl into each other.
+          const dx = p.tx - p.sx;
+          const dy = p.ty - p.sy;
+          const bow = Math.sin(e * Math.PI) * p.curl;
+          p.x = p.sx + dx * e - dy * bow;
+          p.y = p.sy + dy * e + dx * bow;
+          ctx.globalAlpha = first ? Math.min(1, 0.35 + Math.max(0, local)) : 1;
+          if (first && local <= 0) continue;
+        } else {
+          let fx = 0;
+          let fy = 0;
+          if (pointer.on) {
+            const ox = p.x - pointer.x;
+            const oy = p.y - pointer.y;
+            const d = Math.hypot(ox, oy);
+            if (d < reach && d > 0.01) {
+              const push = (1 - d / reach) ** 2 * 2600;
+              fx = (ox / d) * push;
+              fy = (oy / d) * push;
+            }
+          }
+          const band = Math.abs(p.tx - scanX);
+          const lift = band < 60 ? 1 - band / 60 : 0;
+          p.vx = (p.vx + fx * dt) * damp + (p.tx - p.x) * k * 60 * dt;
+          p.vy = (p.vy + fy * dt) * damp + (p.ty - lift * cell * 0.9 - p.y) * k * 60 * dt;
+          p.x += p.vx * dt * 10;
+          p.y += p.vy * dt * 10;
+          tints[i] = Math.max(flash, lift * 0.85);
+          ctx.globalAlpha = 1;
+        }
+        ctx.fillStyle = colors[p.row] ?? colors[0];
+        ctx.fillRect(Math.round(p.x), Math.round(p.y), size, size);
+      }
+      ctx.fillStyle = neon;
+      for (let i = 0; i < pixels.length; i++) {
+        if (tints[i] < 0.02) continue;
+        ctx.globalAlpha = tints[i];
+        ctx.fillRect(Math.round(pixels[i].x), Math.round(pixels[i].y), size, size);
+      }
+      ctx.globalAlpha = 1;
+      if (visible && !document.hidden) raf = requestAnimationFrame(draw);
+    };
+
+    const wake = () => {
+      if (!raf && visible && !document.hidden && !calm()) {
+        last = performance.now();
+        raf = requestAnimationFrame(draw);
+      }
+    };
+
+    const sync = () => {
+      const still = calm();
+      section.dataset.motion = still ? "calm" : "full";
+      if (still) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+        ctx.clearRect(0, 0, width, height);
+      } else {
+        build();
+        if (armed && beat < 0 && phrases.length) fly(0);
+        wake();
+      }
+    };
+
+    // The first line arrives as the section reaches 55% of the view; scrolling back above re-arms it.
+    const trigger = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        armed = true;
+        // Always opens on the first line; after that the clock picks.
+        if (beat < 0 && phrases.length && !calm()) fly(0);
+      } else if (entry.boundingClientRect.top > 0) {
+        armed = false;
+        first = true;
+        beat = -1;
+        ctx.clearRect(0, 0, width, height);
+      }
+    }, { rootMargin: "0px 0px -45% 0px" });
+    const onScreen = new IntersectionObserver(([entry]) => {
       visible = entry.isIntersecting;
       if (visible) wake();
-      else { cancelAnimationFrame(raf); raf = 0; }
     });
-    observer.observe(section);
-    syncMotion();
-    window.addEventListener("scroll", wake, { passive: true });
-    window.addEventListener("resize", wake);
-    window.addEventListener("lab:preferences", syncMotion);
-    media.addEventListener("change", syncMotion);
+
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType === "touch") return;
+      const r = stage.getBoundingClientRect();
+      pointer.x = e.clientX - r.left;
+      pointer.y = e.clientY - r.top;
+      pointer.on = true;
+    };
+    const onLeave = () => { pointer.on = false; };
+    const ro = new ResizeObserver(() => { if (!calm()) build(); });
+
+    sync();
+    document.fonts?.ready.then(() => { if (!calm()) build(); });
+    trigger.observe(section);
+    onScreen.observe(section);
+    ro.observe(stage);
+    section.addEventListener("pointermove", onMove);
+    section.addEventListener("pointerleave", onLeave);
+    window.addEventListener("lab:preferences", sync);
+    media.addEventListener("change", sync);
     document.addEventListener("visibilitychange", wake);
     return () => {
       cancelAnimationFrame(raf);
-      animations.forEach((animation) => animation.cancel());
-      observer.disconnect();
-      window.removeEventListener("scroll", wake);
-      window.removeEventListener("resize", wake);
-      window.removeEventListener("lab:preferences", syncMotion);
-      media.removeEventListener("change", syncMotion);
+      trigger.disconnect();
+      onScreen.disconnect();
+      ro.disconnect();
+      section.removeEventListener("pointermove", onMove);
+      section.removeEventListener("pointerleave", onLeave);
+      window.removeEventListener("lab:preferences", sync);
+      media.removeEventListener("change", sync);
       document.removeEventListener("visibilitychange", wake);
     };
   }, []);
@@ -120,24 +371,17 @@ export function LabInterlude() {
   return (
     <section ref={ref} id="interlude" className="lab-interlude" aria-labelledby="interlude-title">
       <div className="lab-interlude-pin">
-        <p className="lab-interlude-eyebrow" aria-hidden="true">From the first line to what’s next</p>
-        <h2 id="interlude-title" className="lab-interlude-title" aria-label={BEATS.map((beat) => `${beat.top} ${beat.bottom}`).join(" ")}>
-          {BEATS.map((beat, index) => (
-            <span className="lab-interlude-beat" key={beat.label} aria-hidden="true">
-              <span className="lab-interlude-line"><span data-title-piece>{beat.top}</span></span>
-              <span className={`lab-interlude-line lab-interlude-accent lab-interlude-accent-${index}`}>
-                {[...beat.bottom].map((letter, i) => <span key={i} data-title-piece>{letter === " " ? "\u00a0" : letter}</span>)}
-              </span>
+        <h2 id="interlude-title" className="lab-interlude-title">
+          {BEATS.map((b) => (
+            <span key={b.label} className="lab-interlude-line">
+              <span className="lab-interlude-row">{b.lines[0]}</span>{" "}
+              <span className="lab-interlude-row is-accent">{b.lines[1]}</span>
             </span>
           ))}
         </h2>
-        <div className="lab-interlude-timeline" aria-hidden="true">
-          <div className="lab-interlude-meter"><span className="lab-interlude-meter-fill" /></div>
-          <div className="lab-interlude-steps">
-            {BEATS.map((beat, index) => <span key={beat.label} className="lab-interlude-step" data-active={index === 0}><span>0{index + 1}</span> {beat.label}</span>)}
-          </div>
-        </div>
-        <p className="lab-interlude-sub">Scroll to write the next line<span aria-hidden="true"> ↓</span></p>
+        {/* Off-screen type sample: the canvas reads the headline's real font, weight and size from it. */}
+        <span className="lab-interlude-probe" aria-hidden="true">M</span>
+        <canvas ref={canvasRef} className="lab-interlude-canvas" aria-hidden="true" />
       </div>
     </section>
   );
