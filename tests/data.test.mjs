@@ -24,6 +24,13 @@ test("GitHub cache accepts recent validated data and rejects stale or corrupt en
   assert.equal(readContributionCache(null), null);
 });
 
+test("GitHub cache goes stale at midnight in Manila, however young it is", () => {
+  const beforeMidnight = Date.parse("2026-11-14T15:50:00Z"); // 23:50 in Manila
+  const cached = { savedAt: beforeMidnight, contributions: [day("2026-11-14")] };
+  assert.deepEqual(readContributionCache(cached, beforeMidnight + 5 * 60 * 1000), cached.contributions); // 23:55
+  assert.equal(readContributionCache(cached, beforeMidnight + 10 * 60 * 1000), null); // 00:00, new day
+});
+
 test("contributions sort real dates and keep the last 364 days", () => {
   const contributions = Array.from({ length: 370 }, (_, index) => {
     const date = new Date(Date.UTC(2025, 0, 1 + index)).toISOString().slice(0, 10);

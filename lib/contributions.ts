@@ -1,11 +1,18 @@
 export type ContribDay = { date: string; count: number; level: 0 | 1 | 2 | 3 | 4 };
 
 export const CONTRIBUTION_CACHE_KEY = "dexterslab:github:v1";
-const CACHE_LIFETIME = 60 * 60 * 1000;
+const CACHE_LIFETIME = 15 * 60 * 1000;
+
+/** The calendar day in Manila, as YYYY-MM-DD: the graph's "today". */
+export function manilaDay(now = Date.now()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(now);
+}
 
 export function readContributionCache(value: unknown, now = Date.now()): ContribDay[] | null {
   if (!value || typeof value !== "object" || !("savedAt" in value) || typeof value.savedAt !== "number"
     || !Number.isFinite(value.savedAt) || now < value.savedAt || now - value.savedAt > CACHE_LIFETIME) return null;
+  // A copy saved before midnight in Manila is stale even if it's young: the new day must show.
+  if (manilaDay(value.savedAt) !== manilaDay(now)) return null;
   try { return parseContributions(value); } catch { return null; }
 }
 
