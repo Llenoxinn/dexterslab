@@ -605,6 +605,11 @@ export function createJourney(
         p.obj.matrixWorld.decompose(roomPos, roomQuat, roomScale);
         formation(c.from, p, c, aPos, aQuat, aScale);
         formation(c.to, p, c, bPos, bQuat, bScale);
+        // Lobby debris is solid stone and steel: at a prop's size it reads heavier, so it travels smaller.
+        if (p.guest) {
+          if (c.from !== "room" && c.from !== "burst") aScale.multiplyScalar(0.6);
+          if (c.to !== "room" && c.to !== "burst") bScale.multiplyScalar(0.6);
+        }
         // Pieces don't all move at once: each leaves in turn (in queue order where there is one),
         // so the burst peels off into the columns one piece after another.
         let mp = m;
