@@ -19,10 +19,19 @@ export function ProjectSlotMachine<T extends { slug: string; name: string }>({
   const [animate, setAnimate] = useState(true);
   const [pulled, setPulled] = useState(false);
   const [rolling, setRolling] = useState(false);
-  // Until the first pull, the reel nudges and the lever wobbles to show that it can be pulled.
+  // Until the first pull, once the machine is on screen, the lever half-pulls and the reel peeks.
   const [idle, setIdle] = useState(true);
+  const [inView, setInView] = useState(false);
+  const reelRef = useRef<HTMLDivElement>(null);
   const timers = useRef<number[]>([]);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  useEffect(() => {
+    const el = reelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting), { threshold: 0.5 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   if (count === 0) return null;
 
@@ -45,19 +54,24 @@ export function ProjectSlotMachine<T extends { slug: string; name: string }>({
     if (rolling || count < 2) return;
     setIdle(false);
     const target = position + 1;
-    setPulled(true);
-    timers.current.push(window.setTimeout(() => setPulled(false), 340));
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.labFx === "calm";
-    setRolling(!reduce);
-    setPosition(target);
-    if (reduce) land(target);
-    else timers.current.push(window.setTimeout(() => land(target), 760));
+    if (reduce) {
+      setPosition(target);
+      land(target);
+      return;
+    }
+    // Cause, then effect: the lever goes down first, and the reel spins once it bottoms out.
+    setPulled(true);
+    setRolling(true);
+    timers.current.push(window.setTimeout(() => setPulled(false), 900));
+    timers.current.push(window.setTimeout(() => setPosition(target), 240));
+    timers.current.push(window.setTimeout(() => land(target), 240 + 820));
   };
 
   const cards = [...items, ...items, ...items];
 
   return (
-    <div className={`reel ${idle && count > 1 ? "is-idle" : ""}`}>
+    <div ref={reelRef} className={`reel ${idle && count > 1 ? "is-idle" : ""} ${inView ? "is-inview" : ""}`}>
       <div className="reel-window">
         {/* Invisible sizer: every card stacked in one cell, so the window is exactly as tall as the tallest card. */}
         <div className="reel-sizer" aria-hidden="true" inert>
