@@ -874,14 +874,12 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     // Clay and steel leaves tumbling down around the room and settling on the lake.
     const leaves = createClayLeaves({
       clay: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 }),
-      steel: steelMaterial(studio, "polished"), // small leaves need the bright cards, not the brushed spread
       // In front of the open cutaway and off its left side; never right of it, where the copy sits.
       area: {
         minX: ROOM_CENTER_X - ROOM_WIDTH / 2 - 5, maxX: ROOM_CENTER_X + ROOM_WIDTH / 2 - 2.5,
         minZ: ROOM_CENTER_Z - ROOM_DEPTH / 2 - 1, maxZ: ROOM_CENTER_Z + ROOM_DEPTH / 2 + 8,
       },
-      clayCount: 36,
-      steelCount: 6,
+      clayCount: 40,
       room: {
         minX: ROOM_CENTER_X - ROOM_WIDTH / 2, maxX: ROOM_CENTER_X + ROOM_WIDTH / 2,
         minZ: ROOM_CENTER_Z - ROOM_DEPTH / 2, maxZ: ROOM_CENTER_Z + ROOM_DEPTH / 2,

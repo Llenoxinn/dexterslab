@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 /*
- * Falling leaves (after the 3d-falling-leaves mechanism), modelled in the lab's clay and steel.
+ * Falling leaves (after the 3d-falling-leaves mechanism), modelled in matte clay in leaf colours.
  *
  *  - One real leaf: a pointed blade folded along its midrib and bent along its length, with a stem,
  *    so it thins to a line when it turns edge-on. The back face is paler.
@@ -50,16 +50,14 @@ const hash = (n: number) => {
 
 export function createClayLeaves(options: {
   clay: THREE.Material;
-  steel: THREE.Material;
   /** Where leaves may fall (x, z), and the room footprint they keep out of. */
   area: Bounds;
   room: Bounds;
   top: number;
   water: number;
   clayCount?: number;
-  steelCount?: number;
 }) {
-  const { area, room, top, water, clayCount = 64, steelCount = 10 } = options;
+  const { area, room, top, water, clayCount = 40 } = options;
   const geometry = leafGeometry();
   const group = new THREE.Group();
   group.name = "clay-leaves";
@@ -81,14 +79,16 @@ export function createClayLeaves(options: {
     return m;
   };
 
-  const sets = [
-    { mesh: new THREE.InstancedMesh(geometry, paleBack(options.clay), clayCount), count: clayCount, salt: 0 },
-    { mesh: new THREE.InstancedMesh(geometry, paleBack(options.steel), steelCount), count: steelCount, salt: 1000 },
-  ];
-  // Clay leaves: mostly white clay, one in four in the lab's DOS blue.
-  const white = new THREE.Color(0xf3f3f5);
-  const blue = new THREE.Color(0x2323d2);
-  for (let i = 0; i < clayCount; i++) sets[0].mesh.setColorAt(i, hash(i * 7.3) < 0.25 ? blue : white);
+  const sets = [{ mesh: new THREE.InstancedMesh(geometry, paleBack(options.clay), clayCount), count: clayCount, salt: 0 }];
+  // Leaf colours, softened like painted clay: sage and olive greens, a few ochre and rust turning.
+  const palette = [0x8fa66a, 0x7a9455, 0xa3b07a, 0x6f8a4e, 0xc9a24f, 0xb8743f].map((c) => new THREE.Color(c));
+  const weights = [0.24, 0.2, 0.18, 0.14, 0.14, 0.1];
+  for (let i = 0; i < clayCount; i++) {
+    let r = hash(i * 7.3);
+    let pick = 0;
+    while (pick < palette.length - 1 && r > weights[pick]) r -= weights[pick++];
+    sets[0].mesh.setColorAt(i, palette[pick]);
+  }
   for (const { mesh } of sets) {
     mesh.frustumCulled = false;
     mesh.castShadow = false; // a scatter of small shadows on the water reads as dirt, not leaves
