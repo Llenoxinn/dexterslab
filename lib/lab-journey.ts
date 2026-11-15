@@ -57,6 +57,9 @@ type Piece = {
   ring: number;
   /** Not stick- or sheet-like: a loose part that still reads as an object when it travels alone. */
   chunky: boolean;
+  /** Debris from the lobby's underwater BOOM, not the lab: its "home" is wherever the blast has
+   *  thrown it (its parent drives it), and it joins the formations from the swirl on. */
+  guest: boolean;
 };
 
 type ShellMat = { mesh: THREE.Mesh; mat: THREE.Material };
@@ -128,7 +131,10 @@ export function contactField(
   return { points: Array.from({ length: count }, () => [box.x, ceiling] as [number, number]), cellX: 0.1, cellY: 0.1 };
 }
 
-export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector3; toCamera: THREE.Vector3 }) {
+export function createJourney(
+  root: THREE.Object3D,
+  opts: { center: THREE.Vector3; toCamera: THREE.Vector3; guests?: THREE.Object3D[] },
+) {
   let seed = 11;
   const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
 
@@ -146,7 +152,7 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
     if (o instanceof THREE.Mesh) return register(o, false);
     for (const child of o.children) visit(child);
   };
-  const register = (o: THREE.Object3D, unit: boolean) => {
+  const register = (o: THREE.Object3D, unit: boolean, guest = false) => {
     let size: number;
     if (o instanceof THREE.Mesh) {
       if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
@@ -208,9 +214,16 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
       wordSlot: -1,
       ring: -1,
       chunky,
+      guest,
     });
   };
   visit(root);
+  for (const g of opts.guests ?? []) {
+    g.updateMatrixWorld(true);
+    register(g, true, true);
+  }
+  // Guests always get a place: the BOOM's debris is meant to be seen carrying on down the page.
+  const guestsFirst = (a: Piece, b: Piece) => Number(b.guest) - Number(a.guest);
 
   // Contact frame: a dense border of slots around the screen edges, three deep at the sides.
   const slots: Array<[number, number]> = [];
@@ -224,7 +237,7 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
   const candidates = pieces
     // Whole objects first; then chunky loose parts that still read as objects. Never sticks or trim.
     .filter((p) => !p.shell && p.size > 0.12 && p.size < 2.8 && (p.unit || (p.chunky && p.size > 0.22)))
-    .sort((a, b) => Number(b.unit) - Number(a.unit) || b.size - a.size)
+    .sort((a, b) => guestsFirst(a, b) || Number(b.unit) - Number(a.unit) || b.size - a.size)
     .slice(0, slots.length);
   // Shuffle so neighbouring slots don't all hold the same kind of thing.
   for (let i = candidates.length - 1; i > 0; i--) {
@@ -234,7 +247,7 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
   candidates.forEach((p, i) => { p.slot = i; });
   const wordCandidates = pieces
     .filter((p) => !p.shell && p.size > 0.08 && p.size < (p.unit ? 2.8 : 1.8))
-    .sort((a, b) => Number(b.unit) - Number(a.unit) || b.size - a.size)
+    .sort((a, b) => guestsFirst(a, b) || Number(b.unit) - Number(a.unit) || b.size - a.size)
     .slice(0, Math.max(slots.length, CONTACT_WORD_POINTS.length));
   wordCandidates.forEach((p, i) => { p.wordSlot = i; });
   const pingRoot = new THREE.Group();
@@ -286,8 +299,10 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
   const RING_COUNT = 72;
   const ringPieces = pieces
     .filter((p) => p.unit && !p.shell && p.size > 0.1 && p.size < 2.8)
-    .sort((a, b) => a.phase - b.phase)
-    .slice(0, RING_COUNT);
+    .sort(guestsFirst)
+    .slice(0, RING_COUNT)
+    // Spread around the rings by phase, so the guests don't bunch up in one arc.
+    .sort((a, b) => a.phase - b.phase);
   ringPieces.forEach((p, i) => { p.ring = i; });
 
   // ---------- Scratch objects (no allocation per frame) ----------
@@ -370,6 +385,13 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
         scale.copy(roomScale);
         return;
       case "burst": {
+        if (p.guest) {
+          // Lobby debris stays where the blast has it until the swirl gathers it up.
+          pos.copy(roomPos);
+          quat.copy(roomQuat);
+          scale.copy(roomScale);
+          return;
+        }
         // The BOOM happens under the lake, not to the lab: the room's props wait just below the
         // bottom edge of the screen, so burst → swirl plays as them rising up out of the water.
         // Pieces that sit the swirl out stay hidden at both ends and never cross the frame.
@@ -548,6 +570,7 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
       pingWords.forEach((word) => { word.visible = false; });
       fieldWords.visible = false;
       for (const p of pieces) {
+        if (p.guest) continue; // the lobby drives its debris; there is no home to return to
         p.obj.position.copy(p.homePos);
         p.obj.quaternion.copy(p.homeQuat);
         p.obj.scale.copy(p.homeScale);
@@ -578,6 +601,7 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
       const m = smooth(clamp(c.mix, 0, 1));
 
       for (const p of pieces) {
+        if (p.guest) p.obj.updateMatrixWorld(); // just moved by the blast, outside root
         p.obj.matrixWorld.decompose(roomPos, roomQuat, roomScale);
         formation(c.from, p, c, aPos, aQuat, aScale);
         formation(c.to, p, c, bPos, bQuat, bScale);
@@ -590,7 +614,9 @@ export function createJourney(root: THREE.Object3D, opts: { center: THREE.Vector
         }
         aPos.lerp(bPos, mp);
         // A slight swing outward mid-flight turns the straight line into an arc.
-        if (mp > 0 && mp < 1 && !p.shell) aPos.addScaledVector(ray.copy(aPos).sub(camPos).normalize(), -Math.sin(mp * Math.PI) * 3);
+        // (Not for lobby debris still sitting in its blast pose: room and burst are the same place.)
+        const parked = p.guest && (c.to === "room" || c.to === "burst");
+        if (mp > 0 && mp < 1 && !p.shell && !parked) aPos.addScaledVector(ray.copy(aPos).sub(camPos).normalize(), -Math.sin(mp * Math.PI) * 3);
         aQuat.slerp(bQuat, mp);
         aScale.lerp(bScale, mp);
 
