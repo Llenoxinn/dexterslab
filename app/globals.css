@@ -10599,58 +10599,80 @@ html[data-lab-theme="phosphor"] body { background: #101232; }
   position: relative;
   grid-area: 1 / 1;
   margin: 0 auto;
-  font-family: var(--font-display);
-  font-weight: 700;
+  font-family: var(--font-heading);
   line-height: 0.98;
   text-align: center;
-  text-shadow: 0.06em 0.06em 0 var(--color-neon);
 }
 /* Two lines at most: wide measure, size from the viewport. */
 .contact-finale-ask {
-  width: min(100%, 15ch);
-  font-size: clamp(2.6rem, 7.4vw, 7.25rem);
+  width: min(100%, 13ch);
+  font-size: clamp(2.8rem, 8vw, 7.75rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
   text-wrap: balance;
 }
 .contact-finale-word {
   display: inline-block;
   opacity: 0;
 }
-[data-ping-finale="ask"] .contact-finale-word {
-  /* Typed in word by word once the blocks have filled the screen. */
-  animation: finale-word 1ms steps(1) forwards;
-  animation-delay: calc(380ms + var(--w) * 150ms);
-}
 .contact-finale-caret {
   display: inline-block;
-  width: 0.5em;
-  height: 0.82em;
-  margin-left: 0.06em;
-  vertical-align: -0.06em;
-  background: currentColor;
-  box-shadow: 0.06em 0.06em 0 var(--color-neon);
+  width: 0.09em;
+  height: 0.78em;
+  margin-left: 0.08em;
+  vertical-align: -0.04em;
+  background: var(--color-neon);
   opacity: 0;
-}
-[data-ping-finale="ask"] .contact-finale-caret {
-  animation: finale-caret 1060ms steps(1) 380ms infinite;
 }
 .contact-finale-cool {
-  font-size: clamp(5rem, 23vw, 21rem);
+  font-size: clamp(5.5rem, 24vw, 22rem);
+  font-weight: 900;
+  letter-spacing: -0.06em;
   opacity: 0;
 }
-[data-ping-finale="cool"] .contact-finale-cool {
-  /* One stepped slam: big, then settled, in three pixel-sized moves. */
-  animation: finale-slam 260ms steps(3) forwards;
+@media (prefers-reduced-motion: no-preference) {
+  /* The question is asked: each word rises out of a soft blur, after the blocks have filled. */
+  [data-ping-finale="ask"] .contact-finale-word {
+    animation: finale-word 460ms var(--ease-out) forwards;
+    animation-delay: calc(400ms + var(--w) * 110ms);
+  }
+  [data-ping-finale="ask"] .contact-finale-caret {
+    animation: finale-caret 900ms steps(1) 1.05s infinite;
+  }
+  /* The answer lands: big and blurred, overshooting under size, then settled. */
+  [data-ping-finale="cool"] .contact-finale-cool {
+    animation: finale-slam 440ms cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+  }
+  /* On impact the blocks flash neon and the whole screen takes a small jolt. */
+  [data-ping-finale="cool"] .contact-finale-pixels span {
+    animation: finale-flash 520ms var(--ease-out) 200ms;
+  }
+  [data-ping-finale="cool"] .contact-finale {
+    animation: finale-jolt 240ms linear 220ms;
+  }
 }
 @keyframes finale-word {
-  to { opacity: 1; }
+  from { opacity: 0; transform: translateY(0.3em); filter: blur(8px); }
+  to { opacity: 1; transform: none; filter: none; }
 }
 @keyframes finale-caret {
   0% { opacity: 1; }
   50% { opacity: 0; }
 }
 @keyframes finale-slam {
-  from { opacity: 1; transform: scale(1.35); }
-  to { opacity: 1; transform: none; }
+  0% { opacity: 0; transform: scale(1.7); filter: blur(10px); }
+  55% { opacity: 1; transform: scale(0.95); filter: none; }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes finale-flash {
+  0%, 100% { background: var(--color-ink); }
+  25% { background: var(--color-neon); }
+}
+@keyframes finale-jolt {
+  0%, 100% { translate: 0 0; }
+  20% { translate: 3px -2px; }
+  45% { translate: -3px 2px; }
+  70% { translate: 2px 1px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .contact-finale-pixels span,
@@ -10658,8 +10680,8 @@ html[data-lab-theme="phosphor"] body { background: #101232; }
     transition: none;
   }
   [data-ping-finale="ask"] .contact-finale-word,
+  [data-ping-finale="ask"] .contact-finale-caret,
   [data-ping-finale="cool"] .contact-finale-cool {
-    animation: none;
     opacity: 1;
   }
 }
