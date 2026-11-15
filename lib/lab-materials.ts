@@ -276,7 +276,10 @@ export function wetClayMaterial(env: THREE.Texture, color: THREE.Color): THREE.M
         `#include <color_fragment>
         float sUp = smoothstep(0.55, 0.9, normalize(vSunkN).y);
         float sSilt = sUp * smoothstep(0.35, 0.7, sFbm(vSunkP * 2.4));
-        diffuseColor.rgb = mix(diffuseColor.rgb * (0.8 + 0.4 * sFbm(vSunkP * 5.0)), vec3(0.36, 0.33, 0.28), sSilt * 0.75);`,
+        /* water stains: broad dark blotches and a finer mottle, so no two blocks soak the same */
+        float sStain = smoothstep(0.3, 0.75, sFbm(vSunkP * 1.6 + 4.0));
+        diffuseColor.rgb *= mix(1.05, 0.55, sStain) * (0.85 + 0.3 * sFbm(vSunkP * 6.0));
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.36, 0.33, 0.28), sSilt * 0.75);`,
       )
       .replace(
         "#include <roughnessmap_fragment>",
@@ -319,7 +322,7 @@ uniform float uVerdigris;`)
         float sEdge = 1.0 - max(sN.x, max(sN.y, sN.z));
         float sFw = max(length(dFdx(vSunkP)), length(dFdy(vSunkP)));
         float sFine = mix(0.5, sFbm(vSunkP * 70.0), 1.0 - smoothstep(0.15, 0.8, sFw * 70.0));
-        float sRust = smoothstep(0.35, 0.65, sFbm(vSunkP * 1.3) * 0.7 + sFine * 0.45) * (1.0 - smoothstep(0.05, 0.25, sEdge));
+        float sRust = smoothstep(0.25, 0.55, sFbm(vSunkP * 1.3) * 0.7 + sFine * 0.45) * (1.0 - smoothstep(0.05, 0.25, sEdge));
         float sGreen = uVerdigris * smoothstep(0.55, 0.75, sFbm(vSunkP * 2.7 + 9.0)) * sRust;
         vec3 sPatina = mix(vec3(0.16, 0.055, 0.02) * (0.6 + 0.8 * sFine), vec3(0.10, 0.34, 0.27), sGreen);
         diffuseColor.rgb = mix(diffuseColor.rgb, sPatina, sRust);`,

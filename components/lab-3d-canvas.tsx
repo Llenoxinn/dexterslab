@@ -1575,7 +1575,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       }
       // Silt thickens the water as the lobby blows, so the hall dissolves before the water clears.
       const murk = 1 + 1.6 * clamp((boom - 0.3) / 0.45, 0, 1);
-      (scene.fog as THREE.FogExp2).density = 0.075 * water * murk;
+      (scene.fog as THREE.FogExp2).density = 0.05 * water * murk;
       hemi.intensity = daylight.hemi * (1 - 0.55 * water) + flash * 2.5;
       hemi.color.copy(daylight.sky).lerp(waterSky, water);
       hemi.groundColor.copy(daylight.ground).lerp(waterGround, water);
@@ -1584,12 +1584,12 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       (scene.background as THREE.Color).copy(pageColour).lerp(deepWater, water);
       // The lobby's copy is only present while the lens is actually under the water, so it never
       // floats over the room above (scrolling back up with the lag), and it gets out of the BOOM's way.
-      const presence = (uw * clamp(1 - boom * 4, 0, 1)).toFixed(2);
+      const presence = (uw * clamp(1 - boom * 8, 0, 1)).toFixed(2);
       if (lobbySection && lobbySection.style.getPropertyValue("--lobby-presence") !== presence) {
         lobbySection.style.setProperty("--lobby-presence", presence);
       }
       lobby.group.visible = diveS > 1.02 && clear < 1;
-      lobbyCaustics.visible = lobby.group.visible && boom < 0.6;
+      lobbyCaustics.visible = lobby.group.visible && boom < 0.35;
       if (lobby.group.visible && !calm) lobby.tick(animT, boom);
       let from = 0;
       let mix = 0;

@@ -30,7 +30,7 @@ test("blast offsets start at home, fly out fast against the water's drag, then s
   assert.equal(blastOffset(0, dir, 1.5, out).length(), 0, "at rest every piece is exactly home");
   assert.equal(blastOffset(-1, dir, 1.5, out).length(), 0, "before the blast too");
   const half = blastOffset(0.5, dir, 1.5, out.clone()).sub(new THREE.Vector3(0, -1.5 * 0.25, 0)).length();
-  assert.ok(half > 0.9 * dir.length() * (1 - Math.exp(-3)), "most of the travel happens early");
+  assert.ok(half > 0.9 * dir.length() * (1 - Math.exp(-2)), "most of the travel happens early");
   const y80 = blastOffset(0.8, dir, 1.5, new THREE.Vector3()).y;
   const y100 = blastOffset(1, dir, 1.5, new THREE.Vector3()).y;
   assert.ok(y100 < y80, "pieces settle downward at the end");

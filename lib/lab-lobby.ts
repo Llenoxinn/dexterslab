@@ -25,7 +25,7 @@ export type LobbyMaterials = {
  */
 export function blastOffset(b: number, dir: THREE.Vector3, sink: number, out: THREE.Vector3): THREE.Vector3 {
   if (b <= 0) return out.set(0, 0, 0);
-  out.copy(dir).multiplyScalar(1 - Math.exp(-6 * b));
+  out.copy(dir).multiplyScalar(1 - Math.exp(-4 * b));
   out.y -= sink * b * b;
   return out;
 }
@@ -179,10 +179,10 @@ export function createLobby(options: {
   const pieces: Piece[] = loose.map(({ obj, emblem: e }) => {
     lobby.attach(obj);
     const away = obj.position.clone().sub(blastPoint);
-    const reach = 3 + rand() * 6 + 14 / (1 + away.length());
+    const reach = 1.5 + rand() * 3.5 + 8 / (1 + away.length());
     const dir = away.normalize().multiplyScalar(reach);
-    dir.y += 1 + rand() * 3;
-    if (dir.z > 0) dir.z *= 0.45; // toward the lens: keep it from swallowing the frame
+    dir.y += 0.5 + rand() * 2;
+    if (dir.z > 0) dir.z *= 0.2; // toward the lens: keep it from swallowing the frame
     return {
       obj,
       homePos: obj.position.clone(),

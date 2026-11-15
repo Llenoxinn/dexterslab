@@ -64,7 +64,7 @@ void main() {
   p.z += cos(uTime * .25 + aParams.w * 1.7) * .25 * b;
   vec4 mv = modelViewMatrix * vec4(p, 1.);
   gl_Position = projectionMatrix * mv;
-  gl_PointSize = aParams.x * uScale / -mv.z * (1. + b * 1.5);
+  gl_PointSize = aParams.x * uScale / -mv.z * (1. + b);
   vAlpha = smoothstep(0., .08, b) * (1. - uClear);
 }`;
 
@@ -73,7 +73,7 @@ varying float vAlpha;
 void main() {
   float d = length(gl_PointCoord * 2. - 1.);
   if (d > 1. || vAlpha < .002) discard;
-  gl_FragColor = vec4(.42, .38, .32, (1. - d * d) * .18 * vAlpha);
+  gl_FragColor = vec4(.42, .38, .32, (1. - d * d) * .07 * vAlpha);
 }`;
 
 const SHOCK_VERTEX = /* glsl */ `
@@ -159,7 +159,7 @@ export function createUnderwaterBlast(options: {
     sPos.set([x, floorY + rand() * 0.4, z], i * 3);
     const out = 2 + rand() * 5;
     sOut.set([Math.sin(a) * out, 0, Math.cos(a) * out], i * 3);
-    sParams.set([0.5 + rand() * 1.4, 1 + rand() * 4.5, 0.5 + rand() * 1.5, rand() * 6.28], i * 4);
+    sParams.set([0.35 + rand() * 0.9, 0.4 + rand() * 2.2, 0.3 + rand() * 0.8, rand() * 6.28], i * 4);
   }
   const siltGeometry = new THREE.BufferGeometry();
   siltGeometry.setAttribute("position", new THREE.BufferAttribute(sPos, 3));
