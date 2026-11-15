@@ -11,6 +11,7 @@ import type { ResearchEntry } from "@/lib/content";
 import { narraTexture } from "@/lib/filipino-lab";
 import { site } from "@/lib/site";
 import { createGovernor, qualityTiers, type QualityTier } from "@/lib/render-quality";
+import { paperFibreTexture, paperLeaf, paperSurface, steelMaterial, studioEnvironment } from "@/lib/lab-materials";
 
 /** Set once the journal's context has been lost: later mounts this session start without AO. */
 const LITE_KEY = "lab:journal-lite";
@@ -485,6 +486,15 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       const clothMat = std({ color: CLOTH, roughness: 0.85 });
       const leftPageMat = std({ roughness: 0.92 });
       const rightPageMat = std({ roughness: 0.92 });
+      // Paper, not card: one shared fibre field bumps every page under the low sun.
+      const fibre = paperFibreTexture();
+      fibre.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      disposables.push(fibre);
+      paperSurface(leftPageMat, fibre);
+      paperSurface(rightPageMat, fibre);
+      // Steel for the few metal things on the desk, lit by its own small studio of bright cards.
+      const studio = studioEnvironment(renderer);
+      disposables.push(studio);
 
       const book = new THREE.Group();
       scene.add(book);
@@ -556,6 +566,8 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       turnGeo.translate(PAGE_W / 2, 0, 0);
       const turnFrontMat = std({ roughness: 0.92, side: THREE.FrontSide });
       const turnBackMat = std({ roughness: 0.92, side: THREE.BackSide });
+      const leafFront = paperLeaf(turnFrontMat, fibre);
+      const leafBack = paperLeaf(turnBackMat, fibre);
       const turnBackGeo = turnGeo.clone();
       const backUv = turnBackGeo.attributes.uv as THREE.BufferAttribute;
       for (let i = 0; i < backUv.count; i++) backUv.setX(i, 1 - backUv.getX(i));
@@ -700,8 +712,20 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       tip.position.x = 0.72;
       const eraser = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.1, 12), std({ color: 0xff7a93, roughness: 0.8 }));
       eraser.rotation.z = Math.PI / 2;
-      eraser.position.x = -0.7;
-      pencil.add(shaft, tip, eraser);
+      eraser.position.x = -0.725;
+      // Brushed ferrule crimping the eraser on, with two pressed rings.
+      const ferruleMat = steelMaterial(studio, "brushed");
+      const ferrule = new THREE.Mesh(new THREE.CylinderGeometry(0.039, 0.039, 0.085, 24), ferruleMat);
+      ferrule.rotation.z = Math.PI / 2;
+      ferrule.position.x = -0.635;
+      const crimpGeo = new THREE.TorusGeometry(0.039, 0.0045, 6, 24);
+      for (const x of [-0.655, -0.615]) {
+        const crimp = new THREE.Mesh(crimpGeo, ferruleMat);
+        crimp.rotation.y = Math.PI / 2;
+        crimp.position.x = x;
+        pencil.add(crimp);
+      }
+      pencil.add(shaft, tip, eraser, ferrule);
       pencil.position.set(2.25, 0.035, 0.55);
       pencil.rotation.y = 0.9;
       pencil.traverse((o) => (o.castShadow = true));
@@ -723,7 +747,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
 
       // Round reading glasses, folded and set down beside the notebook.
       const specs = new THREE.Group();
-      const frameMat = std({ color: 0x14185a, roughness: 0.35, metalness: 0.3 });
+      const frameMat = steelMaterial(studio, "polished");
       const lensMat = std({ color: 0xbfe6ff, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.35, depthWrite: false });
       const rimGeo = new THREE.TorusGeometry(0.17, 0.02, 10, 40);
       for (const side of [-1, 1]) {
@@ -824,6 +848,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         const swap = (m: THREE.Material) => {
           const sm = m as THREE.MeshStandardMaterial;
           if (m === leftPageMat || m === rightPageMat || m === turnFrontMat || m === turnBackMat || m === edgeMat) return m;
+          if (m.userData.metal) return m;
           if (sm.map && sm.map !== deskWood) return m;
           const lit = sm.emissive && sm.emissiveIntensity > 0 && sm.emissive.getHex() !== 0;
           const blue = m === clothMat || lit;
@@ -970,6 +995,10 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
           setMap(rightPageMat, nextR);
           setMap(turnFrontMat, curR);
           setMap(turnBackMat, nextL);
+          // Each face shows the other's ink through the paper while the leaf is in the air.
+          leafFront.uOther.value = nextL;
+          leafBack.uOther.value = curR;
+          leafFront.uLift.value = leafBack.uLift.value = Math.sin(flip * Math.PI);
           leaf.visible = true;
           bendLeaf(flip * Math.PI);
         } else {

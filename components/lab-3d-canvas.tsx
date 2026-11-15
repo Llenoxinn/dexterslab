@@ -15,6 +15,7 @@ import { CONTACT_SPIRAL_SECONDS, CONTACT_WORD_COLUMNS, type ContactChoreography 
 import { createStudioWindows, STUDIO_BACK_WINDOW, STUDIO_SUN_DIRECTION } from "@/lib/studio-daylight";
 import { interludeBus } from "@/lib/interlude-bus";
 import { createGovernor, qualityTiers, type QualityTier } from "@/lib/render-quality";
+import { steelMaterial, studioEnvironment } from "@/lib/lab-materials";
 import { batchScene, PROXY_LAYER } from "@/lib/batch-scene";
 
 export type FocusStation = "terminal" | "core" | "tank" | "bench" | "rack";
@@ -125,6 +126,8 @@ type LabBuild = {
   accents: Set<THREE.Material>;
   /** Materials that keep their own look (the CRT screen and the painted sign). */
   keep: Set<THREE.Material>;
+  /** The lab's bare hardware (coil, stands, rack frames): rendered as real brushed steel. */
+  steel: THREE.Material;
 };
 
 function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
@@ -511,6 +514,7 @@ function buildLab(root: THREE.Group, textures: THREE.Texture[]): LabBuild {
     stations: [terminal, core, tank, bench, rack],
     accents: new Set<THREE.Material>([M.ink, M.neon, M.liquid, M.tankFluid, M.holo, M.glow]),
     keep: new Set<THREE.Material>([M.screen, M.blueprint, M.led, daylight.sky]),
+    steel: M.steel,
     markers,
     activate: christmas.activate,
     tick: (t: number) => {
@@ -750,6 +754,16 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     scene.add(root);
     const lab = buildLab(root, textures);
     addLabProps(root);
+    // Clay everywhere, except the bare hardware: brushed steel against its own studio of bright cards,
+    // so it reads as metal (not grey plastic) next to the matte white model.
+    const studio = studioEnvironment(renderer);
+    textures.push(studio);
+    const steel = steelMaterial(studio, "brushed");
+    root.traverse((o) => {
+      if (o instanceof THREE.Mesh && o.material === lab.steel) o.material = steel;
+    });
+    lab.steel.dispose();
+    lab.keep.add(steel);
     applyClay(root, lab);
     textures.push(...addSunlight(scene, SUN_DIR));
 
