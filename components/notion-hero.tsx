@@ -117,11 +117,9 @@ export function NotionHero() {
         <p className="hero-tagline" aria-hidden="true">A lab<br />for ideas.</p>
 
         <div className="hero-3d-bottom">
-          <p className="hero-corner hero-corner--left" aria-hidden="true">
-            <span className="hero-corner-cross" />
-            01 / dexterslab
-          </p>
-          <div className="lab-3d-controls" role="group" aria-label="Fly to a lab station">
+          {/* Quiet text controls in the corner: the keyboard path to the stations, never a bar over the lab. */}
+          <div className="lab-3d-controls hero-stations" role="group" aria-label="Fly to a lab station">
+            <span className="hero-stations-lead" aria-hidden="true">Fly to</span>
             {STATIONS.map((item) => (
               <button
                 key={item.id}

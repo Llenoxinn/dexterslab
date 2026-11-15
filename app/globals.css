@@ -10724,3 +10724,73 @@ html[data-lab-theme="phosphor"] body { background: #101232; }
   font-weight: 400;
   opacity: 0.72;
 }
+
+/* ── Hero station controls: text in the corner, not a pill over the lab ── */
+.hero-3d-bottom {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.hero-stations.lab-3d-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-self: start;
+  gap: 0 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.hero-stations-lead {
+  font-family: var(--font-heading);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: rgb(10 10 93 / 0.6);
+}
+.hero-stations .ndev-specimen-btn {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font-family: var(--font-heading);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1;
+  color: rgb(10 10 93 / 0.66);
+  text-decoration: underline 2px transparent;
+  text-underline-offset: 7px;
+  transition: color 160ms var(--ease-out), text-decoration-color 160ms var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .hero-stations .ndev-specimen-btn:hover {
+    color: var(--color-ink);
+  }
+}
+.hero-stations .ndev-specimen-btn.is-active {
+  background: none;
+  color: var(--color-ink);
+  text-decoration-color: currentColor;
+}
+.hero-stations .ndev-specimen-btn:focus-visible {
+  outline: 2px solid var(--color-neon);
+  outline-offset: 4px;
+}
+[data-lab-theme="phosphor"] .hero-stations-lead,
+[data-lab-theme="phosphor"] .hero-stations .ndev-specimen-btn {
+  color: rgb(238 240 255 / 0.66);
+}
+[data-lab-theme="phosphor"] .hero-stations .ndev-specimen-btn.is-active {
+  color: rgb(238 240 255);
+}
+@media (max-width: 899px) {
+  .hero-3d-bottom {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .hero-stations.lab-3d-controls {
+    justify-self: center;
+    justify-content: center;
+  }
+}
