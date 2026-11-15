@@ -10634,6 +10634,10 @@ html[data-lab-theme="phosphor"] body { background: #101232; }
 :root[data-dive="on"] .lab-lobby {
   background: transparent;
 }
+/* With the 3D dive running, the copy follows the camera: present under the water, gone above it. */
+:root[data-dive="on"] .lab-lobby-copy {
+  opacity: var(--lobby-presence, 0);
+}
 .lab-lobby-pin {
   position: sticky;
   top: 0;

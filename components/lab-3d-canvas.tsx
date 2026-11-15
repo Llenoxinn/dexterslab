@@ -961,6 +961,7 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
     const deepWater = new THREE.Color(0x0b1450);
     scene.fog = new THREE.FogExp2(deepWater, 0);
     let diveS = 0;
+    const lobbySection = document.getElementById("lobby");
     let anchors: DiveAnchors = { diveStart: 0, diveEnd: 1, descendStart: 2, descendEnd: 3, riseStart: 4, riseEnd: 5 };
     const pageColour = new THREE.Color(BACKDROP);
     const breeze = new THREE.Vector2(0.18, 0.06);
@@ -1483,6 +1484,12 @@ export function Lab3DCanvas({ station, onStationChange, zoomed, onZoomChange }: 
       const uw = underwaterAmount(camera.position.y, WATER_LEVEL);
       (scene.fog as THREE.FogExp2).density = 0.06 * uw;
       (scene.background as THREE.Color).copy(pageColour).lerp(deepWater, uw);
+      // The lobby's copy is only present while the lens is actually under the water, so it never
+      // floats over the room above (surfacing for the BOOM, or scrolling back up with the lag).
+      const presence = uw.toFixed(2);
+      if (lobbySection && lobbySection.style.getPropertyValue("--lobby-presence") !== presence) {
+        lobbySection.style.setProperty("--lobby-presence", presence);
+      }
       lobby.group.visible = diveS > 1.02 && diveS < 2.98;
       if (lobby.group.visible && !calm) lobby.tick(animT);
       // Fully under: the lab above is out of sight, so it stops drawing (its batches follow root).
