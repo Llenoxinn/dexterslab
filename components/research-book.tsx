@@ -14,12 +14,25 @@ const ResearchDeskCanvas = dynamic(
   { ssr: false },
 );
 
+/** Renders `**word**` as <strong>, the only markup the research copy uses. */
+function emphasize(text: string) {
+  return text.split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 ? <strong key={i}>{part}</strong> : part));
+}
+
+/** "31.25 mg/mL" → the number big, the unit small beside it, never split across lines. */
+function withUnit(value: string) {
+  const m = value.match(/^(.*?)\s(mg\/mL|ppm)$/);
+  return m ? <>{m[1]}<span className="paper-result-unit">{m[2]}</span></> : value;
+}
+
 export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
   const [progress, setProgress] = useState(0);
   const [active, setActive] = useState(false);
   const [ready, setReady] = useState(false);
   const [readingIndex, setReadingIndex] = useState<number | null>(null);
   const [unsupported, setUnsupported] = useState(false);
+  // Each lost GPU context remounts the scene; after two tries the static manuscript takes over.
+  const [attempt, setAttempt] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -96,21 +109,29 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
         </h3>
       </header>
 
-      <p className="paper-summary">{entry.summary}</p>
+      <p className="paper-problem">{emphasize(entry.problem)}</p>
 
-      <div className="paper-findings">
-        {entry.highlights.map((highlight) => (
-          <section key={highlight.heading}>
-            <h4>{highlight.heading}</h4>
-            <p>{highlight.detail}</p>
-          </section>
+      <section className="paper-results" aria-label="Key results">
+        {entry.results.map((r) => (
+          <div key={r.value} className="paper-result">
+            <p className="paper-result-value">{withUnit(r.value)}</p>
+            <p className="paper-result-label">{r.label}</p>
+          </div>
         ))}
-      </div>
-
-      <section className="paper-abstract">
-        <h4>Abstract</h4>
-        {entry.abstract.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
       </section>
+
+      <div className="paper-brief">
+        <section>
+          <h4>Methods</h4>
+          <ol className="paper-methods">
+            {entry.methods.map((m) => <li key={m}>{m}</li>)}
+          </ol>
+        </section>
+        <section className="paper-conclusion">
+          <h4>Conclusion</h4>
+          <p>{emphasize(entry.conclusion)}</p>
+        </section>
+      </div>
 
       <dl className="paper-facts">
         <div className="paper-facts-wide">
@@ -158,6 +179,7 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
 
         {active && !unsupported && (
           <ResearchDeskCanvas
+            key={attempt}
             studies={studies}
             progress={progress}
             onRead={(idx) => setReadingIndex(idx)}
@@ -166,13 +188,23 @@ export function ResearchBook({ studies }: { studies: ResearchEntry[] }) {
               setUnsupported(true);
               setReady(true);
             }}
+            onContextLost={() => {
+              if (attempt >= 2) {
+                setUnsupported(true);
+                setReady(true);
+              } else {
+                setReady(false);
+                setAttempt((a) => a + 1);
+              }
+            }}
           />
         )}
 
         {!ready && (
           <div className="research-desk-loading" role="status">
-            <span aria-hidden="true" />
-            Preparing the 3D monograph…
+            <span className="research-desk-loading-book" aria-hidden="true" />
+            <span className="research-desk-loading-table" aria-hidden="true" />
+            Setting the notebook on the table…
           </div>
         )}
 
