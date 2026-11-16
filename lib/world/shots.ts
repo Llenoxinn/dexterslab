@@ -10,16 +10,17 @@ export type Shot = { from: Pose; to: Pose; /** Where the key light and its shado
 
 export const SHOTS: Record<ShotId, Shot> = {
   console: { from: { pos: [0, 2, 8.6], look: [0, 4.4, -60] }, to: { pos: [-1, 3.6, 2.5], look: [-3, 8, -80] }, focus: [0, 0, -8] },
-  tubes: { from: { pos: [-1, 7, -36], look: [17, 7, -58] }, to: { pos: [6.5, 3.6, -50.5], look: [17, 4.4, -58.5] }, focus: [14, 0, -56] },
-  platform: { from: { pos: [0, 12, -60], look: [0, 4, -92] }, to: { pos: [-6, 4.2, -75], look: [0, 3.6, -92] }, focus: [0, 0, -90] },
+  tubes: { from: { pos: [-2, 8, -38], look: [17, 8, -58] }, to: { pos: [3.5, 5, -49], look: [17, 6, -59] }, focus: [14, 0, -56] },
+  platform: { from: { pos: [0, 13, -58], look: [0, 4, -92] }, to: { pos: [-8, 6.5, -71], look: [0, 3.2, -92] }, focus: [0, 0, -90] },
   cabinet: { from: { pos: [4, 8, -106], look: [-15, 3, -126] }, to: { pos: [-5, 3.4, -117.5], look: [-15, 2.8, -126] }, focus: [-13, 0, -124] },
   projector: { from: { pos: [-6, 8, -132], look: [13, 4.5, -152] }, to: { pos: [2.5, 3.6, -145], look: [14, 4.8, -153] }, focus: [11, 0, -150] },
   banderitas: { from: { pos: [0, 3, -154], look: [0, 12, -180] }, to: { pos: [0, 6.5, -166], look: [0, 13.5, -190] }, focus: [0, 0, -176] },
-  outbox: { from: { pos: [0, 10, -184], look: [0, 9, -228] }, to: { pos: [-2.5, 3.6, -200], look: [3, 6.5, -228] }, focus: [0, 0, -212] },
+  outbox: { from: { pos: [0, 10, -182], look: [0, 11, -228] }, to: { pos: [-2.5, 4.5, -198], look: [3, 8.5, -228] }, focus: [0, 0, -212] },
 };
 
 const smooth = (t: number) => t * t * (3 - 2 * t);
-const mix = (a: number, b: number, t: number) => a + (b - a) * t;
+/** Exact at both ends, so a finished shot rests exactly on its pose. */
+const mix = (a: number, b: number, t: number) => a * (1 - t) + b * t;
 
 /** The pose at scroll progress `p` (0 as the window enters, 1 as it leaves). Clamped and eased. */
 export function shotPose(id: ShotId, p: number, out: Pose = { pos: [0, 0, 0], look: [0, 0, 0] }): Pose {

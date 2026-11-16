@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { experience, githubProjects, projects, researchWorks } from "@/lib/content";
 import { AchievementsSection } from "@/components/achievements-section";
 import { ContactSection } from "@/components/contact-section";
 import { ExperienceSection } from "@/components/experience-section";
@@ -39,17 +40,17 @@ export default function Home() {
         </div>
 
         <Sheet><MethodSection /></Sheet>
-        <LabPassage shot="tubes" name="Pneumatic mail" note="One canister for every place I have worked." />
+        <LabPassage shot="tubes" name="Pneumatic mail" action="Bring one down" items={experience.map((org) => org.organisation)} />
         <Sheet><ExperienceSection /></Sheet>
-        <LabPassage shot="platform" name="The centre platform" note="A vault, a calculating engine and a photo booth: one machine per project." />
+        <LabPassage shot="platform" name="The centre platform" action="Turn the platform" items={projects.map((project) => project.name)} />
         <Sheet><ProjectsSection /></Sheet>
-        <LabPassage shot="cabinet" name="The blueprint cabinet" note="A drawer for each smaller build." />
+        <LabPassage shot="cabinet" name="The blueprint cabinet" action="Open the next drawer" items={githubProjects.map((repo) => repo.name)} />
         <Sheet><GitHubSection /></Sheet>
-        <LabPassage shot="projector" name="The projector" note="The research, on the big screen." />
+        <LabPassage shot="projector" name="The projector" action="Next slide" items={researchWorks.map((paper) => paper.shortName)} />
         <Sheet><ResearchSection /></Sheet>
-        <LabPassage shot="banderitas" name="Banderitas" note="Every flag on the line was captured." />
+        <LabPassage shot="banderitas" name="Banderitas" action="Tug the line" note="Every flag on the line was captured." />
         <Sheet><AchievementsSection /></Sheet>
-        <LabPassage shot="outbox" name="The outbox" note="Mail leaves the lab from here." />
+        <LabPassage shot="outbox" name="The outbox" action="Send a canister" note="Mail leaves the lab from here." />
         <Sheet><ContactSection /></Sheet>
       </main>
 

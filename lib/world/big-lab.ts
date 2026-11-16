@@ -1,5 +1,9 @@
 import * as THREE from "three";
-import { Painter, createMaterials, gouache } from "@/lib/world/paint";
+import { Painter, clock, createMaterials, gouache } from "@/lib/world/paint";
+import { parol, starGeometry } from "@/lib/world/parol";
+import { createRigs, type Rig } from "@/lib/world/rigs";
+import { createProps } from "@/lib/world/props";
+import { C } from "@/lib/world/palette";
 
 /**
  * The big lab: one hall, 96 m wide, 250 m long and 48 m high, walked from the control desk at the
@@ -7,23 +11,7 @@ import { Painter, createMaterials, gouache } from "@/lib/world/paint";
  * Units are metres; the aisle runs down -z. Station positions match the camera shots in shots.ts.
  */
 
-const C = {
-  navy: 0x0a1246,
-  deep: 0x14226a,
-  steel: 0x2b4a92,
-  teal: 0x2c7f96,
-  aqua: 0x66c4cf,
-  ice: 0xbfe9ee,
-  lilac: 0x6a72d8,
-  dos: 0x2a36d0,
-  cream: 0xf2e8cf,
-  warm: 0xffd772,
-  amber: 0xf2a23a,
-  red: 0xe5483c,
-  pink: 0xff7aa8,
-  green: 0x1f7a4c,
-  wood: 0x6b4426,
-} as const;
+
 
 const HALF_PI = Math.PI / 2;
 /** Rotation that turns a station built facing +z toward the aisle from its side of the hall. */
@@ -111,7 +99,7 @@ function tower(p: Painter, w: number, d: number, h: number, r: () => number, det
   for (let row = 0; row < 3; row += 1) {
     for (let col = 0; col < 8; col += 1) {
       if (r() < 0.22) continue;
-      p.box(0.3, 0.3, 0.16, lamps[Math.floor(r() * lamps.length)], { at: [(col - 3.5) * w * 0.09, h * 0.46 - row * 0.75, f + 0.08], bucket: "glow" });
+      p.box(0.3, 0.3, 0.16, lamps[Math.floor(r() * lamps.length)], { at: [(col - 3.5) * w * 0.09, h * 0.46 - row * 0.75, f + 0.08], bucket: r() < 0.45 ? "blink" : "glow", phase: r() });
     }
   }
   for (let i = 0; i < 6; i += 1) p.box(w * 0.56, 0.16, 0.2, C.navy, { at: [0, h * 0.14 + i * 0.42, f + 0.04], ramp: 0 });
@@ -199,23 +187,6 @@ function spotlight(p: Painter, x: number, z: number, radius = 7, color = 0x2c241
   p.add(new THREE.ConeGeometry(radius * 1.05, 0.02, 28, 1, true), color, { at: [x, 0.04, z], bucket: "beam" });
 }
 
-/** A five-point star lantern (parol) with its ring and two tails. */
-function parol(p: Painter, x: number, y: number, z: number, size: number, a: number, b: number) {
-  const shape = new THREE.Shape();
-  for (let i = 0; i < 10; i += 1) {
-    const radius = i % 2 === 0 ? size : size * 0.42;
-    const angle = (i / 10) * Math.PI * 2 + HALF_PI;
-    if (i === 0) shape.moveTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
-    else shape.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
-  }
-  shape.closePath();
-  p.add(new THREE.ExtrudeGeometry(shape, { depth: size * 0.2, bevelEnabled: false }), a, { at: [x, y, z - size * 0.1], bucket: "glow" });
-  p.ring(size * 1.08, size * 0.05, b, { at: [x, y, z], bucket: "glow" }, 20);
-  p.ball(size * 0.24, b, { at: [x, y, z + size * 0.12], bucket: "glow" }, 8);
-  for (const side of [-1, 1]) p.box(size * 0.1, size * 1.3, size * 0.04, b, { at: [x + side * size * 0.55, y - size * 1.5, z], rot: [0, 0, side * 0.12], bucket: "glow" });
-  p.cyl(0.03, 0.03, 3, C.navy, { at: [x, y + size + 1.5, z], ramp: 0 }, 4);
-}
-
 function christmas(p: Painter) {
   const r = rng(1225);
   p.push([-7, 0, -9], 0, 0.55);
@@ -227,7 +198,8 @@ function christmas(p: Painter) {
     p.add(new THREE.ConeGeometry(radius, 2.7, 18), C.green, { at: [0, 2.6 + i * 1.55, 0], ramp: 0.55 });
   }
   const top = 2.6 + (tiers - 1) * 1.55 + 1.6;
-  p.add(new THREE.OctahedronGeometry(0.7), C.warm, { at: [0, top + 0.4, 0], bucket: "glow" });
+  p.add(starGeometry(1.05, 0.46, 0.34, 0xffc94a, 0xfffbe6), C.warm, { at: [0, top + 0.75, 0], bucket: "glow", keep: true });
+  p.cyl(0.08, 0.12, 0.6, C.amber, { at: [0, top + 0.05, 0], bucket: "gloss" }, 8);
   for (let i = 0; i < 70; i += 1) {
     const t = i / 70;
     const y = 1.6 + t * (top - 2.2);
@@ -235,7 +207,7 @@ function christmas(p: Painter) {
     const angle = t * Math.PI * 9;
     const at: [number, number, number] = [Math.cos(angle) * radius, y, Math.sin(angle) * radius];
     if (i % 3 === 0) p.ball(0.26, i % 2 === 0 ? 0xd8322e : 0xf2b632, { at, bucket: "gloss" }, 8);
-    else p.ball(0.09, r() < 0.5 ? 0xfff0b0 : 0xffc86a, { at, bucket: "glow" }, 5);
+    else p.ball(0.09, r() < 0.5 ? 0xfff0b0 : 0xffc86a, { at, bucket: "blink", phase: t * 3 }, 5);
   }
   const gifts: Array<[number, number, number, number]> = [[3.2, 1.4, C.red, 0.3], [-2.6, 1.1, C.dos, -0.4], [1.2, 0.9, C.cream, 0.8]];
   for (const [x, s, color, turn] of gifts) {
@@ -254,12 +226,16 @@ function christmas(p: Painter) {
     points.push([-21 + u * 42, 17 - Math.sin(u * Math.PI) * 4.5, -17]);
   }
   p.tube(points, 0.05, C.navy);
-  palette.forEach(([a, b], i) => {
+  palette.forEach(([paper, trim], i) => {
     const u = (i + 1) / 6;
-    parol(p, -21 + u * 42, 17 - Math.sin(u * Math.PI) * 4.5 - 2.6, -17, 1.15, a, b);
+    parol(p, [-21 + u * 42, 17 - Math.sin(u * Math.PI) * 4.5 - 2.9, -17], 1.15, { paper, trim });
   });
-  parol(p, -13, 21, -44, 2.2, C.warm, C.red);
-  parol(p, 13, 22, -47, 1.8, C.pink, C.cream);
+  parol(p, [-13, 21, -44], 2.4, { paper: C.warm, trim: C.red }, 0.25);
+  parol(p, [13, 22, -47], 2, { paper: C.pink, trim: C.cream, bulbs: [C.aqua, 0xfff0a8] }, -0.3);
+  // A few more further down the hall, so the season carries all the way to the far end.
+  parol(p, [-16, 23, -104], 2.2, { paper: 0x9fe6e0, trim: C.warm }, 0.4);
+  parol(p, [17, 25, -138], 2.6, { paper: C.red, trim: C.warm }, -0.4);
+  parol(p, [0, 30, -206], 3.2, { paper: C.warm, trim: C.pink, bulbs: [C.red, 0xfff0a8, 0x8dffb0] });
 }
 
 function consoleDesk(p: Painter) {
@@ -276,21 +252,17 @@ function consoleDesk(p: Painter) {
   }
   // The big red button, and two levers.
   p.cyl(0.6, 0.7, 0.2, C.cream, { at: [-2.2, 1.86, 0.3], bucket: "gloss" }, 18);
-  p.cyl(0.42, 0.46, 0.3, C.red, { at: [-2.2, 2.06, 0.3], bucket: "gloss" }, 18);
   for (const [x, lean, color] of [[-3.3, 0.35, C.aqua], [-3.8, -0.3, C.warm]] as const) {
     p.cyl(0.06, 0.06, 0.9, C.ice, { at: [x, 2.1, 0.2], rot: [lean, 0, 0] }, 6);
     p.ball(0.16, color, { at: [x, 2.52, 0.2 + lean * 0.42], bucket: "gloss" }, 8);
   }
   // Left: the CRT. Right: a roll printer with its paper running out.
   p.soft(3.4, 2.8, 2.8, C.ice, { at: [-6.6, 2.9, 0.8], rot: [0, 0.42, 0], bucket: "gloss" }, 0.5);
-  p.soft(2.6, 2, 0.2, 0xc8f4ee, { at: [-6.05, 2.95, 2.05], rot: [0, 0.42, 0], bucket: "glow" }, 0.25);
-  for (let i = 0; i < 5; i += 1) {
-    p.box(1.5 - (i % 3) * 0.4, 0.09, 0.05, C.dos, { at: [-6.15 + (i % 3) * 0.08, 3.55 - i * 0.28, 2.2], rot: [0, 0.42, 0], bucket: "glow" });
-  }
+  p.soft(2.7, 2.1, 0.12, 0x061826, { at: [-6.05, 2.95, 2.08], rot: [0, 0.42, 0] }, 0.2);
   p.soft(3, 1.5, 2.2, C.steel, { at: [6.6, 2.25, 0.9], rot: [0, -0.42, 0], bucket: "gloss" }, 0.3);
   p.cyl(0.55, 0.55, 2, C.cream, { at: [6.5, 3.3, 0.9], rot: [0, -0.42, HALF_PI] }, 16);
   p.box(1.8, 0.03, 1.6, C.cream, { at: [6.25, 2.72, 1.9], rot: [0.5, -0.42, 0], ramp: 0 });
-  for (let i = 0; i < 3; i += 1) p.box(0.3, 0.34, 0.1, [C.red, C.warm, 0x8dffb0][i], { at: [5.7 + i * 0.45, 2.2, 2.05], rot: [0, -0.42, 0], bucket: "glow" });
+  for (let i = 0; i < 3; i += 1) p.box(0.3, 0.34, 0.1, [C.red, C.warm, 0x8dffb0][i], { at: [5.7 + i * 0.45, 2.2, 2.05], rot: [0, -0.42, 0], bucket: "blink" });
   p.pop();
   // A stool left out in the aisle, for scale.
   p.push([0, 0, -1.5], 0, 0.45);
@@ -326,16 +298,11 @@ function breakerWall(p: Painter) {
 function tubes(p: Painter) {
   p.push([19, 0, -58], face(1));
   p.soft(14, 10, 1.2, C.deep, { at: [0, 6, 0], bucket: "gloss" }, 0.3);
-  const canisters = [C.pink, C.warm, 0x9fe6e0, C.cream];
   for (let i = 0; i < 4; i += 1) {
     const x = (i - 1.5) * 2.9;
     p.cyl(0.75, 0.75, 37, C.ice, { at: [x, 21.5, 1.6], bucket: "glass", ramp: 0 }, 14, true);
     for (let y = 6; y < 40; y += 6.5) p.ring(0.82, 0.1, C.steel, { at: [x, y, 1.6], rot: [HALF_PI, 0, 0], ramp: 0 }, 14);
     p.cyl(0.95, 1.1, 0.8, C.steel, { at: [x, 2.9, 1.6], bucket: "gloss" }, 14);
-    const y = [6.2, 11.5, 4.4, 17][i];
-    p.cyl(0.5, 0.5, 1.3, canisters[i], { at: [x, y, 1.6], bucket: "gloss" }, 12);
-    p.ball(0.5, C.steel, { at: [x, y + 0.65, 1.6], bucket: "gloss" }, 10);
-    p.ball(0.5, C.steel, { at: [x, y - 0.65, 1.6], bucket: "gloss" }, 10);
   }
   // The tray, with two canisters opened and their ID badges out.
   p.soft(13, 1.3, 3.6, C.steel, { at: [0, 0.65, 3], bucket: "gloss" }, 0.25);
@@ -415,20 +382,8 @@ function projectMachines(p: Painter) {
 function cabinet(p: Painter) {
   p.push([-18.5, 0, -126], face(-1));
   p.soft(11, 5.6, 3.6, C.steel, { at: [0, 2.8, 0], bucket: "gloss" }, 0.3);
-  for (let row = 0; row < 3; row += 1) {
-    for (let col = 0; col < 3; col += 1) {
-      const open = row === 1 && col === 1;
-      const x = (col - 1) * 3.5;
-      const y = 1.2 + row * 1.6;
-      p.soft(3.2, 1.3, open ? 3.4 : 0.3, C.ice, { at: [x, y, open ? 3.3 : 1.85], bucket: "gloss", ramp: 0.2 }, 0.1);
-      p.soft(1.2, 0.16, 0.24, C.amber, { at: [x, y, open ? 5.1 : 2.08], bucket: "gloss" }, 0.06);
-      if (open) {
-        p.box(2.9, 0.06, 4.6, C.dos, { at: [x, y + 0.7, 4.2], rot: [0.12, 0, 0], ramp: 0 });
-        for (let i = 0; i < 5; i += 1) p.box(2.2 - (i % 2) * 0.7, 0.07, 0.07, C.cream, { at: [x - 0.1, y + 0.76 - i * 0.07, 3 + i * 0.6], rot: [0.12, 0, 0], ramp: 0 });
-        p.ring(0.6, 0.04, C.cream, { at: [x + 0.6, y + 0.52, 5.4], rot: [HALF_PI + 0.12, 0, 0], ramp: 0 }, 18);
-      }
-    }
-  }
+  // The drawers are a rig (rigs.ts); this is the dark well they slide out of.
+  p.box(10.6, 5, 0.1, 0x070d33, { at: [0, 2.8, 1.78], ramp: 0 });
   const rolls = [C.dos, C.cream, C.dos, C.ice, C.cream];
   rolls.forEach((color, i) => p.cyl(0.24, 0.24, 3.4, color, { at: [-2.4 + i * 0.6, 5.86 + (i % 2) * 0.1, 0.4 - (i % 3) * 0.4], rot: [0, 0.2 * (i % 2), HALF_PI], ramp: 0.1 }, 10));
   // A drafting lamp over the open drawer.
@@ -444,14 +399,6 @@ function projector(p: Painter) {
   p.box(10.4, 0.4, 0.5, C.navy, { at: [0, 10.3, 0.4], ramp: 0 });
   p.box(10, 7.4, 0.14, C.cream, { at: [0, 6.4, 0.5], ramp: 0.12 });
   for (const x of [-4.9, 4.9]) p.cyl(0.1, 0.1, 10.4, C.ice, { at: [x, 5.2, 0.4] }, 6);
-  // What is on the slide: a title bar, text lines and a little helix.
-  p.box(5.6, 0.6, 0.05, C.dos, { at: [-1.6, 8.9, 0.6], ramp: 0 });
-  for (let i = 0; i < 5; i += 1) p.box(4.4 - (i % 2) * 1.2, 0.2, 0.05, C.steel, { at: [-2.2 - (i % 2) * 0.6, 7.7 - i * 0.6, 0.6], ramp: 0 });
-  for (let i = 0; i < 12; i += 1) {
-    const a = i * 0.6;
-    p.ball(0.2, i % 2 ? C.red : C.teal, { at: [2.9 + Math.cos(a) * 0.8, 4 + i * 0.36, 0.72], ramp: 0 }, 6);
-    p.ball(0.2, i % 2 ? C.amber : C.dos, { at: [2.9 - Math.cos(a) * 0.8, 4 + i * 0.36, 0.72], ramp: 0 }, 6);
-  }
   // The cart and the projector itself.
   p.soft(2.8, 1.8, 2.2, C.steel, { at: [0, 1.4, 9.6], bucket: "gloss" }, 0.2);
   for (const x of [-1.1, 1.1]) p.cyl(0.25, 0.25, 0.3, C.navy, { at: [x, 0.25, 9.6], rot: [0, 0, HALF_PI] }, 10);
@@ -465,46 +412,46 @@ function projector(p: Painter) {
   p.pop();
 }
 
-/** Fiesta bunting across the hall: one flag per win. */
-function banderitas(p: Painter) {
-  const colors = [C.red, C.warm, C.dos, C.cream, 0x9fe6e0, C.pink];
-  for (let line = 0; line < 5; line += 1) {
-    const z = -171 - line * 4.6;
-    const high = 19 + (line % 2) * 2.5;
-    const sag = 6.5 + (line % 3) * 0.8;
-    const at = (u: number): [number, number, number] => [-30 + u * 60, high - Math.sin(u * Math.PI) * sag, z];
-    const points: Array<[number, number, number]> = [];
-    for (let i = 0; i <= 16; i += 1) points.push(at(i / 16));
-    p.tube(points, 0.05, C.cream, { ramp: 0 }, 40);
-    for (let i = 1; i < 20; i += 1) {
-      const [x, y] = at(i / 20);
-      p.add(new THREE.ConeGeometry(0.85, 1.7, 3), colors[(i + line * 2) % colors.length], { at: [x, y - 0.9, z], rot: [Math.PI, (i % 2) * 0.3, 0], scale: [1, 1, 0.1], ramp: 0.25 });
-    }
-  }
-}
-
 /** The far end: the vault door out of the lab, the outbox where mail leaves, and the arcade cabinet. */
 function exitWall(p: Painter) {
   p.soft(64, 40, 4, C.deep, { at: [0, 20, -234], bucket: "gloss", ramp: 0.5 }, 1);
   p.ring(10, 0.9, C.steel, { at: [0, 11, -231.6], bucket: "gloss" }, 40);
   p.cyl(9.2, 9.2, 1, C.teal, { at: [0, 11, -231.8], rot: [HALF_PI, 0, 0], bucket: "gloss" }, 40);
   p.ring(10.9, 0.22, 0x9fe6e0, { at: [0, 11, -231.9], bucket: "glow" }, 48);
-  for (let i = 0; i < 4; i += 1) p.box(0.7, 15, 0.6, C.ice, { at: [0, 11, -231], rot: [0, 0, (i / 4) * Math.PI], bucket: "gloss", ramp: 0 });
-  p.cyl(2, 2, 1.4, C.amber, { at: [0, 11, -230.8], rot: [HALF_PI, 0, 0], bucket: "gloss" }, 20);
+  // The door itself: a stepped face, a ring of locking bolts, hinges, and the wheel that opens it.
+  p.cyl(7.2, 7.6, 0.6, C.steel, { at: [0, 11, -231.1], rot: [HALF_PI, 0, 0], bucket: "gloss", ramp: 0.2 }, 40);
+  p.ring(5.2, 0.12, C.navy, { at: [0, 11, -230.75], ramp: 0 }, 40);
+  for (let i = 0; i < 20; i += 1) {
+    const a = (i / 20) * Math.PI * 2;
+    p.cyl(0.32, 0.32, 0.5, C.ice, { at: [Math.cos(a) * 8.4, 11 + Math.sin(a) * 8.4, -231], rot: [HALF_PI, 0, 0], bucket: "gloss" }, 10);
+  }
+  for (const y of [5.5, 16.5]) p.soft(2.2, 2.4, 1.4, C.deep, { at: [-10.3, y, -231.2], bucket: "gloss" }, 0.3);
+  p.ring(2.9, 0.32, C.amber, { at: [0, 11, -230.2], bucket: "gloss" }, 36);
+  for (let i = 0; i < 6; i += 1) {
+    const a = (i / 6) * Math.PI;
+    p.cyl(0.16, 0.16, 5.8, C.amber, { at: [0, 11, -230.2], rot: [0, 0, a], bucket: "gloss" }, 8);
+  }
+  for (let i = 0; i < 6; i += 1) {
+    const a = (i / 6) * Math.PI * 2;
+    p.ball(0.34, C.amber, { at: [Math.cos(a) * 2.9, 11 + Math.sin(a) * 2.9, -230.2], bucket: "gloss" }, 10);
+  }
+  p.cyl(0.9, 1.1, 1.2, C.amber, { at: [0, 11, -230.5], rot: [HALF_PI, 0, 0], bucket: "gloss" }, 20);
+  p.cyl(0.5, 0.5, 0.3, C.red, { at: [0, 11, -229.8], rot: [HALF_PI, 0, 0], bucket: "gloss" }, 16);
   // The readout above the door.
   p.soft(34, 8, 0.6, 0x163a6a, { at: [0, 31, -231.6], bucket: "glow" }, 0.4);
-  for (let i = 0; i < 26; i += 1) p.box(0.6, 0.8 + Math.abs(Math.sin(i * 0.9) * Math.cos(i * 0.37)) * 5, 0.2, i % 5 === 0 ? C.warm : 0x9fe6e0, { at: [-15.6 + i * 1.25, 31, -231.2], bucket: "glow" });
+  for (let i = 0; i < 26; i += 1) p.box(0.6, 0.8 + Math.abs(Math.sin(i * 0.9) * Math.cos(i * 0.37)) * 5, 0.2, i % 5 === 0 ? C.warm : 0x9fe6e0, { at: [-15.6 + i * 1.25, 31, -231.2], bucket: "blink", phase: i / 26 });
   // Tesla towers either side.
-  for (const x of [-27, 27]) {
-    p.cyl(1.4, 2.4, 10, C.steel, { at: [x, 5, -220], bucket: "gloss" }, 14);
-    for (let i = 0; i < 7; i += 1) p.ring(2.6 - i * 0.26, 0.28, C.amber, { at: [x, 11 + i * 1.5, -220], rot: [HALF_PI, 0, 0], bucket: "gloss" }, 20);
-    p.ball(1.5, 0xc8f4ee, { at: [x, 23, -220], bucket: "glow" }, 14);
+  for (const x of [-19, 19]) {
+    p.cyl(1.4, 2.4, 10, C.steel, { at: [x, 5, -222], bucket: "gloss" }, 14);
+    p.cyl(0.7, 0.9, 10, C.cream, { at: [x, 15, -222], bucket: "gloss", ramp: 0.2 }, 14);
+    for (let i = 0; i < 9; i += 1) p.ring(1.05, 0.12, C.amber, { at: [x, 10.6 + i * 1.05, -222], rot: [HALF_PI, 0, 0], bucket: "gloss" }, 18);
+    p.ring(2.4, 0.7, C.steel, { at: [x, 21, -222], rot: [HALF_PI, 0, 0], bucket: "gloss" }, 24);
+    p.ball(1.1, 0xc8f4ee, { at: [x, 22.4, -222], bucket: "glow" }, 14);
   }
   // The outbox: the trunk tube comes down to a desk with one canister ready to go.
   p.cyl(0.9, 0.9, 30, C.ice, { at: [15, 19, -226], bucket: "glass", ramp: 0 }, 14, true);
   p.cyl(1.2, 1.4, 1.2, C.steel, { at: [15, 3.6, -226], bucket: "gloss" }, 14);
   p.soft(7, 3, 3.4, C.steel, { at: [14, 1.5, -224.5], bucket: "gloss" }, 0.3);
-  p.cyl(0.5, 0.5, 1.4, C.warm, { at: [15, 5.4, -226], bucket: "gloss" }, 12);
   p.cyl(0.55, 0.62, 0.3, C.red, { at: [12.2, 3.2, -223.6], bucket: "gloss" }, 16);
   // The arcade cabinet where the runner game lives.
   p.push([-11, 0, -212], 0.45);
@@ -534,8 +481,10 @@ function catwalks(p: Painter) {
 
 export type BigLab = {
   group: THREE.Group;
-  /** Advance the few things that move. `t` in seconds. */
-  update: (t: number, dt: number) => void;
+  /** Machines the reader can press, pull and open, one or more per shot. */
+  rigs: Rig[];
+  /** Advance everything that moves. `t` in seconds; `still` snaps to rest (reduced motion). */
+  update: (t: number, dt: number, still: boolean) => void;
   dispose: () => void;
 };
 
@@ -555,8 +504,8 @@ export function createBigLab(): BigLab {
   platformBase(p);
   cabinet(p);
   projector(p);
-  banderitas(p);
   exitWall(p);
+  const props = createProps(group, materials, p);
   spotlight(p, 0, -6, 8);
   spotlight(p, -7, -9, 4.5, 0x241b0a, 22);
   spotlight(p, -12, -32, 7);
@@ -575,6 +524,7 @@ export function createBigLab(): BigLab {
   // A turning caster's shadow would need the shadow map redrawn every frame; the disc is lit, not shadowed.
   platform.traverse((object) => { object.castShadow = false; });
   group.add(platform);
+  const rigs = createRigs(group, materials, platform);
 
   const floorMap = floorTexture();
   const floorMaterial = gouache(new THREE.MeshLambertMaterial({ map: floorMap }));
@@ -601,8 +551,11 @@ export function createBigLab(): BigLab {
 
   return {
     group,
-    update(t, dt) {
-      platform.rotation.y = t * 0.12;
+    rigs,
+    update(t, dt, still) {
+      clock.value = t;
+      props.update(t, dt, still);
+      for (const rig of rigs) rig.update(t, dt, still);
       const position = dustGeometry.getAttribute("position") as THREE.BufferAttribute;
       for (let i = 0; i < MOTES; i += 1) {
         const y = position.getY(i) + dt * (0.12 + (i % 7) * 0.02);
@@ -611,11 +564,16 @@ export function createBigLab(): BigLab {
       position.needsUpdate = true;
     },
     dispose() {
+      const owned = new Set<THREE.Material>();
       group.traverse((object) => {
         const mesh = object as THREE.Mesh;
         if (mesh.geometry) mesh.geometry.dispose();
+        const material = mesh.material;
+        if (Array.isArray(material)) material.forEach((m) => owned.add(m));
+        else if (material) owned.add(material);
       });
-      for (const material of Object.values(materials)) material.dispose();
+      for (const material of Object.values(materials)) owned.add(material);
+      owned.forEach((material) => material.dispose());
       floorMaterial.dispose();
       floorMap.dispose();
       dustMaterial.dispose();

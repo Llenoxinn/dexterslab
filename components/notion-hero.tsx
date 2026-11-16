@@ -42,6 +42,13 @@ export function NotionHero() {
   const [view, setView] = useState<ViewId>("whoami");
   const [zoomed, setZoomed] = useState(false);
 
+  // The big red button on the desk in the lab opens the same terminal.
+  useEffect(() => {
+    const open = () => setZoomed(true);
+    window.addEventListener("lab:open-terminal", open);
+    return () => window.removeEventListener("lab:open-terminal", open);
+  }, []);
+
   useEffect(() => {
     if (!zoomed) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -85,8 +92,6 @@ export function NotionHero() {
           </div>
         </div>
 
-        {/* One line at the foot of the hero, like a caption under the model. */}
-        <p className="hero-tagline" aria-hidden="true">A lab<br />for ideas.</p>
       </div>
 
       {zoomed && (

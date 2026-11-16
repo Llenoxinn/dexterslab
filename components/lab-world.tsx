@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { createBigLab } from "@/lib/world/big-lab";
+import type { Rig } from "@/lib/world/rigs";
 import { SHOTS, shotPose, windowProgress, type Pose, type ShotId } from "@/lib/world/shots";
 import { createGovernor } from "@/lib/render-quality";
 
@@ -59,6 +60,29 @@ export function LabWorld() {
     const glow = new THREE.PointLight(0x74e0e8, 160, 70, 1.6);
     scene.add(lamp, glow);
 
+    const raycaster = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    let activeEl: HTMLElement | null = null;
+    let hovered: Rig | null = null;
+    /** The machine under a screen point, if the point is in the window that shows its shot. */
+    const pick = (x: number, y: number) => {
+      if (!active) return null;
+      const rigs = lab.rigs.filter((rig) => rig.shot === active);
+      if (!rigs.length) return null;
+      ndc.set((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1);
+      raycaster.setFromCamera(ndc, camera);
+      const hit = raycaster.intersectObjects(rigs.flatMap((rig) => rig.hits), false)[0];
+      return hit ? rigs.find((rig) => rig.hits.includes(hit.object)) ?? null : null;
+    };
+    const announce = (rig: Rig) => {
+      window.dispatchEvent(new CustomEvent("lab:state", { detail: { shot: rig.shot, index: rig.index } }));
+    };
+    const work = (rig: Rig) => {
+      rig.trigger();
+      announce(rig);
+      wake();
+    };
+
     const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
     const calm = () => reducedMotion.matches || document.documentElement.dataset.labFx === "calm";
 
@@ -99,6 +123,11 @@ export function LabWorld() {
         }
       }
       if (!best) return false;
+      if (best !== activeEl) {
+        if (activeEl) activeEl.style.cursor = "";
+        activeEl = best;
+        hovered = null;
+      }
       const id = best.dataset.worldShot as ShotId;
       const rect = best.getBoundingClientRect();
       // The hero is pinned while the first sheet slides over it, so its own position never changes.
@@ -156,7 +185,7 @@ export function LabWorld() {
       swayY += (pointerY - swayY) * (still ? 0 : 1 - Math.exp(-dt * 3));
       camera.position.set(position.x + swayX * 0.7, position.y + swayY * 0.35, position.z);
       camera.lookAt(look);
-      lab.update(time, still ? 0 : dt);
+      lab.update(time, dt, still);
       renderer.render(scene, camera);
       if (!ready) {
         ready = true;
@@ -181,10 +210,28 @@ export function LabWorld() {
     }, { rootMargin: "80px 0px" });
     for (const el of windows) observer.observe(el);
 
+    const interactive = "a, button, input, textarea, select, label, summary, [role='button'], dialog";
     const onPointer = (event: PointerEvent) => {
       if (event.pointerType !== "mouse") return;
       pointerX = (event.clientX / innerWidth) * 2 - 1;
       pointerY = -((event.clientY / innerHeight) * 2 - 1);
+      const target = event.target as Element | null;
+      const over = target && !target.closest(interactive) && activeEl?.contains(target) ? pick(event.clientX, event.clientY) : null;
+      if (over !== hovered) {
+        hovered = over;
+        if (activeEl) activeEl.style.cursor = over ? "pointer" : "";
+      }
+    };
+    const onClick = (event: MouseEvent) => {
+      const target = event.target as Element | null;
+      if (!target || target.closest(interactive) || !activeEl?.contains(target)) return;
+      const rig = pick(event.clientX, event.clientY);
+      if (rig) work(rig);
+    };
+    const onAct = (event: Event) => {
+      const shot = (event as CustomEvent<{ shot: ShotId }>).detail?.shot;
+      const rig = lab.rigs.find((item) => item.shot === shot);
+      if (rig) work(rig);
     };
     const onResize = () => {
       resize();
@@ -198,6 +245,8 @@ export function LabWorld() {
     resizeObserver.observe(host);
     window.addEventListener("scroll", wake, { passive: true });
     window.addEventListener("pointermove", onPointer, { passive: true });
+    window.addEventListener("click", onClick);
+    window.addEventListener("lab:act", onAct);
     window.addEventListener("lab:preferences", wake);
     document.addEventListener("visibilitychange", wake);
     reducedMotion.addEventListener("change", wake);
@@ -209,6 +258,9 @@ export function LabWorld() {
       resizeObserver.disconnect();
       window.removeEventListener("scroll", wake);
       window.removeEventListener("pointermove", onPointer);
+      window.removeEventListener("click", onClick);
+      window.removeEventListener("lab:act", onAct);
+      if (activeEl) activeEl.style.cursor = "";
       window.removeEventListener("lab:preferences", wake);
       document.removeEventListener("visibilitychange", wake);
       reducedMotion.removeEventListener("change", wake);

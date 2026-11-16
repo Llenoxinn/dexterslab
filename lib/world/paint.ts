@@ -8,9 +8,13 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
  * but only a few draw calls, which is what lets it be huge on a small GPU.
  *
  * Buckets: `matte` (walls, wood, cloth), `gloss` (machines: a soft highlight), `glow` (screens and
- * bulbs, unlit), `beam` (light cones and pools, additive) and `glass` (see-through tubes).
+ * bulbs, unlit), `blink` (indicator lamps that switch on and off, each on its own beat), `beam` (light
+ * cones and pools, additive) and `glass` (see-through tubes).
  */
-export type Bucket = "matte" | "gloss" | "glow" | "beam" | "glass";
+export type Bucket = "matte" | "gloss" | "glow" | "blink" | "beam" | "glass";
+
+/** Seconds since the lab started; every animated material reads it. */
+export const clock = { value: 0 };
 
 export type Place = {
   at?: [number, number, number];
@@ -21,13 +25,17 @@ export type Place = {
   ramp?: number;
   /** Colour at the bottom of a beam or the rim of a pool; defaults to black (invisible when additive). */
   fade?: number;
+  /** Keep the geometry's own `color` attribute instead of painting a ramp (for shapes shaded by hand). */
+  keep?: boolean;
+  /** Where in its cycle a `blink` lamp starts (0-1); random when left out. */
+  phase?: number;
 };
 
 const SHADOW = new THREE.Color(0x0a1246);
-const BUCKETS: Bucket[] = ["matte", "gloss", "glow", "beam", "glass"];
+const BUCKETS: Bucket[] = ["matte", "gloss", "glow", "blink", "beam", "glass"];
 
 export class Painter {
-  private parts: Record<Bucket, THREE.BufferGeometry[]> = { matte: [], gloss: [], glow: [], beam: [], glass: [] };
+  private parts: Record<Bucket, THREE.BufferGeometry[]> = { matte: [], gloss: [], glow: [], blink: [], beam: [], glass: [] };
   private stack: THREE.Matrix4[] = [new THREE.Matrix4()];
   private m = new THREE.Matrix4();
   private q = new THREE.Quaternion();
@@ -54,6 +62,21 @@ export class Painter {
     const geometry = source.index ? source.toNonIndexed() : source;
     if (geometry !== source) source.dispose();
     geometry.deleteAttribute("uv");
+    if (bucket === "blink") {
+      const phase = place.phase ?? Math.random();
+      geometry.setAttribute("aBlink", new THREE.BufferAttribute(new Float32Array(geometry.getAttribute("position").count).fill(phase), 1));
+    }
+    this.e.set(...(place.rot ?? [0, 0, 0]));
+    this.m.compose(
+      new THREE.Vector3(...(place.at ?? [0, 0, 0])),
+      this.q.setFromEuler(this.e),
+      new THREE.Vector3(...(place.scale ?? [1, 1, 1])),
+    );
+    if (place.keep && geometry.getAttribute("color")) {
+      geometry.applyMatrix4(this.m.premultiply(this.stack[this.stack.length - 1]));
+      this.parts[bucket].push(geometry);
+      return;
+    }
     geometry.computeBoundingBox();
     const box = geometry.boundingBox!;
     const height = Math.max(1e-4, box.max.y - box.min.y);
@@ -87,12 +110,6 @@ export class Painter {
       colors[i * 3 + 2] = b;
     }
     geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    this.e.set(...(place.rot ?? [0, 0, 0]));
-    this.m.compose(
-      new THREE.Vector3(...(place.at ?? [0, 0, 0])),
-      this.q.setFromEuler(this.e),
-      new THREE.Vector3(...(place.scale ?? [1, 1, 1])),
-    );
     geometry.applyMatrix4(this.m.premultiply(this.stack[this.stack.length - 1]));
     this.parts[bucket].push(geometry);
   }
@@ -122,6 +139,14 @@ export class Painter {
   tube(points: Array<[number, number, number]>, radius: number, color: number, place?: Place, segments = 28) {
     const curve = new THREE.CatmullRomCurve3(points.map((p) => new THREE.Vector3(...p)));
     this.add(new THREE.TubeGeometry(curve, segments, radius, 6), color, { ramp: 0.12, ...place });
+  }
+
+  /** A straight-sided rod through the points: bamboo frames and wire, where a smooth curve would round the corners. */
+  rods(points: Array<[number, number, number]>, radius: number, color: number, place?: Place, closed = false) {
+    const path = new THREE.CurvePath<THREE.Vector3>();
+    const v = points.map((q) => new THREE.Vector3(...q));
+    for (let i = 0; i < v.length - (closed ? 0 : 1); i += 1) path.add(new THREE.LineCurve3(v[i], v[(i + 1) % v.length]));
+    this.add(new THREE.TubeGeometry(path, v.length * 6, radius, 5, closed), color, { ramp: 0, ...place });
   }
 
   /** Merge each bucket into one mesh. Returns the meshes that exist; the caller owns disposal. */
@@ -169,8 +194,62 @@ export function gouache<T extends THREE.Material>(material: T): T {
   return material;
 }
 
+/** Indicator lamps: each one switches on and off at its own speed, with a soft edge so it reads as a bulb. */
+function blinking() {
+  const material = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = clock;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute float aBlink;\nvarying float vBlink;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvBlink = aBlink;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform float uTime;\nvarying float vBlink;")
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        float bk = fract(uTime * (0.22 + fract(vBlink * 7.31) * 0.85) + vBlink);
+        diffuseColor.rgb *= mix(0.22, 1.2, smoothstep(0.0, 0.05, bk) * (1.0 - smoothstep(0.58, 0.64, bk)));`,
+      );
+  };
+  material.customProgramCacheKey = () => "blink";
+  return material;
+}
+
+/** A phosphor screen: graticule, two traces and scanlines, drawn per pixel so it stays sharp up close. */
+export function scopeMaterial(tint = 0x6ff0d8, seed = 0) {
+  return new THREE.ShaderMaterial({
+    toneMapped: false,
+    uniforms: { uTime: clock, uTint: { value: new THREE.Color(tint) }, uSeed: { value: seed } },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      varying vec2 vUv;
+      uniform float uTime;
+      uniform vec3 uTint;
+      uniform float uSeed;
+      void main() {
+        vec2 uv = vUv;
+        vec2 g = abs(fract(uv * vec2(8.0, 6.0)) - 0.5);
+        float grid = 1.0 - smoothstep(0.0, 0.035, min(g.x, g.y));
+        float t = uTime + uSeed * 3.7;
+        float y1 = 0.5 + 0.24 * sin(uv.x * (9.0 + uSeed) + t * 2.1) * (0.65 + 0.35 * sin(t * 0.6));
+        float y2 = 0.5 + 0.1 * sin(uv.x * 29.0 - t * 3.3) + 0.07 * sin(uv.x * 6.0 + t * 1.3);
+        float l1 = 1.0 - smoothstep(0.004, 0.02, abs(uv.y - y1));
+        float l2 = 1.0 - smoothstep(0.003, 0.012, abs(uv.y - y2));
+        float sweep = smoothstep(0.08, 0.0, abs(fract(t * 0.35) - uv.x)) * 0.25;
+        float scan = 0.86 + 0.14 * sin(uv.y * 260.0);
+        float vig = smoothstep(0.78, 0.22, length(uv - 0.5));
+        vec3 col = vec3(0.03, 0.12, 0.15) + uTint * (0.16 * grid + 1.3 * l1 + sweep) + vec3(1.0, 0.86, 0.5) * l2 * 0.75;
+        gl_FragColor = vec4(col * scan * (0.5 + 0.5 * vig), 1.0);
+        #include <colorspace_fragment>
+      }`,
+  });
+}
+
 export function createMaterials(): Record<Bucket, THREE.Material> {
   return {
+    blink: blinking(),
     matte: gouache(new THREE.MeshLambertMaterial({ vertexColors: true })),
     gloss: gouache(new THREE.MeshPhongMaterial({ vertexColors: true, specular: 0x4a66a8, shininess: 34 })),
     glow: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: true }),
