@@ -9,12 +9,13 @@ export function PageMotion() {
   useEffect(() => {
     // The paper comes in several sheets with the lab showing between them; the header is light over any of them.
     const sheets = [...document.querySelectorAll<HTMLElement>("[data-sheet]")];
-    const header = document.querySelector<HTMLElement>(".site-header");
+    const header = document.querySelector<HTMLElement>(".lab-nav");
     let headerObserver: IntersectionObserver | undefined;
     const watchHeader = () => {
       headerObserver?.disconnect();
       if (!header || !sheets.length) return;
-      const height = header.offsetHeight;
+      // The corners float 64px deep; whatever sits under that band decides light or dark.
+      const height = 64;
       const under = new Set<Element>();
       headerObserver = new IntersectionObserver((entries) => {
         for (const entry of entries) {
@@ -33,7 +34,7 @@ export function PageMotion() {
     }, { rootMargin: "60px", threshold: 0.01 });
     document.querySelectorAll(".lab-section").forEach((section) => ambientObserver.observe(section));
 
-    const navLinks = [...document.querySelectorAll<HTMLAnchorElement>(".site-header a[href^='#']")];
+    const navLinks = [...document.querySelectorAll<HTMLAnchorElement>(".lab-nav a[href^='#']")];
     const visibleSections = new Map<Element, number>();
     const sectionObserver = new IntersectionObserver((entries) => {
       for (const entry of entries) {

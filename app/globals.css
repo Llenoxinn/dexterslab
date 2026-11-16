@@ -11164,97 +11164,377 @@ body:has(.lab-world) {
 }
 
 
-/* ---------- Header over the lab ---------- */
+/* ---------- Navigation: two corners and a tube rail ---------- */
 
-/* Over the lab the bar is dark glass, so the room shows through; over paper it turns light again. */
-.site-header:not(.is-light) {
-  background: rgb(8 12 64 / 0.55);
+.lab-nav {
+  --stop: 48px;
+}
+
+.lab-nav-brand {
+  position: fixed;
+  top: 12px;
+  left: max(14px, calc(var(--gutter) - 6px));
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
   color: var(--color-paper);
-  border-bottom-color: rgb(246 246 252 / 0.12);
-  backdrop-filter: blur(14px) saturate(1.3);
+  text-decoration: none;
+  transition: color 200ms ease;
 }
 
-.site-header:not(.is-light) :is(.nav-link, .brand, .icon-btn) {
-  color: var(--color-paper);
+.lab-nav.is-light .lab-nav-brand {
+  color: var(--color-ink-deep);
 }
 
-.site-header:not(.is-light) .btn-ghost {
-  color: var(--color-paper);
-  background: rgb(246 246 252 / 0.1);
-}
-
-.site-header:not(.is-light) .icon-btn {
-  border-color: rgb(246 246 252 / 0.22);
-}
-
-.site-header:not(.is-light) .btn-solid {
-  background: var(--color-paper);
-  border-color: var(--color-paper);
-  color: var(--color-ink);
-}
-
-.site-header:not(.is-light) .nav-link[aria-current="location"] {
-  background: rgb(246 246 252 / 0.14);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .site-header:not(.is-light) .nav-link:hover {
-    background: rgb(246 246 252 / 0.1);
-  }
-}
-
-.brand-mark {
-  width: 30px;
-  height: 30px;
+.lab-nav-mark {
+  width: 38px;
+  height: 38px;
   flex: none;
+  border-radius: 9px;
+  box-shadow: 0 6px 16px rgb(5 8 40 / 0.3);
 }
 
-/* The wordmark in the heading face, like every other title on the site. */
-.site-header .wordmark {
+.lab-nav-wordmark {
   font-family: var(--font-heading);
   font-size: 1.1875rem;
   font-weight: 700;
   letter-spacing: -0.035em;
+  transition: opacity 200ms ease, transform 200ms var(--ease-out);
 }
 
-.site-header .nav-link {
-  gap: 6px;
-  padding: 0 11px 0 9px;
+.lab-nav[data-scrolled] .lab-nav-wordmark {
+  opacity: 0;
+  transform: translateX(-6px);
+}
+
+.lab-nav-actions {
+  position: fixed;
+  top: 12px;
+  right: max(12px, calc(var(--gutter) - 8px));
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid rgb(246 246 252 / 0.14);
+  border-radius: 999px;
+  background: rgb(8 12 64 / 0.55);
+  color: var(--color-paper);
+  backdrop-filter: blur(14px) saturate(1.3);
+  transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease;
+}
+
+.lab-nav.is-light .lab-nav-actions {
+  border-color: rgb(10 10 93 / 0.1);
+  background: rgb(246 246 252 / 0.88);
+  color: var(--color-ink-deep);
+  box-shadow: 0 8px 24px rgb(10 10 93 / 0.08);
+}
+
+.lab-nav-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: inherit;
+  transition: background-color 150ms ease, transform 150ms ease-out;
+}
+
+.lab-nav-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.lab-nav-text {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: background-color 150ms ease, transform 150ms ease-out;
+}
+
+.lab-nav-cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color 200ms ease, color 200ms ease, transform 150ms ease-out;
+}
+
+.lab-nav.is-light .lab-nav-cta {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+:is(.lab-nav-cta, .lab-nav-text, .lab-nav-icon):active {
+  transform: scale(0.96);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :is(.lab-nav-icon, .lab-nav-text):hover {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+  }
+}
+
+.lab-nav-toggle {
+  display: none;
+}
+
+.lab-nav-toggle[aria-expanded="true"] .hamburger > span:first-child {
+  transform: translateY(3.5px) rotate(45deg);
+}
+
+.lab-nav-toggle[aria-expanded="true"] .hamburger > span:last-child {
+  transform: translateY(-3.5px) rotate(-45deg);
+}
+
+/* The rail: a glass tube with one stop per section, and a canister parked at the one you are reading. */
+.lab-rail {
+  position: fixed;
+  top: 50%;
+  left: 14px;
+  z-index: 60;
+  padding: 8px 4px;
+  border: 1px solid rgb(246 246 252 / 0.14);
+  border-radius: 30px;
+  background: rgb(8 12 64 / 0.62);
+  color: var(--color-paper);
+  box-shadow: 0 12px 32px rgb(5 8 40 / 0.28);
+  backdrop-filter: blur(14px) saturate(1.3);
+  transform: translateY(-50%);
+}
+
+.lab-rail-tube {
+  position: absolute;
+  top: 32px;
+  bottom: 32px;
+  left: 50%;
+  width: 6px;
+  margin-left: -3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgb(191 233 238 / 0.1), rgb(191 233 238 / 0.36) 50%, rgb(191 233 238 / 0.1));
+}
+
+.lab-rail-canister {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  width: 34px;
+  height: 40px;
+  margin-left: -17px;
+  border-radius: 13px;
+  background: linear-gradient(90deg, #e9b94a, #ffe39a 40%, #ffd772 60%, #d9a43a);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.3), 0 3px 8px rgb(5 8 40 / 0.35);
+  transition: transform 460ms cubic-bezier(0.32, 0.72, 0, 1), opacity 200ms ease;
+}
+
+.lab-rail-canister::before,
+.lab-rail-canister::after {
+  content: "";
+  position: absolute;
+  inset-inline: 3px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgb(43 74 146 / 0.75);
+}
+
+.lab-rail-canister::before {
+  top: 3px;
+}
+
+.lab-rail-canister::after {
+  bottom: 3px;
+}
+
+.lab-rail-canister[data-hidden] {
+  opacity: 0;
+}
+
+.lab-rail-stops {
+  position: relative;
+  display: grid;
+}
+
+.lab-rail-stop {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: var(--stop);
+  border-radius: 22px;
+  color: rgb(246 246 252 / 0.72);
+  transition: color 200ms ease;
+}
+
+.lab-rail-stop[aria-current="location"] {
+  color: var(--color-ink-deep);
+}
+
+.lab-rail-label {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 14px);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--color-paper);
+  color: var(--color-ink-deep);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgb(10 10 93 / 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-4px, -50%);
+  transition: opacity 150ms ease, transform 150ms ease-out;
+}
+
+.lab-rail-stop:focus-visible .lab-rail-label {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lab-rail-stop:hover:not([aria-current="location"]) {
+    color: var(--color-paper);
+  }
+  .lab-rail-stop:hover .lab-rail-label {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lab-rail-canister {
+    transition: opacity 200ms ease;
+  }
 }
 
 .nav-icon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   flex: none;
-  opacity: 0.8;
 }
 
-.nav-link[aria-current="location"] .nav-icon {
-  opacity: 1;
+/* The rail takes the left edge, so the content column starts clear of it. */
+@media (min-width: 1100px) {
+  .wrap {
+    padding-left: max(var(--gutter), 84px);
+  }
 }
 
-.mobile-nav-link {
+@media (max-width: 1099px) {
+  .lab-rail,
+  .lab-nav-actions > :is(.lab-nav-text, a.lab-nav-icon) {
+    display: none;
+  }
+  .lab-nav-toggle {
+    display: grid;
+  }
+}
+
+/* Small screens: the stops as a full-screen menu, in the heading face. */
+.lab-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 32px;
+  padding: 88px max(24px, var(--gutter)) 40px;
+  background: rgb(8 12 64 / 0.95);
+  color: var(--color-paper);
+  overscroll-behavior: contain;
+  backdrop-filter: blur(16px);
+}
+
+.lab-menu[hidden] {
+  display: none;
+}
+
+.lab-menu-list {
+  display: grid;
+  gap: 2px;
+}
+
+.lab-menu-link {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
+  min-height: 56px;
+  color: inherit;
+  font-family: var(--font-heading);
+  font-size: clamp(1.75rem, 7vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  text-decoration: none;
 }
 
-.mobile-nav-link .nav-icon {
-  width: 20px;
-  height: 20px;
+.lab-menu-link .nav-icon {
+  width: 26px;
+  height: 26px;
+  opacity: 0.6;
 }
 
-/* Between the full bar and the menu button, labels give way to icons alone. */
-@media (min-width: 1100px) and (max-width: 1279px) {
-  .site-header .nav-link {
-    padding: 0 10px;
+.lab-menu-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lab-menu-list li {
+    animation: lab-menu-in 300ms var(--ease-out) both;
   }
-  .site-header .nav-link {
-    font-size: 0;
-    gap: 0;
+  .lab-menu-list li:nth-child(2) { animation-delay: 40ms; }
+  .lab-menu-list li:nth-child(3) { animation-delay: 80ms; }
+  .lab-menu-list li:nth-child(4) { animation-delay: 120ms; }
+  .lab-menu-list li:nth-child(5) { animation-delay: 160ms; }
+  .lab-menu-list li:nth-child(6) { animation-delay: 200ms; }
+}
+
+@keyframes lab-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+    filter: blur(4px);
   }
-  .site-header .nav-link .nav-icon {
-    width: 18px;
-    height: 18px;
-  }
+}
+
+.lab-nav.is-open :is(.lab-nav-brand, .lab-nav-actions) {
+  color: var(--color-paper);
+}
+
+.lab-nav.is-open .lab-nav-actions {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+html.menu-open {
+  overflow: hidden;
+}
+
+/* With no bar across the top, the lab runs to the top edge of the screen. */
+.hero.hero--world {
+  padding-top: 0;
+}
+
+.hero--world .hero-3d-shell {
+  min-height: 100dvh;
+}
+
+.hero--world .hero-3d-hud {
+  padding-top: 84px;
 }
