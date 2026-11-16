@@ -7,17 +7,23 @@ const EASE_OUT = "cubic-bezier(0.23, 1, 0.32, 1)";
 
 export function PageMotion() {
   useEffect(() => {
-    const sheet = document.querySelector<HTMLElement>("[data-sheet]");
+    // The paper comes in several sheets with the lab showing between them; the header is light over any of them.
+    const sheets = [...document.querySelectorAll<HTMLElement>("[data-sheet]")];
     const header = document.querySelector<HTMLElement>(".site-header");
     let headerObserver: IntersectionObserver | undefined;
     const watchHeader = () => {
       headerObserver?.disconnect();
-      if (!header || !sheet) return;
+      if (!header || !sheets.length) return;
       const height = header.offsetHeight;
-      headerObserver = new IntersectionObserver(([entry]) => {
-        header.classList.toggle("is-light", entry.isIntersecting);
+      const under = new Set<Element>();
+      headerObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) under.add(entry.target);
+          else under.delete(entry.target);
+        }
+        header.classList.toggle("is-light", under.size > 0);
       }, { rootMargin: `-${height}px 0px -${Math.max(0, innerHeight - height - 1)}px 0px` });
-      headerObserver.observe(sheet);
+      for (const sheet of sheets) headerObserver.observe(sheet);
     };
     watchHeader();
     window.addEventListener("resize", watchHeader);

@@ -11012,3 +11012,110 @@ html[data-lab-theme="phosphor"] body { background: #101232; }
 [data-lab-theme="phosphor"] .finding-item-rank { color: rgb(238 240 255); }
 [data-lab-theme="phosphor"] .finding-item-rank-sub { color: rgb(238 240 255 / 0.72); }
 [data-lab-theme="phosphor"] .finding-flag { fill: rgb(238 240 255); }
+
+
+/* ---------- The big lab behind the page ---------- */
+
+/* One canvas, fixed behind everything. The hero and the gaps between sheets are windows onto it. */
+.lab-world {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  /* Shown until the first frame, and instead of the lab when WebGL is unavailable. */
+  background: linear-gradient(180deg, #0b1a58 0%, var(--color-ink-deep) 100%);
+}
+
+.lab-world canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 500ms var(--ease-out);
+}
+
+.lab-world[data-ready] canvas {
+  opacity: 1;
+}
+
+.lab-world[data-webgl="off"] canvas {
+  display: none;
+}
+
+.hero.hero--world {
+  background: transparent;
+}
+
+.hero.hero--world::after {
+  content: none;
+}
+
+/* The page used to be one see-through sheet over a paper body; now the paper is the sheets themselves. */
+body:has(.lab-world) {
+  background: transparent;
+}
+
+.sheet {
+  background: var(--color-paper);
+}
+
+.sheet > .pixel-edge {
+  display: block;
+}
+
+/* A soft shade behind the copy only, so the room stays bright everywhere else. */
+.hero--world .hero-3d-shell {
+  background: linear-gradient(260deg, rgb(10 10 93 / 0.82) 0%, rgb(10 10 93 / 0.46) 30%, rgb(10 10 93 / 0) 58%);
+  color: var(--color-paper);
+}
+
+.hero--world .ndev-title {
+  color: var(--color-paper);
+}
+
+.hero--world .ndev-subtitle {
+  color: rgb(246 246 252 / 0.84);
+}
+
+.hero--world .btn-ghost {
+  color: var(--color-paper);
+  border-color: rgb(246 246 252 / 0.42);
+}
+
+.hero--world :is(.hero-corner-kicker, .hero-tagline) {
+  color: rgb(246 246 252 / 0.72);
+}
+
+.lab-passage {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  min-height: 72vh;
+  padding-block: 48px clamp(32px, 6vh, 64px);
+  color: var(--color-paper);
+  background: linear-gradient(0deg, rgb(10 10 93 / 0.62) 0%, rgb(10 10 93 / 0) 34%);
+}
+
+@media (min-width: 768px) {
+  .lab-passage {
+    min-height: 110vh;
+  }
+}
+
+.lab-passage-caption {
+  display: grid;
+  gap: 6px;
+}
+
+.lab-passage-name {
+  font-family: var(--font-heading);
+  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.lab-passage-note {
+  max-width: 44ch;
+  color: var(--color-lavender);
+}
