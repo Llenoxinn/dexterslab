@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FlaskIcon, GitHubMark } from "@/components/icons";
+import { GitHubMark } from "@/components/icons";
+import { LogoMark } from "@/components/logo-mark";
+import { NAV_ICONS } from "@/components/nav-icons";
 import { site } from "@/lib/site";
 
 const NAV_ITEMS = [
-  { label: "About", hash: "#method" },
-  { label: "Experience", hash: "#experience" },
-  { label: "Projects", hash: "#projects" },
-  { label: "GitHub", hash: "#github" },
-  { label: "Research", hash: "#research" },
-  { label: "Achievements", hash: "#achievements" },
+  { label: "About", hash: "#method", icon: NAV_ICONS.about },
+  { label: "Experience", hash: "#experience", icon: NAV_ICONS.experience },
+  { label: "Projects", hash: "#projects", icon: NAV_ICONS.projects },
+  { label: "GitHub", hash: "#github", icon: NAV_ICONS.github },
+  { label: "Research", hash: "#research", icon: NAV_ICONS.research },
+  { label: "Achievements", hash: "#achievements", icon: NAV_ICONS.achievements },
 ];
 
 export function SiteHeader({ home = false }: { home?: boolean }) {
@@ -45,7 +47,7 @@ export function SiteHeader({ home = false }: { home?: boolean }) {
     <header ref={headerRef} className="site-header on-ink">
       <div className="wrap header-inner">
         <a className="brand" href="/">
-          <FlaskIcon className="brand-mark" />
+          <LogoMark className="brand-mark" />
           <span className="wordmark">{site.wordmark}</span>
         </a>
 
@@ -53,7 +55,8 @@ export function SiteHeader({ home = false }: { home?: boolean }) {
           <ul className="nav-links">
             {NAV_ITEMS.map((item) => (
               <li key={item.hash}>
-                <a className="nav-link" href={home ? item.hash : `/${item.hash}`}>
+                <a className="nav-link" href={home ? item.hash : `/${item.hash}`} title={item.label}>
+                  {item.icon}
                   {item.label}
                 </a>
               </li>
@@ -106,6 +109,7 @@ export function SiteHeader({ home = false }: { home?: boolean }) {
                 href={home ? item.hash : `/${item.hash}`}
                 onClick={() => setMenuOpen(false)}
               >
+                {item.icon}
                 {item.label}
               </a>
             </li>
