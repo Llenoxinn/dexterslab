@@ -3,18 +3,12 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
-import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
-import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
-import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import type { ResearchEntry } from "@/lib/content";
-import { narraTexture } from "@/lib/filipino-lab";
 import { site } from "@/lib/site";
-import { createGovernor, qualityTiers, type QualityTier } from "@/lib/render-quality";
-import { paperFibreTexture, paperLeaf, paperSurface, steelMaterial, studioEnvironment } from "@/lib/lab-materials";
-
-/** Set once the journal's context has been lost: later mounts this session start without AO. */
-const LITE_KEY = "lab:journal-lite";
+import { createGovernor } from "@/lib/render-quality";
+import { Painter, clock, createMaterials, gouache, haloScale } from "@/lib/world/paint";
+import { C } from "@/lib/world/palette";
+import { paperFibreTexture, paperLeaf, paperSurface } from "@/lib/world/paper";
 
 type Props = {
   studies: ResearchEntry[];
@@ -42,13 +36,13 @@ const BOARD_T = 0.04;
 const BLOCK_T = 0.06; // paper block thickness per side
 const SEG = 32;
 
-/* ── Palette: Dexter's-lab night blues, warm spotlight, parol accents ──── */
-const BG = 0xeef0f6; // the same pale table the hero's clay lab sits on
+/* ── Palette: the lab at night, one warm desk lamp, parol accents ──────── */
+const BG = 0x0a1246; // the lab's navy: the desk falls off into the same dark as the hall
 const CLOTH = 0x1a1f8c;
 const PAPER = "#f5f0e3";
 const GRID = "rgba(70, 92, 190, 0.13)";
 const INK = "#1313ba";
-const TEXT = "#0b0f2e"; // near-black ink: the daylight scene is bright, so the copy has to be dark
+const TEXT = "#0b0f2e"; // near-black ink on cream paper, read under a warm lamp
 const MUTED = "#2a3052";
 
 /** The research copy marks emphasis with `**word**`; the notebook pages print it plain. */
@@ -256,9 +250,9 @@ function coverTexture(fonts: Fonts, renderer: THREE.WebGLRenderer) {
 
   ctx.textAlign = "center";
   ctx.fillStyle = INK;
-  ctx.font = `700 88px ${fonts.pixel}`;
-  ctx.fillText("LAB", canvas.width / 2, ly + 150);
-  ctx.fillText("NOTEBOOK", canvas.width / 2, ly + 240);
+  ctx.font = `700 92px ${fonts.heading}`;
+  ctx.fillText("Lab", canvas.width / 2, ly + 150);
+  ctx.fillText("Notebook", canvas.width / 2, ly + 240);
   ctx.font = `600 30px ${fonts.body}`;
   ctx.fillStyle = TEXT;
   ctx.fillText("Computational & Experimental Biology", canvas.width / 2, ly + 320);
@@ -284,9 +278,9 @@ function coverTexture(fonts: Fonts, renderer: THREE.WebGLRenderer) {
       ctx.fillRect(fx + c * px, fy + r * px, px, px);
     }),
   );
-  ctx.font = `700 30px ${fonts.pixel}`;
+  ctx.font = `700 32px ${fonts.heading}`;
   ctx.fillStyle = "#cbcbef";
-  ctx.fillText("DEXTERSLAB", canvas.width / 2, 1240);
+  ctx.fillText("dexterslab", canvas.width / 2, 1240);
   ctx.textAlign = "left";
   return toTexture(canvas, renderer);
 }
@@ -380,10 +374,6 @@ function paperBlock(pageMat: THREE.Material, edgeMat: THREE.Material, mirrored =
   return { group, setSwell };
 }
 
-function lathe(points: [number, number][], material: THREE.Material, segments = 40) {
-  return new THREE.Mesh(new THREE.LatheGeometry(points.map(([x, y]) => new THREE.Vector2(x, y)), segments), material);
-}
-
 /* ── Component ─────────────────────────────────────────────────────────── */
 
 export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsupported, onContextLost }: Props) {
@@ -421,20 +411,14 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         latest.current.onUnsupported();
         return;
       }
-      const roomy = ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) > 4;
-      // One ladder of pixel ratio, MSAA and AO. Small devices, and any browser that already lost this
-      // context once, start on the first tier without AO and never climb above it.
-      const tiers = qualityTiers(devicePixelRatio || 1, 1.5);
-      let lite = !roomy;
-      try {
-        lite ||= sessionStorage.getItem(LITE_KEY) === "1";
-      } catch {}
-      const governor = createGovernor(tiers.length, { start: lite ? Math.max(0, tiers.findIndex((t) => t.ao === 0)) : 0 });
-      let tier: QualityTier = tiers[governor.index];
-      renderer.setPixelRatio(tier.ratio);
-      host.dataset.renderScale = String(tier.ratio);
-      renderer.toneMapping = THREE.NeutralToneMapping;
-      renderer.toneMappingExposure = 1;
+      // The same pixel-ratio ladder as the hall: drop a step when frames run long.
+      const tiers = [Math.min(devicePixelRatio || 1, 1.5), 1, 0.75].filter((ratio, i, all) => all.indexOf(ratio) === i);
+      const governor = createGovernor(tiers.length);
+      let tier = tiers[governor.index];
+      renderer.setPixelRatio(tier);
+      host.dataset.renderScale = String(tier);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 0.92;
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFShadowMap;
       renderer.shadowMap.autoUpdate = false;
@@ -442,7 +426,7 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       renderer.domElement.setAttribute("role", "img");
       renderer.domElement.setAttribute(
         "aria-label",
-        "A lab notebook on a pale tabletop in soft daylight. Its pages summarise each research study.",
+        "A lab notebook open on a desk in the lab at night, under a warm desk lamp. Its pages summarise each research study.",
       );
 
       const scene = new THREE.Scene();
@@ -450,32 +434,34 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       scene.fog = new THREE.Fog(BG, 8.6, 17);
       const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 40);
 
-      /* Lighting: daylight on a white clay model, matching the hero lab. A soft sky fill and one
-         low sun that throws long shadows across the bench. */
-      scene.add(new THREE.HemisphereLight(0xffffff, 0xc9ccd8, 1.0));
-      const spot = new THREE.SpotLight(0xfff4e6, 120, 20, 0.42, 0.9, 1.5); // kept modest so the pages don't wash out
-      spot.position.set(-5.5, 8.5, -4.5);
-      spot.target.position.set(0, 0, -0.1);
+      /* Lighting, as in the hall: the room's cool navy bounce, and one warm desk lamp over the
+         notebook that throws its shadows forward across the desk. */
+      scene.add(new THREE.HemisphereLight(0x8fa8ff, 0x0a1040, 0.75));
+      // It sits in the lamp's shade (built below), top right, and falls across the spread toward the reader.
+      const spot = new THREE.SpotLight(0xffd9a0, 62, 16, 0.7, 0.7, 1.4);
+      spot.position.set(2.7, 4.3, -2.45);
+      spot.target.position.set(-0.4, 0, 0.35);
       spot.castShadow = true;
-      spot.shadow.mapSize.setScalar(Math.min(renderer.capabilities.maxTextureSize, 2048));
+      spot.shadow.mapSize.setScalar(Math.min(renderer.capabilities.maxTextureSize, 1024));
       spot.shadow.camera.near = 0.5;
-      spot.shadow.radius = roomy ? 3 : 1.5;
-      spot.shadow.intensity = 0.78;
-      spot.shadow.bias = -0.00008;
+      spot.shadow.radius = 2;
+      spot.shadow.bias = -0.0001;
       spot.shadow.normalBias = 0.004;
       scene.add(spot, spot.target);
-      const fill = new THREE.DirectionalLight(0xf2f4ff, 0.45); // shadowless fill from the viewer's side
-      fill.position.set(-4, 3, 5);
-      scene.add(fill);
+      // A cool rim from the screens behind, so the book's edges separate from the dark.
+      const rim = new THREE.DirectionalLight(0x74e0e8, 0.55);
+      rim.position.set(3, 2.5, -6);
+      scene.add(rim);
 
       const disposables: { dispose(): void }[] = [];
       const std = (params: THREE.MeshStandardMaterialParameters) => new THREE.MeshStandardMaterial(params);
+      const paint = createMaterials();
+      disposables.push(...Object.values(paint));
 
-      /* Desk: a narra-wood tabletop that falls off into the dark. */
-      const deskWood = narraTexture([5, 5]);
-      deskWood.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      disposables.push(deskWood);
-      const bench = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), std({ map: deskWood, color: 0xb08a74, roughness: 0.5, metalness: 0.02 }));
+      /* Desk: the lab's painted navy, with the same paper wash as every surface in the hall. */
+      const deskMat = gouache(new THREE.MeshLambertMaterial({ color: 0x24357a }));
+      disposables.push(deskMat);
+      const bench = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), deskMat);
       bench.rotation.x = -Math.PI / 2;
       bench.receiveShadow = true;
       scene.add(bench);
@@ -493,9 +479,6 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       disposables.push(fibre);
       paperSurface(leftPageMat, fibre);
       paperSurface(rightPageMat, fibre);
-      // Steel for the few metal things on the desk, lit by its own small studio of bright cards.
-      const studio = studioEnvironment(renderer);
-      disposables.push(studio);
 
       const book = new THREE.Group();
       scene.add(book);
@@ -613,25 +596,86 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         }
       };
 
-      /* Props from the lab bench. */
-      const props = new THREE.Group();
-      scene.add(props);
-      const glass = std({ color: 0xdff1ff, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.38, depthWrite: false });
-      const glow = (color: number, intensity = 1.6) =>
-        std({ color, emissive: color, emissiveIntensity: intensity, roughness: 0.3, transparent: true, opacity: 0.92 });
+      /* Props from the lab bench, painted with the hall's gouache kit: a soft light-to-dark ramp in the
+         vertex colours, merged into a handful of meshes, with halos where something glows. */
+      const HALF = Math.PI / 2;
+      const latheGeo = (points: [number, number][]) => new THREE.LatheGeometry(points.map(([x, y]) => new THREE.Vector2(x, y)), 32);
+      const kit = new Painter();
+      const lampKit = new Painter();
 
-      // Erlenmeyer flask with luminous teal reagent.
+      // The desk lamp the light comes from: a weighted base, a two-part arm, an amber shade and its bulb.
+      lampKit.cyl(0.48, 0.55, 0.14, C.navy, { at: [3.5, 0.07, -2.9], bucket: "gloss" }, 24);
+      lampKit.rods([[3.5, 0.12, -2.9], [3.9, 2.7, -3.4], [2.95, 4.5, -2.6]], 0.05, C.ice, { bucket: "gloss" });
+      lampKit.ball(0.11, C.amber, { at: [3.9, 2.7, -3.4], bucket: "gloss" }, 10);
+      lampKit.cyl(0.22, 0.62, 0.7, C.amber, { at: [2.85, 4.62, -2.55], rot: [0.32, 0, -0.42], bucket: "gloss", ramp: 0.45 }, 24, true);
+      lampKit.ball(0.2, 0xfff2cc, { at: [2.78, 4.42, -2.5], bucket: "glow", halo: 1.6, haloColor: 0xffc878 }, 12);
+
+      // An Erlenmeyer flask of glowing reagent (the reagent itself is its own mesh, so it can wobble).
+      const flaskProfile: [number, number][] = [[0, 0], [0.42, 0], [0.46, 0.04], [0.16, 0.66], [0.13, 0.7], [0.13, 0.95], [0.155, 0.98]];
+      kit.add(latheGeo(flaskProfile), 0xbfe9ee, { at: [-2.65, 0, -0.25], bucket: "glass", ramp: 0 });
+      kit.ring(0.15, 0.018, C.ice, { at: [-2.65, 0.98, -0.25], rot: [HALF, 0, 0], bucket: "gloss" }, 28);
+
+      // A rack of test tubes, each sample glowing its own parol colour.
+      kit.push([2.45, 0, -1.2], -0.12);
+      for (const y of [0.04, 0.42]) kit.soft(1.0, 0.06, 0.3, C.cream, { at: [0, y, 0], bucket: "gloss" }, 0.02);
+      for (const x of [-0.46, 0.46]) kit.box(0.05, 0.46, 0.28, C.cream, { at: [x, 0.23, 0] });
+      [0xff8a3d, 0x8dffb0, 0xff7aa8, 0xffd772].forEach((color, i) => {
+        const x = -0.3 + i * 0.2;
+        const h = 0.28 + (i % 2) * 0.1;
+        kit.cyl(0.055, 0.055, 0.7, 0xbfe9ee, { at: [x, 0.42, 0], bucket: "glass", ramp: 0 }, 18, true);
+        kit.cyl(0.048, 0.048, h, color, { at: [x, 0.08 + h / 2, 0], bucket: "glow", halo: 0.32 }, 18);
+      });
+      kit.pop();
+
+      // A pencil left beside the spread.
+      kit.push([2.25, 0.035, 0.55], 0.9);
+      kit.cyl(0.035, 0.035, 1.3, C.warm, { rot: [0, 0, HALF], bucket: "gloss" }, 6);
+      kit.add(new THREE.ConeGeometry(0.035, 0.14, 6), 0xf1d6b0, { at: [0.72, 0, 0], rot: [0, 0, -HALF] });
+      kit.cyl(0.036, 0.036, 0.1, C.pink, { at: [-0.725, 0, 0], rot: [0, 0, HALF] }, 12);
+      kit.cyl(0.039, 0.039, 0.085, C.ice, { at: [-0.635, 0, 0], rot: [0, 0, HALF], bucket: "gloss" }, 16);
+      kit.pop();
+
+      // Coffee: the lab runs on it.
+      kit.cyl(0.2, 0.18, 0.36, C.amber, { at: [-2.15, 0.18, 1.6], bucket: "gloss" }, 28);
+      kit.add(new THREE.CircleGeometry(0.18, 24), 0x3b2314, { at: [-2.15, 0.33, 1.6], rot: [-HALF, 0, 0], bucket: "gloss", ramp: 0 });
+      kit.ring(0.09, 0.025, C.amber, { at: [-1.94, 0.19, 1.6], bucket: "gloss" }, 20);
+
+      // Round reading glasses, folded and set down.
+      kit.push([2.0, 0.17, 1.5], -0.35);
+      for (const side of [-1, 1]) {
+        kit.ring(0.17, 0.02, C.ice, { at: [side * 0.21, 0, 0], rot: [-HALF + 0.28, 0, 0], bucket: "gloss" }, 40);
+        kit.add(new THREE.CircleGeometry(0.165, 32), 0xbfe6ff, { at: [side * 0.21, 0, 0], rot: [-HALF + 0.28, 0, 0], bucket: "glass", ramp: 0 });
+        kit.box(0.4, 0.018, 0.018, C.ice, { at: [side * 0.2, -0.03, -0.12], rot: [0, side * 0.12, 0], bucket: "gloss" });
+      }
+      kit.add(new THREE.TorusGeometry(0.05, 0.016, 8, 16, Math.PI), C.ice, { at: [0, 0.012, -0.012], rot: [-HALF + 0.28, 0, 0], bucket: "gloss" });
+      kit.pop();
+
+      // A petri dish with colonies growing in parol colours.
+      kit.cyl(0.42, 0.42, 0.08, 0xbfe9ee, { at: [-2.55, 0.04, 0.78], bucket: "glass", ramp: 0 }, 40, true);
+      kit.cyl(0.4, 0.4, 0.035, 0xf2d98a, { at: [-2.55, 0.02, 0.78], ramp: 0.1 }, 40);
+      const colonyColors = [0xff8a3d, 0x8dffb0, 0xff7aa8, 0x7cf0dc, 0xffffff];
+      for (let i = 0; i < 14; i += 1) {
+        const a = i * 2.39996;
+        const r = 0.08 + (((i * 37) % 100) / 100) * 0.27;
+        const size = 0.018 + (i % 4) * 0.008;
+        kit.ball(1, colonyColors[i % colonyColors.length], { at: [-2.55 + Math.cos(a) * r, 0.04, 0.78 + Math.sin(a) * r], scale: [size, size * 0.5, size], bucket: "gloss", ramp: 0 }, 8);
+      }
+
+      const props = kit.build(paint);
+      scene.add(props);
+      const lamp = lampKit.build(paint);
+      // The bulb is inside the shade: if the lamp cast shadows it would black out its own light.
+      lamp.traverse((object) => {
+        object.castShadow = false;
+      });
+      scene.add(lamp);
+
       const flask = new THREE.Group();
       flask.position.set(-2.65, 0, -0.25);
-      const flaskProfile: [number, number][] = [
-        [0, 0], [0.42, 0], [0.46, 0.04], [0.16, 0.66], [0.13, 0.7], [0.13, 0.95], [0.155, 0.98],
-      ];
-      flask.add(lathe(flaskProfile, glass));
-      const lip = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.018, 8, 28), std({ color: 0xe8f4ff, roughness: 0.2 }));
-      lip.rotation.x = Math.PI / 2;
-      lip.position.y = 0.98;
-      flask.add(lip);
-      const reagent = lathe([[0, 0.015], [0.4, 0.015], [0.43, 0.05], [0.27, 0.36], [0, 0.36]], glow(0x34e3c9, 0.55));
+      scene.add(flask);
+      const reagentKit = new Painter();
+      reagentKit.add(latheGeo([[0, 0.015], [0.4, 0.015], [0.43, 0.05], [0.27, 0.36], [0, 0.36]]), 0x34e3c9, { bucket: "glow", halo: 0.9, haloColor: 0x2fd6bf });
+      const reagent = reagentKit.build(paint);
       flask.add(reagent);
       const flaskLight = new THREE.PointLight(0x34e3c9, 3.2, 3.2, 1.6);
       flaskLight.position.set(0, 0.35, 0);
@@ -665,135 +709,8 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         pupils.push(pupil);
         eyes.add(eye);
       }
-      const blush = std({ color: 0xff7aa8, emissive: 0xff7aa8, emissiveIntensity: 0.4, transparent: true, opacity: 0.7 });
-      for (const side of [-1, 1]) {
-        const cheek = new THREE.Mesh(new THREE.CircleGeometry(0.03, 16), blush);
-        cheek.position.set(side * 0.19, -0.07, 0.03);
-        cheek.rotation.y = side * 0.5;
-        eyes.add(cheek);
-      }
       flask.add(eyes);
       let nextBlink = 2.5;
-      props.add(flask);
-
-      // Test-tube rack with parol-coloured samples.
-      const rack = new THREE.Group();
-      rack.position.set(2.45, 0, -1.2);
-      rack.rotation.y = -0.12;
-      const rackMat = std({ color: 0xdfe5f5, roughness: 0.5 });
-      const shelf = new RoundedBoxGeometry(1.0, 0.06, 0.3, 2, 0.02);
-      for (const y of [0.04, 0.42]) {
-        const s = new THREE.Mesh(shelf, rackMat);
-        s.position.y = y;
-        s.castShadow = true;
-        rack.add(s);
-      }
-      for (const x of [-0.46, 0.46]) {
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.46, 0.28), rackMat);
-        leg.position.set(x, 0.23, 0);
-        leg.castShadow = true;
-        rack.add(leg);
-      }
-      [0xff8a3d, 0x4ade80, 0xff5fb8, 0xffd23f].forEach((color, i) => {
-        const x = -0.3 + i * 0.2;
-        const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.7, 18, 1, true), glass);
-        tube.position.set(x, 0.42, 0);
-        const fluid = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.28 + (i % 2) * 0.1, 18), glow(color, 0.9));
-        fluid.position.set(x, 0.22 + (i % 2) * 0.05, 0);
-        rack.add(tube, fluid);
-      });
-      props.add(rack);
-
-      // Pencil resting beside the spread.
-      const pencil = new THREE.Group();
-      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.3, 6), std({ color: 0xffc83d, roughness: 0.55 }));
-      shaft.rotation.z = Math.PI / 2;
-      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.14, 6), std({ color: 0xf1d6b0, roughness: 0.8 }));
-      tip.rotation.z = -Math.PI / 2;
-      tip.position.x = 0.72;
-      const eraser = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.1, 12), std({ color: 0xff7a93, roughness: 0.8 }));
-      eraser.rotation.z = Math.PI / 2;
-      eraser.position.x = -0.725;
-      // Brushed ferrule crimping the eraser on, with two pressed rings.
-      const ferruleMat = steelMaterial(studio, "brushed");
-      const ferrule = new THREE.Mesh(new THREE.CylinderGeometry(0.039, 0.039, 0.085, 24), ferruleMat);
-      ferrule.rotation.z = Math.PI / 2;
-      ferrule.position.x = -0.635;
-      const crimpGeo = new THREE.TorusGeometry(0.039, 0.0045, 6, 24);
-      for (const x of [-0.655, -0.615]) {
-        const crimp = new THREE.Mesh(crimpGeo, ferruleMat);
-        crimp.rotation.y = Math.PI / 2;
-        crimp.position.x = x;
-        pencil.add(crimp);
-      }
-      pencil.add(shaft, tip, eraser, ferrule);
-      pencil.position.set(2.25, 0.035, 0.55);
-      pencil.rotation.y = 0.9;
-      pencil.traverse((o) => (o.castShadow = true));
-      props.add(pencil);
-
-      // Coffee mug — the lab runs on it.
-      const mug = new THREE.Group();
-      mug.position.set(-2.15, 0, 1.6);
-      const mugBody = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.18, 0.36, 28), std({ color: 0xff8a3d, roughness: 0.5 }));
-      mugBody.position.y = 0.18;
-      const coffee = new THREE.Mesh(new THREE.CircleGeometry(0.18, 24), std({ color: 0x3b2314, roughness: 0.3 }));
-      coffee.rotation.x = -Math.PI / 2;
-      coffee.position.y = 0.33;
-      const handle = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.025, 8, 20), std({ color: 0xff8a3d, roughness: 0.5 }));
-      handle.position.set(0.21, 0.19, 0);
-      mug.add(mugBody, coffee, handle);
-      mug.traverse((o) => (o.castShadow = true));
-      props.add(mug);
-
-      // Round reading glasses, folded and set down beside the notebook.
-      const specs = new THREE.Group();
-      const frameMat = steelMaterial(studio, "polished");
-      const lensMat = std({ color: 0xbfe6ff, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.35, depthWrite: false });
-      const rimGeo = new THREE.TorusGeometry(0.17, 0.02, 10, 40);
-      for (const side of [-1, 1]) {
-        const rim = new THREE.Mesh(rimGeo, frameMat);
-        rim.position.x = side * 0.21;
-        const lens = new THREE.Mesh(new THREE.CircleGeometry(0.165, 32), lensMat);
-        lens.position.x = side * 0.21;
-        // Folded temple arm tucked behind the lenses.
-        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.018, 0.018), frameMat);
-        arm.position.set(side * 0.2, 0.0, -0.06 - (side > 0 ? 0.03 : 0));
-        arm.rotation.y = side * 0.12;
-        specs.add(rim, lens, arm);
-      }
-      const bridge = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.016, 8, 16, Math.PI), frameMat);
-      bridge.position.y = 0.04;
-      specs.add(bridge);
-      // Lying on the bench, lenses tilted slightly up as real folded glasses rest on their arms.
-      specs.rotation.set(-Math.PI / 2 + 0.28, 0, 0);
-      const specsRig = new THREE.Group();
-      specsRig.position.set(2.0, 0.17, 1.5);
-      specsRig.rotation.y = -0.35;
-      specsRig.add(specs);
-      specsRig.traverse((o) => (o.castShadow = true));
-      props.add(specsRig);
-
-      // A petri dish with colourful colonies — tiny parol-coloured dots of life.
-      const dish = new THREE.Group();
-      dish.position.set(-2.55, 0, 0.78);
-      const dishWall = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.08, 40, 1, true), glass);
-      dishWall.position.y = 0.04;
-      const agar = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.035, 40), std({ color: 0xf2d98a, roughness: 0.4, transparent: true, opacity: 0.85 }));
-      agar.position.y = 0.02;
-      dish.add(dishWall, agar);
-      const colonyGeo = new THREE.SphereGeometry(1, 10, 6);
-      const colonyColors = [0xff8a3d, 0x4ade80, 0xff5fb8, 0x7cf0dc, 0xffffff];
-      for (let i = 0; i < 14; i++) {
-        const a = i * 2.39996;
-        const r = 0.08 + ((i * 37) % 100) / 100 * 0.27;
-        const colony = new THREE.Mesh(colonyGeo, std({ color: colonyColors[i % colonyColors.length], roughness: 0.5 }));
-        const size = 0.018 + (i % 4) * 0.008;
-        colony.scale.set(size, size * 0.5, size);
-        colony.position.set(Math.cos(a) * r, 0.04, Math.sin(a) * r);
-        dish.add(colony);
-      }
-      props.add(dish);
 
       /* Page textures, cached per study. */
       const pageCache = new Map<string, [THREE.Texture, THREE.Texture]>();
@@ -837,87 +754,18 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       let placing = false;
       let lostTimer = 0;
 
-      /* Clay pass: everything turns matte white except what carries the content. Printed surfaces
-         (pages, cover, labels) keep their textures; the notebook cloth and anything that glowed
-         become the DOS-blue accent; glass stays glass. */
-      {
-        const clay = std({ color: 0xf3f3f5, roughness: 0.92, metalness: 0 });
-        const accent = std({ color: 0x2323d2, roughness: 0.6, emissive: 0x2323d2, emissiveIntensity: 0.15 });
-        const glass = std({ color: 0xffffff, roughness: 0.15, transparent: true, opacity: 0.3, depthWrite: false });
-        const accentGlass = std({ color: 0x2323d2, roughness: 0.3, transparent: true, opacity: 0.4, depthWrite: false });
-        disposables.push(clay, accent, glass, accentGlass);
-        const swap = (m: THREE.Material) => {
-          const sm = m as THREE.MeshStandardMaterial;
-          if (m === leftPageMat || m === rightPageMat || m === turnFrontMat || m === turnBackMat || m === edgeMat) return m;
-          if (m.userData.metal) return m;
-          if (sm.map && sm.map !== deskWood) return m;
-          const lit = sm.emissive && sm.emissiveIntensity > 0 && sm.emissive.getHex() !== 0;
-          const blue = m === clothMat || lit;
-          if (m.transparent && m.opacity < 0.95) return blue ? accentGlass : glass;
-          return blue ? accent : clay;
-        };
-        scene.traverse((o) => {
-          if (o instanceof THREE.PointLight) o.visible = false;
-          if (o instanceof THREE.Mesh) {
-            o.material = Array.isArray(o.material) ? o.material.map(swap) : swap(o.material);
-            const solid = (Array.isArray(o.material) ? o.material : [o.material]).every((m) => !m.transparent);
-            o.castShadow = solid && o !== bench && o !== coverFace;
-            o.receiveShadow = solid && o !== turnFront && o !== turnBack;
-          }
-        });
-        // The tabletop is painted in exactly the page's background colour, with shadows laid over
-        // it by a separate catcher. The scene then has no visible edge against the section behind
-        // it, even for the moment a slow device lets the canvas trail the scroll.
-        const flat = new THREE.MeshBasicMaterial({ color: BG, toneMapped: false, fog: false });
-        const catcherMat = new THREE.ShadowMaterial({ color: 0x252b49, opacity: 0.3 });
-        disposables.push(flat, catcherMat);
-        (bench as THREE.Mesh).material = flat;
-        bench.receiveShadow = false;
-        const catcher = new THREE.Mesh(bench.geometry, catcherMat);
-        catcher.rotation.x = -Math.PI / 2;
-        catcher.position.y = 0.002;
-        catcher.receiveShadow = true;
-        scene.add(catcher);
-      }
-
-      // Contact shading anchors the cover, paper edges and small props to the tabletop.
-      const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: tier.samples }));
-      composer.addPass(new RenderPass(scene, camera));
-      const gtao = new GTAOPass(scene, camera, 1, 1);
-      const gtaoSetSize = gtao.setSize.bind(gtao);
-      gtao.setSize = (w: number, h: number) => {
-        const s = tier.ao || 0.5;
-        gtaoSetSize(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)));
+      const render = () => {
+        // The hall shares these with this scene; set them for this camera and clock before each draw.
+        haloScale.value = renderer.getDrawingBufferSize(sizeProbe).y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+        clock.value = elapsed.t;
+        renderer.render(scene, camera);
       };
-      gtao.blendIntensity = 0.55;
-      gtao.updateGtaoMaterial({ radius: 0.16, distanceExponent: 1.6, thickness: 0.15, scale: 1, samples: roomy ? 16 : 8 });
-      gtao.updatePdMaterial({ radius: 5, depthPhi: 1, normalPhi: 4, samples: 16 });
-      const gtaoVisibility = gtao as unknown as { _overrideVisibility: () => void; _visibilityCache: THREE.Object3D[] };
-      const hideBase = gtaoVisibility._overrideVisibility.bind(gtao);
-      gtaoVisibility._overrideVisibility = () => {
-        hideBase();
-        scene.traverse((object) => {
-          if (object instanceof THREE.Mesh && object.visible && (Array.isArray(object.material) ? object.material : [object.material]).every((material) => material.transparent)) {
-            object.visible = false;
-            gtaoVisibility._visibilityCache.push(object);
-          }
-        });
-      };
-      composer.addPass(gtao);
-      const output = new OutputPass();
-      composer.addPass(output);
-      let useAO = tier.ao > 0;
-      const render = () => { if (useAO) composer.render(); else renderer.render(scene, camera); };
       let lastRendered = 0;
-      const applyTier = (next: QualityTier) => {
+      const applyTier = (next: number) => {
         if (next === tier) return;
-        const resample = next.samples !== tier.samples;
         tier = next;
-        renderer.setPixelRatio(tier.ratio);
-        composer.setPixelRatio(tier.ratio);
-        if (resample) composer.reset(new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: tier.samples }));
-        useAO = !contextLost && tier.ao > 0;
-        host.dataset.renderScale = String(tier.ratio);
+        renderer.setPixelRatio(tier);
+        host.dataset.renderScale = String(tier);
         renderer.shadowMap.needsUpdate = true;
         resize();
       };
@@ -1082,7 +930,6 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         camera.updateProjectionMatrix();
         // CSS sizes the canvas (100% of the stage); only the drawing buffer is set here.
         renderer.setSize(host.clientWidth, host.clientHeight, false);
-        composer.setSize(host.clientWidth, host.clientHeight);
         applyState(current);
         render();
       };
@@ -1143,10 +990,6 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
       const onLost = (event: Event) => {
         event.preventDefault();
         contextLost = true;
-        useAO = false;
-        try {
-          sessionStorage.setItem(LITE_KEY, "1");
-        } catch {}
         // A context the browser never hands back would leave an empty stage: let the parent rebuild.
         window.clearTimeout(lostTimer);
         lostTimer = window.setTimeout(() => {
@@ -1198,9 +1041,6 @@ export function ResearchDeskCanvas({ studies, progress, onRead, onReady, onUnsup
         coverMat.map?.dispose();
         disposables.forEach((d) => d.dispose());
         spot.shadow.map?.dispose();
-        gtao.dispose();
-        output.dispose();
-        composer.dispose();
         renderer.dispose();
         renderer.forceContextLoss();
         renderer.domElement.remove();
