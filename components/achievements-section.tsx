@@ -18,11 +18,6 @@ export function AchievementsSection() {
         {achievements.map((item) => (
           <li key={item.id} className="finding-item">
             <div className="finding-item-meta">
-              {/* A captured flag: it runs up its pole as the row scrolls into view. */}
-              <svg className="finding-flag" viewBox="0 0 12 16" aria-hidden="true" shapeRendering="crispEdges">
-                <rect x="1" y="0" width="1" height="16" />
-                <path className="finding-flag-cloth" d="M2 1h8v1h-1v1h-1v1h1v1h1v1H2z" />
-              </svg>
               <span className="finding-item-rank">
                 {item.result.split(" · ")[0]}
                 {item.result.includes(" · ") && (

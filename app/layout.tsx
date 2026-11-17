@@ -37,9 +37,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" className={`${display.variable} ${heading.variable} ${sans.variable}`} suppressHydrationWarning>
       <body>
         <a href="#lab" className="skip-link">Skip to content</a>
-        {/* Apply saved appearance before paint; content remains visible without JavaScript. */}
+        {/* Apply saved appearance before paint, and arm the opening on a first visit; content remains visible without JavaScript. */}
         <Script id="js-flag" strategy="beforeInteractive">
-          {`const root=document.documentElement;root.classList.add("js");try{const p=JSON.parse(localStorage.getItem("dexterslab:prefs")||"{}");root.dataset.labTheme=p.theme==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"phosphor":"dos"):["dos","phosphor","contrast"].includes(p.theme)?p.theme:"dos";root.dataset.labRails=p.rails===true?"on":"off";if(p.density==="compact")root.dataset.labDensity="compact";if(p.fx==="calm")root.dataset.labFx="calm"}catch(e){root.dataset.labTheme="dos";root.dataset.labRails="off"}`}
+          {`const root=document.documentElement;root.classList.add("js");try{const p=JSON.parse(localStorage.getItem("dexterslab:prefs")||"{}");root.dataset.labTheme=p.theme==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"phosphor":"dos"):["dos","phosphor","contrast"].includes(p.theme)?p.theme:"dos";root.dataset.labRails=p.rails===true?"on":"off";if(p.density==="compact")root.dataset.labDensity="compact";if(p.fx==="calm")root.dataset.labFx="calm"}catch(e){root.dataset.labTheme="dos";root.dataset.labRails="off"};try{if(location.pathname==="/"&&!location.hash&&root.dataset.labFx!=="calm"&&!matchMedia("(prefers-reduced-motion: reduce)").matches&&sessionStorage.getItem("lab:intro")!=="seen")root.dataset.intro="play"}catch(e){}`}
         </Script>
         {children}
         <LabCustomizer />

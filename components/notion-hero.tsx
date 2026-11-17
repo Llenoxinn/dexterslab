@@ -1,32 +1,10 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { FlaskIcon } from "@/components/icons";
-import type { StationId } from "@/components/lab-3d-canvas";
 import { Modal } from "@/components/modal";
 import { achievements, experience, identity, projects } from "@/lib/content";
 import { site } from "@/lib/site";
-
-const Lab3DCanvas = dynamic(() => import("@/components/lab-3d-canvas").then((mod) => mod.Lab3DCanvas), {
-  ssr: false,
-  // A matching backdrop instead of a stale screenshot: the scene fades in over it on its first frame.
-  loading: () => (
-    <div className="hero-lab-loading" role="status">
-      <span className="hero-lab-loading-flask" aria-hidden="true" />
-      <span className="sr-only">Loading the 3D laboratory</span>
-    </div>
-  ),
-});
-
-const STATIONS: Array<{ id: StationId; label: string }> = [
-  { id: "overview", label: "Whole lab" },
-  { id: "terminal", label: "Terminal" },
-  { id: "core", label: "Christmas tree" },
-  { id: "tank", label: "Tank" },
-  { id: "bench", label: "Bench" },
-  { id: "rack", label: "Servers" },
-];
 
 // The /dev/dexter window is a tiny shell: each entry is a "file" you can open with its number key.
 const VIEWS = [
@@ -62,8 +40,15 @@ function ManilaClock() {
 
 export function NotionHero() {
   const [view, setView] = useState<ViewId>("whoami");
-  const [station, setStation] = useState<StationId>("overview");
   const [zoomed, setZoomed] = useState(false);
+  const [closing, setClosing] = useState(false);
+
+  // The big red button on the desk in the lab opens the same terminal.
+  useEffect(() => {
+    const open = () => setZoomed(true);
+    window.addEventListener("lab:open-terminal", open);
+    return () => window.removeEventListener("lab:open-terminal", open);
+  }, []);
 
   useEffect(() => {
     if (!zoomed) return;
@@ -75,14 +60,32 @@ export function NotionHero() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [zoomed]);
 
+  // The lab's camera flies into the CRT on the desk while the terminal is open, and back out after.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("lab:focus", { detail: { target: zoomed && !closing ? "crt" : null } }));
+  }, [zoomed, closing]);
+  useEffect(() => () => {
+    window.dispatchEvent(new CustomEvent("lab:focus", { detail: { target: null } }));
+  }, []);
+
   const active = VIEWS.find((v) => v.id === view) ?? VIEWS[0];
-  const close = () => { setZoomed(false); setStation("overview"); };
+  /** The screen powers off (a short collapse to a line) before the dialog goes. */
+  const close = () => {
+    if (closing) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setZoomed(false);
+      return;
+    }
+    setClosing(true);
+    window.setTimeout(() => {
+      setZoomed(false);
+      setClosing(false);
+    }, 260);
+  };
 
   return (
-    <div className={`hero-3d-shell ${zoomed ? "is-zoomed" : ""} ${station !== "overview" ? "is-focused" : ""}`}>
-      {/* The whole hero is the lab: the canvas fills the section and the copy sits on top of it. */}
-      <Lab3DCanvas station={station} onStationChange={setStation} zoomed={zoomed} onZoomChange={setZoomed} />
-
+    <div className={`hero-3d-shell ${zoomed ? "is-zoomed" : ""}`}>
+      {/* The lab itself is drawn behind the page by LabWorld; this is only the copy on top of it. */}
       <div className="wrap hero-3d-hud">
         <div className="hero-3d-top">
           {/* Quiet corner annotations, like a drawing sheet: who and where, with Cebu's live time. */}
@@ -90,7 +93,7 @@ export function NotionHero() {
             <span>Student developer</span>
             <span>Cebu, Philippines · <ManilaClock /></span>
           </p>
-          <div className="hero-3d-intro" inert={station !== "overview"}>
+          <div className="hero-3d-intro">
             <h1 className="ndev-title">/dev/dexter</h1>
             <p className="ndev-subtitle">
               Computer science at UP Cebu. Building web tools, solving CTFs, and visualizing biological data.
@@ -99,10 +102,7 @@ export function NotionHero() {
               <button
                 type="button"
                 className="btn btn-solid"
-                onClick={() => {
-                  setStation("terminal");
-                  setZoomed(true);
-                }}
+                onClick={() => setZoomed(true)}
               >
                 Open /dev/dexter
               </button>
@@ -113,35 +113,13 @@ export function NotionHero() {
           </div>
         </div>
 
-        {/* One line at the foot of the hero, like a caption under the model. */}
-        <p className="hero-tagline" aria-hidden="true">A lab<br />for ideas.</p>
-
-        <div className="hero-3d-bottom">
-          {/* Quiet text controls in the corner: the keyboard path to the stations, never a bar over the lab. */}
-          <div className="lab-3d-controls hero-stations" role="group" aria-label="Fly to a lab station">
-            <span className="hero-stations-lead" aria-hidden="true">Fly to</span>
-            {STATIONS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`ndev-specimen-btn ${station === item.id ? "is-active" : ""}`}
-                aria-pressed={station === item.id}
-                onClick={() => setStation(item.id)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-          <p className="hero-corner hero-corner--right" aria-hidden="true">
-            Scroll to explore ↓
-            <span className="hero-corner-cross" />
-          </p>
-        </div>
       </div>
 
       {zoomed && (
-        <Modal className="crt-zoom-overlay on-ink" label="/dev/dexter" onClose={close}>
+        <Modal className={`crt-zoom-overlay on-ink ${closing ? "is-closing" : ""}`} label="/dev/dexter" onClose={close}>
           <div className="crt-zoom-shell">
+            {/* The monitor itself: the same ice-blue body as the CRT on the desk in the lab, and its glass. */}
+            <div className="crt-bezel">
             <div className="ndev-window crt-zoom-window dev-window">
               <div className="crt-os-titlebar">
                 <div className="crt-os-title-left">
@@ -269,6 +247,11 @@ export function NotionHero() {
                     </ul>
                   )}
                 </div>
+              </div>
+            </div>
+              <div className="crt-bezel-foot" aria-hidden="true">
+                <span className="crt-bezel-badge">dexterslab</span>
+                <span className="crt-bezel-led" />
               </div>
             </div>
           </div>
