@@ -211,26 +211,129 @@ export class Painter {
   }
 }
 
-/** Paper grain and cool shadows, added to a stock lit material so lights, fog and shadows stay stock. */
+/**
+ * One tileable sheet of watercolour paper, painted once on a canvas. R is the tooth: thousands of short
+ * pale and dark fibres laid in every direction. G is the wash: soft blotches where the paint pooled and
+ * dried darker or lifted lighter. Drawn wrapped, so the tile has no seam.
+ */
+function paperTile(size = 512) {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const tooth = document.createElement("canvas");
+  tooth.width = tooth.height = size;
+  const t = tooth.getContext("2d")!;
+  const wash = document.createElement("canvas");
+  wash.width = wash.height = size;
+  const w = wash.getContext("2d")!;
+  let seed = 7;
+  const r = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+  const wrapped = (draw: (dx: number, dy: number) => void) => {
+    for (const dx of [-size, 0, size]) for (const dy of [-size, 0, size]) draw(dx, dy);
+  };
+  t.fillStyle = "rgb(128 128 128)";
+  t.fillRect(0, 0, size, size);
+  t.lineCap = "round";
+  for (let i = 0; i < 5200; i += 1) {
+    const x = r() * size;
+    const y = r() * size;
+    const a = r() * Math.PI;
+    const len = 3 + r() * r() * 26;
+    const bend = (r() - 0.5) * len * 0.5;
+    const light = r() < 0.5;
+    t.strokeStyle = light ? `rgb(255 255 255 / ${0.05 + r() * 0.11})` : `rgb(0 0 0 / ${0.05 + r() * 0.1})`;
+    t.lineWidth = 0.5 + r() * 1.1;
+    wrapped((dx, dy) => {
+      t.beginPath();
+      t.moveTo(x + dx, y + dy);
+      t.quadraticCurveTo(x + dx + Math.cos(a) * len * 0.5 - Math.sin(a) * bend, y + dy + Math.sin(a) * len * 0.5 + Math.cos(a) * bend, x + dx + Math.cos(a) * len, y + dy + Math.sin(a) * len);
+      t.stroke();
+    });
+  }
+  // Pits in the sheet, where pigment settles.
+  for (let i = 0; i < 1400; i += 1) {
+    const x = r() * size;
+    const y = r() * size;
+    t.fillStyle = `rgb(0 0 0 / ${0.08 + r() * 0.16})`;
+    wrapped((dx, dy) => t.fillRect(x + dx, y + dy, 1 + r(), 1 + r()));
+  }
+  w.fillStyle = "rgb(128 128 128)";
+  w.fillRect(0, 0, size, size);
+  for (let i = 0; i < 90; i += 1) {
+    const x = r() * size;
+    const y = r() * size;
+    const radius = 18 + r() * 90;
+    const dark = r() < 0.5;
+    wrapped((dx, dy) => {
+      const g = w.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, radius);
+      // A pooled wash dries with a darker rim: the hard edge watercolour is known for.
+      g.addColorStop(0, dark ? "rgb(0 0 0 / 0.1)" : "rgb(255 255 255 / 0.1)");
+      g.addColorStop(0.82, dark ? "rgb(0 0 0 / 0.14)" : "rgb(255 255 255 / 0.06)");
+      g.addColorStop(1, "rgb(0 0 0 / 0)");
+      w.fillStyle = g;
+      w.fillRect(x + dx - radius, y + dy - radius, radius * 2, radius * 2);
+    });
+  }
+  const out = ctx.createImageData(size, size);
+  const a = t.getImageData(0, 0, size, size).data;
+  const b = w.getImageData(0, 0, size, size).data;
+  for (let i = 0; i < out.data.length; i += 4) {
+    out.data[i] = a[i];
+    out.data[i + 1] = b[i];
+    out.data[i + 2] = 128;
+    out.data[i + 3] = 255;
+  }
+  const texture = new THREE.DataTexture(out.data, size, size);
+  texture.flipY = false;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
+  texture.anisotropy = 4;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/** The paper every painted surface is laid on; made on first use and shared. */
+export const paper = { value: null as THREE.Texture | null };
+
+/**
+ * Gouache on paper, added to a stock lit material so lights, fog and shadows stay stock. The wash is
+ * fixed to the surfaces (world space, sampled from three sides), so the paint stays put as the camera
+ * moves; the tooth sits in the picture plane, like the sheet under a painting.
+ */
 export function gouache<T extends THREE.Material>(material: T): T {
+  paper.value ??= paperTile();
   material.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <opaque_fragment>",
-      /* glsl */ `
+    shader.uniforms.uPaper = paper;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vGWorld;\nvarying vec3 vGNormal;")
+      .replace(
+        "#include <worldpos_vertex>",
+        "#include <worldpos_vertex>\nvGWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvGNormal = normalize(mat3(modelMatrix) * objectNormal);",
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform sampler2D uPaper;\nvarying vec3 vGWorld;\nvarying vec3 vGNormal;")
+      .replace(
+        "#include <opaque_fragment>",
+        /* glsl */ `
       {
         float gLum = dot(outgoingLight, vec3(0.299, 0.587, 0.114));
         float gShade = 1.0 - smoothstep(0.015, 0.42, gLum);
-        vec2 gq = gl_FragCoord.xy;
-        float gFine = fract(sin(dot(floor(gq / 1.5), vec2(12.9898, 78.233))) * 43758.5453);
-        float gBroad = fract(sin(dot(floor(gq / 5.0) + 7.0, vec2(39.346, 11.135))) * 24634.6345);
-        /* Grain gathers in the dark passages of the paint and almost leaves the lit ones. */
-        outgoingLight *= 1.0 - (gFine * 0.65 + gBroad * 0.35) * (0.07 + 0.36 * gShade);
+        vec3 gw = pow(abs(vGNormal), vec3(4.0));
+        gw /= (gw.x + gw.y + gw.z);
+        vec3 gp = vGWorld * 0.085;
+        float gWash = texture2D(uPaper, gp.zy).g * gw.x + texture2D(uPaper, gp.xz + 0.37).g * gw.y + texture2D(uPaper, gp.xy + 0.71).g * gw.z;
+        float gTooth = texture2D(uPaper, gl_FragCoord.xy / 384.0).r;
+        /* The wash mottles every surface a little; the tooth gathers in the dark passages and almost leaves the lit ones. */
+        outgoingLight *= 1.0 + (gWash - 0.5) * 1.35;
+        outgoingLight *= 1.0 + (gTooth - 0.5) * (0.35 + 1.1 * gShade);
         outgoingLight = mix(outgoingLight, outgoingLight * vec3(0.74, 0.92, 1.3), gShade * 0.4);
       }
       #include <opaque_fragment>`,
-    );
+      );
   };
-  material.customProgramCacheKey = () => "gouache";
+  material.customProgramCacheKey = () => "gouache-paper";
   return material;
 }
 
@@ -287,32 +390,6 @@ export function scopeMaterial(tint = 0x6ff0d8, seed = 0) {
   });
 }
 
-export function createMaterials(): Record<Bucket, THREE.Material> {
-  return {
-    blink: blinking(),
-    matte: gouache(new THREE.MeshLambertMaterial({ vertexColors: true })),
-    gloss: gouache(new THREE.MeshPhongMaterial({ vertexColors: true, specular: 0x4a66a8, shininess: 34 })),
-    glow: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: true }),
-    beam: new THREE.MeshBasicMaterial({
-      vertexColors: true,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-      toneMapped: false,
-      fog: false,
-    }),
-    glass: new THREE.MeshPhongMaterial({
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.26,
-      depthWrite: false,
-      specular: 0xbfe9ee,
-      shininess: 70,
-      side: THREE.DoubleSide,
-    }),
-  };
-}
 let haloMaterial: THREE.ShaderMaterial | null = null;
 
 /**
@@ -394,3 +471,29 @@ function haloPoints(halos: Halo[]) {
   return points;
 }
 
+export function createMaterials(): Record<Bucket, THREE.Material> {
+  return {
+    blink: blinking(),
+    matte: gouache(new THREE.MeshLambertMaterial({ vertexColors: true })),
+    gloss: gouache(new THREE.MeshPhongMaterial({ vertexColors: true, specular: 0x4a66a8, shininess: 34 })),
+    glow: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: true }),
+    beam: new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+      fog: false,
+    }),
+    glass: new THREE.MeshPhongMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.26,
+      depthWrite: false,
+      specular: 0xbfe9ee,
+      shininess: 70,
+      side: THREE.DoubleSide,
+    }),
+  };
+}

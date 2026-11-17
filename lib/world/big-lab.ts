@@ -26,7 +26,7 @@ function rng(seed: number) {
 }
 
 function floorTexture() {
-  const size = 512;
+  const size = 1024;
   const tiles = 8;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
@@ -47,7 +47,7 @@ function floorTexture() {
     }
   }
   ctx.strokeStyle = "rgb(20 40 110 / 0.5)";
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 3;
   for (let i = 0; i <= tiles; i += 1) {
     ctx.beginPath();
     ctx.moveTo(i * step, 0);
@@ -527,7 +527,8 @@ export function createBigLab(): BigLab {
   const rigs = createRigs(group, materials, platform);
 
   const floorMap = floorTexture();
-  const floorMaterial = gouache(new THREE.MeshLambertMaterial({ map: floorMap }));
+  // Waxed lino: a soft sheen that picks up the lamps and the screen glow travelling with each shot.
+  const floorMaterial = gouache(new THREE.MeshPhongMaterial({ map: floorMap, specular: 0x2a3a5c, shininess: 26 }));
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(96, 260), floorMaterial);
   floor.rotation.x = -HALF_PI;
   floor.position.set(0, 0, -112);
