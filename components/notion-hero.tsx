@@ -41,6 +41,7 @@ function ManilaClock() {
 export function NotionHero() {
   const [view, setView] = useState<ViewId>("whoami");
   const [zoomed, setZoomed] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   // The big red button on the desk in the lab opens the same terminal.
   useEffect(() => {
@@ -59,8 +60,28 @@ export function NotionHero() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [zoomed]);
 
+  // The lab's camera flies into the CRT on the desk while the terminal is open, and back out after.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("lab:focus", { detail: { target: zoomed && !closing ? "crt" : null } }));
+  }, [zoomed, closing]);
+  useEffect(() => () => {
+    window.dispatchEvent(new CustomEvent("lab:focus", { detail: { target: null } }));
+  }, []);
+
   const active = VIEWS.find((v) => v.id === view) ?? VIEWS[0];
-  const close = () => setZoomed(false);
+  /** The screen powers off (a short collapse to a line) before the dialog goes. */
+  const close = () => {
+    if (closing) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setZoomed(false);
+      return;
+    }
+    setClosing(true);
+    window.setTimeout(() => {
+      setZoomed(false);
+      setClosing(false);
+    }, 260);
+  };
 
   return (
     <div className={`hero-3d-shell ${zoomed ? "is-zoomed" : ""}`}>
@@ -95,8 +116,10 @@ export function NotionHero() {
       </div>
 
       {zoomed && (
-        <Modal className="crt-zoom-overlay on-ink" label="/dev/dexter" onClose={close}>
+        <Modal className={`crt-zoom-overlay on-ink ${closing ? "is-closing" : ""}`} label="/dev/dexter" onClose={close}>
           <div className="crt-zoom-shell">
+            {/* The monitor itself: the same ice-blue body as the CRT on the desk in the lab, and its glass. */}
+            <div className="crt-bezel">
             <div className="ndev-window crt-zoom-window dev-window">
               <div className="crt-os-titlebar">
                 <div className="crt-os-title-left">
@@ -224,6 +247,11 @@ export function NotionHero() {
                     </ul>
                   )}
                 </div>
+              </div>
+            </div>
+              <div className="crt-bezel-foot" aria-hidden="true">
+                <span className="crt-bezel-badge">dexterslab</span>
+                <span className="crt-bezel-led" />
               </div>
             </div>
           </div>

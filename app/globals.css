@@ -6359,3 +6359,142 @@ html:is([data-intro="reveal"], [data-intro="done"]) .lab-nav {
   transition: opacity 900ms ease 350ms;
 }
 
+/* ── /dev/dexter on the CRT ────────────────────────────────────────────
+   Opening it flies the lab's camera into the monitor on the control desk; the terminal then powers on
+   inside that monitor's ice-blue body. The lab stays visible around it (no blur), only darkened at the
+   edges, and the page chrome steps out of the way. */
+.crt-zoom-overlay {
+  background: radial-gradient(ellipse at center, rgb(2 3 13 / 0) 45%, rgb(2 3 13 / 0.6) 100%);
+  backdrop-filter: none;
+}
+.crt-zoom-overlay::backdrop {
+  background: transparent;
+}
+html:has(.crt-zoom-overlay[open]) :is(.lab-nav, .hero-3d-hud) {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 240ms ease;
+}
+.crt-zoom-shell {
+  width: min(900px, 100%);
+}
+.crt-bezel {
+  padding: clamp(14px, 2.4vw, 26px) clamp(14px, 2.4vw, 26px) 0;
+  border: 1px solid #8fc3cb;
+  border-radius: 26px;
+  background: #bfe9ee;
+  box-shadow: inset 0 -6px 0 rgb(10 18 70 / 0.12), 0 30px 70px -20px rgb(2 3 13 / 0.7);
+}
+.crt-bezel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 6px 12px;
+}
+.crt-bezel-badge {
+  color: #2b4a92;
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.crt-bezel-led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4ade80;
+}
+
+/* The glass: the CRT's phosphor dark, faint scanlines, and a tube's rounded corners. */
+.crt-zoom-overlay .crt-zoom-window {
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  border-radius: 14px;
+  background: #061826;
+  box-shadow: inset 0 0 0 2px rgb(2 8 20 / 0.9), inset 0 0 60px rgb(0 0 0 / 0.55);
+}
+.crt-zoom-overlay .crt-zoom-window::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgb(0 0 0 / 0.16) 0 1px, transparent 1px 3px);
+}
+.crt-zoom-overlay .crt-os-titlebar {
+  background: rgb(255 255 255 / 0.04);
+  border-bottom-color: rgb(159 245 228 / 0.14);
+}
+.crt-zoom-overlay .dev-nav {
+  background: transparent;
+  border-color: rgb(159 245 228 / 0.14);
+}
+.crt-zoom-overlay :is(.dev-nav-btn, .dev-prompt) {
+  font-family: var(--font-heading);
+  letter-spacing: -0.01em;
+}
+.crt-zoom-overlay .dev-nav-btn {
+  color: rgb(214 236 240 / 0.8);
+}
+.crt-zoom-overlay .dev-nav-btn.is-active {
+  background: #9ff5e4;
+  color: #061826;
+}
+.crt-zoom-overlay .dev-prompt-user {
+  color: #9ff5e4;
+}
+.crt-zoom-overlay .dev-prompt-cmd::after {
+  background: #9ff5e4;
+}
+
+/* Power on: the beam draws a bright line across the middle, then the picture opens out of it. */
+@keyframes crt-power-on {
+  0% {
+    transform: scale(0.6, 0.004);
+    filter: brightness(4);
+  }
+  35% {
+    transform: scale(1, 0.004);
+    filter: brightness(4);
+  }
+  100% {
+    transform: none;
+    filter: none;
+  }
+}
+@keyframes crt-power-off {
+  60% {
+    transform: scale(1, 0.004);
+    filter: brightness(3);
+  }
+  100% {
+    transform: scale(0, 0.004);
+    filter: brightness(3);
+  }
+}
+@keyframes crt-bezel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .crt-zoom-overlay .crt-bezel {
+    animation: crt-bezel-in 420ms var(--ease-out) 380ms both;
+  }
+  .crt-zoom-overlay .crt-zoom-window {
+    animation: crt-power-on 460ms cubic-bezier(0.32, 0.72, 0, 1) 720ms both;
+  }
+  .crt-zoom-overlay.is-closing .crt-zoom-window {
+    animation: crt-power-off 220ms ease-in forwards;
+  }
+  .crt-zoom-overlay.is-closing .crt-bezel {
+    opacity: 0;
+    transform: scale(0.96);
+    transition: opacity 240ms ease, transform 240ms ease;
+  }
+}
+/* While the terminal is open the camera is inside the CRT; the sheets below the hero stay out of frame. */
+html:has(.crt-zoom-overlay[open]) .sheet {
+  visibility: hidden;
+}
