@@ -136,6 +136,31 @@ function robot(p: Painter) {
   p.ball(0.12, C.red, { at: [0, 5.3, 0], bucket: "blink", phase: 0.4 }, 8);
 }
 
+/** A rolling instrument cart with a plasma globe on top. Built at the origin; the globe's centre is at `GLOBE`. */
+const GLOBE: V3 = [0, 2.62, 0];
+const GLOBE_R = 0.62;
+function plasmaCart(p: Painter) {
+  p.soft(1.7, 0.14, 1.2, C.steel, { at: [0, 0.42, 0], bucket: "gloss" }, 0.05);
+  p.soft(1.7, 0.14, 1.2, C.steel, { at: [0, 1.5, 0], bucket: "gloss" }, 0.05);
+  for (const x of [-0.78, 0.78]) {
+    for (const z of [-0.52, 0.52]) {
+      p.cyl(0.05, 0.05, 1.3, C.ice, { at: [x, 0.95, z] }, 6);
+      p.ball(0.12, C.navy, { at: [x, 0.13, z] }, 8);
+    }
+  }
+  // A drawer of spare tubes on the lower shelf, and a cable coiled beside it.
+  p.soft(1.1, 0.42, 0.8, C.deep, { at: [-0.1, 0.7, 0], bucket: "gloss" }, 0.06);
+  p.box(0.36, 0.06, 0.04, C.amber, { at: [-0.1, 0.74, 0.41], ramp: 0 });
+  p.ring(0.18, 0.04, C.navy, { at: [0.58, 0.55, 0.1], rot: [HALF_PI, 0, 0], ramp: 0 }, 14);
+  // The globe's base: a turned black plinth with a brass band and a pilot lamp.
+  p.cyl(0.42, 0.55, 0.5, 0x0d1236, { at: [0, 1.82, 0], bucket: "gloss" }, 24);
+  p.ring(0.47, 0.035, C.amber, { at: [0, 1.95, 0], rot: [HALF_PI, 0, 0], bucket: "gloss" }, 24);
+  p.cyl(0.2, 0.3, 0.22, 0x0d1236, { at: [0, 2.1, 0], bucket: "gloss" }, 16);
+  p.ball(0.05, C.red, { at: [0, 1.8, 0.5], bucket: "blink", phase: 0.2 }, 6);
+  p.ball(GLOBE_R, 0xb9c4ff, { at: GLOBE, bucket: "glass", ramp: 0 }, 28);
+  p.ball(0.11, 0xe6d4ff, { at: GLOBE, bucket: "glow", halo: 1.8, haloColor: 0xb27dff }, 12);
+}
+
 export function createProps(root: THREE.Group, materials: Materials, p: Painter) {
   const reels: Array<{ mesh: THREE.Group; speed: number; spin: number; phase: number }> = [];
   const banks: Array<[V3, number]> = [
@@ -194,8 +219,54 @@ export function createProps(root: THREE.Group, materials: Materials, p: Painter)
     p.pop();
   }
 
+  // The plasma globe in the aisle: filaments crawl from the core to the glass, and each one drifts.
+  const CART: V3 = [2.4, 0, -4.6];
+  p.push(CART, -0.35);
+  plasmaCart(p);
+  p.pop();
+  const globe = anchor(root, [CART[0] + GLOBE[0], GLOBE[1], CART[2] + GLOBE[2]], 0);
+  const FILAMENTS = 7;
+  const STEPS = 9;
+  const filament = new Float32Array(FILAMENTS * STEPS * 2 * 3);
+  const filamentGeometry = new THREE.BufferGeometry();
+  filamentGeometry.setAttribute("position", new THREE.BufferAttribute(filament, 3));
+  const filamentMaterial = new THREE.LineBasicMaterial({ color: 0xd6a8ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+  const filaments = new THREE.LineSegments(filamentGeometry, filamentMaterial);
+  filaments.frustumCulled = false;
+  globe.add(filaments);
+  const tips = Array.from({ length: FILAMENTS }, (_, i) => ({ theta: (i / FILAMENTS) * Math.PI * 2, phi: 0.6 + (i % 3) * 0.5, seed: i * 1.37 }));
+  const tip = new THREE.Vector3();
+  const drawFilaments = (t: number) => {
+    let o = 0;
+    for (const f of tips) {
+      const theta = f.theta + Math.sin(t * 0.7 + f.seed) * 0.8;
+      const phi = f.phi + Math.sin(t * 0.53 + f.seed * 2) * 0.45;
+      tip.set(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta)).multiplyScalar(GLOBE_R * 0.97);
+      let px = 0;
+      let py = 0;
+      let pz = 0;
+      for (let i = 1; i <= STEPS; i += 1) {
+        const u = i / STEPS;
+        // Kinked, not straight: each step wanders sideways, most in the middle of the run.
+        const kink = Math.sin(u * Math.PI) * 0.09;
+        const n = Math.sin(t * 13 + i * 3.1 + f.seed * 5);
+        const x = tip.x * u + n * kink;
+        const y = tip.y * u + Math.cos(t * 11 + i * 2.3 + f.seed) * kink;
+        const z = tip.z * u - n * kink;
+        filament.set([px, py, pz, x, y, z], o);
+        o += 6;
+        px = x;
+        py = y;
+        pz = z;
+      }
+    }
+    filamentGeometry.getAttribute("position").needsUpdate = true;
+  };
+  drawFilaments(0);
+
   return {
     update(t: number, dt: number, still: boolean) {
+      if (!still) drawFilaments(t);
       for (const r of reels) {
         // Reels run in bursts and pause, the way a tape drive seeks.
         const running = still ? 0 : Math.sin(t * 0.45 + r.phase) > -0.25 ? 1 : 0;

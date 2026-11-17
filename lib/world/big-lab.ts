@@ -264,15 +264,6 @@ function consoleDesk(p: Painter) {
   p.box(1.8, 0.03, 1.6, C.cream, { at: [6.25, 2.72, 1.9], rot: [0.5, -0.42, 0], ramp: 0 });
   for (let i = 0; i < 3; i += 1) p.box(0.3, 0.34, 0.1, [C.red, C.warm, 0x8dffb0][i], { at: [5.7 + i * 0.45, 2.2, 2.05], rot: [0, -0.42, 0], bucket: "blink" });
   p.pop();
-  // A stool left out in the aisle, for scale.
-  p.push([0, 0, -1.5], 0, 0.45);
-  p.cyl(0.85, 0.85, 0.16, C.dos, { at: [4.5, 1.7, -6], bucket: "gloss" }, 16);
-  for (let i = 0; i < 4; i += 1) {
-    const a = (i / 4) * Math.PI * 2 + 0.6;
-    p.cyl(0.06, 0.06, 1.7, C.ice, { at: [4.5 + Math.cos(a) * 0.6, 0.85, -6 + Math.sin(a) * 0.6], rot: [Math.sin(a) * 0.14, 0, -Math.cos(a) * 0.14] }, 6);
-  }
-  p.ring(0.55, 0.04, C.ice, { at: [4.5, 0.6, -6], rot: [HALF_PI, 0, 0] }, 16);
-  p.pop();
 }
 
 /** Three giant knife switches, one per skill area. */
@@ -581,7 +572,6 @@ export function createBigLab(): BigLab {
         const mesh = object as THREE.Mesh;
         if (mesh.geometry) mesh.geometry.dispose();
         const material = mesh.material;
-      speckMap.dispose();
         if (Array.isArray(material)) material.forEach((m) => owned.add(m));
         else if (material) owned.add(material);
       });
@@ -590,6 +580,7 @@ export function createBigLab(): BigLab {
       floorMaterial.dispose();
       floorMap.dispose();
       dustMaterial.dispose();
+      speckMap.dispose();
     },
   };
 }
