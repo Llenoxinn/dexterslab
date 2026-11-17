@@ -42,6 +42,8 @@ export type Place = {
 export const haloScale = { value: 800 };
 /** 0 = every lamp in the hall dark, 1 = full power. The opening sequence ramps it. */
 export const power = { value: 1 };
+/** The indicator LEDs run on their own circuit: in the opening they glow before the lamps come on. */
+export const ledPower = { value: 1 };
 
 type Halo = { x: number; y: number; z: number; color: number; radius: number; phase: number };
 
@@ -422,7 +424,7 @@ function haloPoints(halos: Halo[]) {
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     toneMapped: false,
-    uniforms: { uTime: clock, uScale: haloScale, uPower: power },
+    uniforms: { uTime: clock, uScale: haloScale, uPower: power, uLeds: ledPower },
     vertexShader: /* glsl */ `
       attribute vec3 color;
       attribute float aSize;
@@ -430,6 +432,7 @@ function haloPoints(halos: Halo[]) {
       uniform float uTime;
       uniform float uScale;
       uniform float uPower;
+      uniform float uLeds;
       varying vec3 vColor;
       varying float vCore;
       void main() {
@@ -446,7 +449,7 @@ function haloPoints(halos: Halo[]) {
           on = 0.9 + 0.1 * sin(uTime * (1.3 + fract(position.x * 0.37) * 1.7) + position.z);
         }
         float haze = exp(-pow(dist * 0.0072, 2.0) * 0.8);
-        vColor = color * on * haze * uPower;
+        vColor = color * on * haze * (aBlink >= 0.0 ? uLeds : uPower);
         vCore = on;
         gl_Position = projectionMatrix * mv;
         gl_PointSize = clamp(2.0 * aSize * uScale / max(0.5, -mv.z), 0.0, 900.0);

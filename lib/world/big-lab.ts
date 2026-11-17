@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Painter, clock, createMaterials, gouache } from "@/lib/world/paint";
+import { Painter, clock, createMaterials, gouache, ledPower, power } from "@/lib/world/paint";
 import { parol, starGeometry } from "@/lib/world/parol";
 import { createRigs, type Rig } from "@/lib/world/rigs";
 import { createProps } from "@/lib/world/props";
@@ -476,6 +476,8 @@ export type BigLab = {
   rigs: Rig[];
   /** Advance everything that moves. `t` in seconds; `still` snaps to rest (reduced motion). */
   update: (t: number, dt: number, still: boolean) => void;
+  /** How much power the hall has: `lamps` for screens, bulbs and light cones, `leds` for indicator lamps (0-1). */
+  setPower: (lamps: number, leds: number) => void;
   dispose: () => void;
 };
 
@@ -555,6 +557,15 @@ export function createBigLab(): BigLab {
   return {
     group,
     rigs,
+    setPower(lamps, leds) {
+      power.value = lamps;
+      ledPower.value = leds;
+      // Unlit materials: scaling their colour scales what they add to the frame.
+      (materials.glow as THREE.MeshBasicMaterial).color.setScalar(0.04 + 0.96 * lamps);
+      (materials.beam as THREE.MeshBasicMaterial).color.setScalar(lamps);
+      (materials.blink as THREE.MeshBasicMaterial).color.setScalar(0.08 + 0.92 * leds);
+      dustMaterial.opacity = 0.55 * lamps;
+    },
     update(t, dt, still) {
       clock.value = t;
       props.update(t, dt, still);

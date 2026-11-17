@@ -4,6 +4,7 @@ import { AchievementsSection } from "@/components/achievements-section";
 import { ContactSection } from "@/components/contact-section";
 import { ExperienceSection } from "@/components/experience-section";
 import { GitHubSection } from "@/components/github-section";
+import { LabIntro } from "@/components/lab-intro";
 import { LabPassage } from "@/components/lab-passage";
 import { LabWorldLoader } from "@/components/lab-world-loader";
 import { MethodSection } from "@/components/method-section";
@@ -32,6 +33,7 @@ export default function Home() {
     <>
       <SiteHeader home />
       <LabWorldLoader />
+      <LabIntro />
 
       {/* The anchor sits on <main>, not the sticky hero: a stuck element always measures as "already at the top". */}
       <main id="lab" tabIndex={-1}>

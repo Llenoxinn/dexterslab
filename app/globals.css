@@ -6077,7 +6077,6 @@ html.menu-open {
    A pneumatic line drawn flat, in the site's DOS colours: a solid navy housing, one lavender line for
    the tube, a ring for every stop, and the stop you are on filled in paper white. No gradients, no
    glow: the active stop is told by contrast alone. */
-  border: 1px solid rgb(203 203 239 / 0.3);
 .lab-rail {
   padding: 12px 6px;
   border: 1px solid rgb(203 203 239 / 0.22);
@@ -6109,13 +6108,11 @@ html.menu-open {
   width: 34px;
   height: 34px;
   margin: -17px 0 0 -17px;
+  border: 1px solid rgb(203 203 239 / 0.3);
   border-radius: 50%;
   background: #0a0a5d;
   transition: border-color 160ms ease, background-color 160ms ease;
 }
-  .lab-rail-stop:hover:not([aria-current="location"]) {
-    color: var(--color-paper);
-  }
 .lab-rail-stop .nav-icon {
   position: relative;
   width: 20px;
@@ -6147,6 +6144,9 @@ html.menu-open {
 }
 
 @media (hover: hover) and (pointer: fine) {
+  .lab-rail-stop:hover:not([aria-current="location"]) {
+    color: var(--color-paper);
+  }
   .lab-rail-stop:hover:not([aria-current="location"])::before {
     border-color: rgb(203 203 239 / 0.75);
     background: #1313ba;
@@ -6230,8 +6230,132 @@ html.menu-open {
 .lab-rail-stop[aria-current="location"] .nav-icon-fill {
   opacity: 0.4;
 }
-/* The tube runs port centre to port centre; its caps sit hidden under the end ports. */
-.lab-rail .lab-rail-tube {
-  top: 38px;
-  bottom: 38px;
+
+/* ── The opening ───────────────────────────────────────────────────────
+   Letterbox bars and a veil around the dark lab, two subtitle lines, then the bars draw back as the
+   lamps settle and the hero copy comes up out of a blur. LabWorld runs the lights; see lab-intro.tsx. */
+.lab-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  pointer-events: none;
 }
+.lab-intro-veil {
+  position: absolute;
+  inset: 0;
+  background: #02030d;
+  transition: opacity 1400ms ease;
+}
+.lab-intro:is([data-state="playing"], [data-state="leaving"]) .lab-intro-veil {
+  opacity: 0;
+}
+.lab-intro-bar {
+  position: absolute;
+  inset-inline: 0;
+  height: 11vh;
+  background: #000;
+  transition: transform 900ms cubic-bezier(0.77, 0, 0.175, 1);
+}
+.lab-intro-bar--top {
+  top: 0;
+}
+.lab-intro-bar--bottom {
+  bottom: 0;
+}
+.lab-intro[data-state="leaving"] .lab-intro-bar--top {
+  transform: translateY(-100%);
+}
+.lab-intro[data-state="leaving"] .lab-intro-bar--bottom {
+  transform: translateY(100%);
+}
+.lab-intro-line {
+  position: absolute;
+  left: 50%;
+  bottom: calc(11vh + 32px);
+  width: max-content;
+  max-width: calc(100vw - 48px);
+  translate: -50% 0;
+  text-align: center;
+  color: rgb(214 214 245 / 0.92);
+  font-size: clamp(1rem, 1.5vw, 1.2rem);
+  font-weight: 500;
+  line-height: 1.7;
+  text-shadow: 0 0 18px rgb(102 102 253 / 0.55);
+}
+.lab-intro-line span {
+  opacity: 0;
+}
+.lab-intro[data-state="playing"] .lab-intro-line span {
+  animation: lab-intro-letter 520ms ease-out forwards;
+}
+.lab-intro[data-state="playing"] .lab-intro-line {
+  animation: lab-intro-line-out 700ms ease-in 3100ms forwards;
+}
+.lab-intro[data-state="leaving"] .lab-intro-line {
+  opacity: 0;
+}
+@keyframes lab-intro-letter {
+  from {
+    opacity: 0;
+    text-shadow: 0 0 0 transparent;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes lab-intro-line-out {
+  to {
+    opacity: 0;
+    filter: blur(6px);
+  }
+}
+.lab-intro-skip {
+  position: absolute;
+  right: clamp(16px, 3vw, 32px);
+  bottom: calc(5.5vh - 16px);
+  padding: 6px 12px;
+  border: 1px solid rgb(203 203 239 / 0.3);
+  border-radius: 999px;
+  background: transparent;
+  color: rgb(214 214 245 / 0.8);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  pointer-events: auto;
+  transition: color 160ms ease, border-color 160ms ease, opacity 300ms ease;
+}
+.lab-intro[data-state="leaving"] .lab-intro-skip {
+  opacity: 0;
+}
+@media (hover: hover) and (pointer: fine) {
+  .lab-intro-skip:hover {
+    color: #fff;
+    border-color: rgb(203 203 239 / 0.7);
+  }
+}
+
+/* While the opening plays, the hero copy and the nav wait in a blur; they arrive as the lamps settle. */
+/* The hero's own entrance animation holds its end state, so it steps aside while the opening runs. */
+html[data-intro] .hero-3d-intro > * {
+  animation: none;
+}
+html[data-intro="play"] :is(.hero-3d-intro > *, .hero-corner-kicker) {
+  opacity: 0;
+  transform: translateY(16px);
+  filter: blur(8px);
+}
+html[data-intro="play"] .lab-nav {
+  opacity: 0;
+}
+html:is([data-intro="reveal"], [data-intro="done"]) :is(.hero-3d-intro > *, .hero-corner-kicker) {
+  transition: opacity 900ms var(--ease-out), transform 900ms var(--ease-out), filter 900ms var(--ease-out);
+}
+html:is([data-intro="reveal"], [data-intro="done"]) .hero-3d-intro > :nth-child(2) {
+  transition-delay: 110ms;
+}
+html:is([data-intro="reveal"], [data-intro="done"]) .hero-3d-intro > :nth-child(3) {
+  transition-delay: 220ms;
+}
+html:is([data-intro="reveal"], [data-intro="done"]) .lab-nav {
+  transition: opacity 900ms ease 350ms;
+}
+

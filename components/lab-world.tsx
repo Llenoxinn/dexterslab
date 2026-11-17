@@ -27,6 +27,10 @@ export function LabWorld() {
       renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     } catch {
       host.dataset.webgl = "off";
+      if (document.documentElement.dataset.intro === "play") {
+        document.documentElement.dataset.intro = "done";
+        window.dispatchEvent(new Event("lab:intro-done"));
+      }
       return;
     }
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -45,7 +49,8 @@ export function LabWorld() {
     const lab = createBigLab();
     scene.add(lab.group);
 
-    scene.add(new THREE.HemisphereLight(0x8fa8ff, 0x0a1040, 1.15));
+    const hemi = new THREE.HemisphereLight(0x8fa8ff, 0x0a1040, 1.15);
+    scene.add(hemi);
     const key = new THREE.DirectionalLight(0xfff0d2, 2.3);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
@@ -60,6 +65,69 @@ export function LabWorld() {
     const lamp = new THREE.PointLight(0xffd27a, 120, 60, 1.6);
     const glow = new THREE.PointLight(0x74e0e8, 160, 70, 1.6);
     scene.add(lamp, glow);
+
+    /** Brings the hall's light up: `lamps` for the room and its screens, `leds` for the indicator lamps. */
+    const setLevels = (lamps: number, leds: number) => {
+      hemi.intensity = 1.15 * (0.1 + 0.9 * lamps);
+      key.intensity = 2.3 * lamps;
+      lamp.intensity = 120 * lamps;
+      glow.intensity = 160 * (0.15 + 0.85 * lamps);
+      lab.setPower(lamps, leds);
+    };
+
+    /* The opening, once a session (the head script in layout.tsx decides): the hall is dark but for
+       its blinking indicator LEDs, the ceiling lamps stutter on, and the camera rises off the floor
+       into the first shot. Scrolling, a key or the Skip button runs it out quickly. */
+    const root = document.documentElement;
+    const INTRO_END = 5.6;
+    let intro = root.dataset.intro === "play" ? 0 : -1;
+    let introFast = false;
+    const introFrom = { pos: new THREE.Vector3(2.6, 0.9, 16.5), look: new THREE.Vector3(-1, 6.5, -50) };
+    const smoother = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
+    const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
+    const lampsAt = (t: number) => {
+      if (t < 2.2) return 0;
+      if (t < 3.4) {
+        // A fluorescent strike: on, off, on, catching a little more each time.
+        const u = (t - 2.2) / 1.2;
+        const on = Math.sin(t * 47) * Math.sin(t * 29 + 1) > 0.1 - u * 0.5 ? 1 : 0.08;
+        return on * (0.3 + 0.45 * u);
+      }
+      return 0.75 + 0.25 * smoother(clamp01((t - 3.4) / 1));
+    };
+    const ledsAt = (t: number) => smoother(clamp01((t - 0.4) / 1.2));
+    const skipIntro = () => {
+      if (intro >= 0) introFast = true;
+    };
+    const finishIntro = () => {
+      intro = -1;
+      setLevels(1, 1);
+      root.dataset.intro = "done";
+      try {
+        sessionStorage.setItem("lab:intro", "seen");
+      } catch {}
+      window.dispatchEvent(new Event("lab:intro-done"));
+      for (const type of ["wheel", "keydown", "pointerdown", "touchstart"] as const) window.removeEventListener(type, skipIntro);
+      window.removeEventListener("lab:intro-skip", skipIntro);
+    };
+    if (intro >= 0) {
+      setLevels(0, 0);
+      for (const type of ["wheel", "keydown", "pointerdown", "touchstart"] as const) window.addEventListener(type, skipIntro, { passive: true });
+      window.addEventListener("lab:intro-skip", skipIntro);
+    }
+
+    /* /dev/dexter opens on the CRT at the left end of the control desk: the camera turns and pushes in
+       until the screen fills the view, and the terminal powers on over it. */
+    const crtScreen = new THREE.Vector3(-3.63, 1.77, 7.05);
+    const crtEye = crtScreen.clone().add(new THREE.Vector3(Math.sin(0.42), 0.02, Math.cos(0.42)).multiplyScalar(2.05));
+    let focusTarget = 0;
+    let focus = 0;
+    const eye = new THREE.Vector3();
+    const aim = new THREE.Vector3();
+    const onFocus = (event: Event) => {
+      focusTarget = (event as CustomEvent<{ target: string | null }>).detail?.target === "crt" ? 1 : 0;
+      wake();
+    };
 
     const raycaster = new THREE.Raycaster();
     const ndc = new THREE.Vector2();
@@ -177,6 +245,15 @@ export function LabWorld() {
       raf = 0;
       if (document.hidden || !readScroll()) return;
       const dt = last ? Math.min(0.05, (now - last) / 1000) : 0;
+      if (intro >= 0) {
+        if (!ready) window.dispatchEvent(new Event("lab:intro-start"));
+        // Real time, not the clamped frame step: on a slow device the opening keeps its length.
+        intro += (last ? Math.min(0.25, (now - last) / 1000) : 0) * (introFast ? 6 : 1);
+        setLevels(lampsAt(intro), Math.max(ledsAt(intro), introFast ? 1 : 0));
+        // The copy arrives as the lamps settle, before the camera has quite come to rest.
+        if (intro > 4.2 && root.dataset.intro === "play") root.dataset.intro = "reveal";
+        if (intro >= INTRO_END) finishIntro();
+      }
       if (last) useTier(governor.sample(now - last));
       last = now;
       const still = calm();
@@ -186,15 +263,28 @@ export function LabWorld() {
       look.lerp(wantLook, ease);
       swayX += (pointerX - swayX) * (still ? 0 : 1 - Math.exp(-dt * 3));
       swayY += (pointerY - swayY) * (still ? 0 : 1 - Math.exp(-dt * 3));
-      camera.position.set(position.x + swayX * 0.7, position.y + swayY * 0.35, position.z);
-      camera.lookAt(look);
+      eye.set(position.x + swayX * 0.7, position.y + swayY * 0.35, position.z);
+      aim.copy(look);
+      if (intro >= 0 && active === "console") {
+        const c = smoother(clamp01((intro - 0.3) / (INTRO_END - 0.6)));
+        eye.lerpVectors(introFrom.pos, eye, c);
+        aim.lerpVectors(introFrom.look, aim, c);
+      }
+      focus = still ? focusTarget : focusTarget > focus ? Math.min(focusTarget, focus + dt / 0.95) : Math.max(focusTarget, focus - dt / 0.7);
+      if (focus > 0 && active === "console") {
+        const k = smoother(focus);
+        eye.lerp(crtEye, k);
+        aim.lerp(crtScreen, k);
+      }
+      camera.position.copy(eye);
+      camera.lookAt(aim);
       lab.update(time, dt, still);
       renderer.render(scene, camera);
       if (!ready) {
         ready = true;
         host.dataset.ready = "";
       }
-      if (!still) raf = requestAnimationFrame(frame);
+      if (!still || intro >= 0) raf = requestAnimationFrame(frame);
     };
     const wake = () => {
       if (!raf && visible.size && !document.hidden) {
@@ -250,6 +340,7 @@ export function LabWorld() {
     window.addEventListener("pointermove", onPointer, { passive: true });
     window.addEventListener("click", onClick);
     window.addEventListener("lab:act", onAct);
+    window.addEventListener("lab:focus", onFocus);
     window.addEventListener("lab:preferences", wake);
     document.addEventListener("visibilitychange", wake);
     reducedMotion.addEventListener("change", wake);
@@ -263,6 +354,10 @@ export function LabWorld() {
       window.removeEventListener("pointermove", onPointer);
       window.removeEventListener("click", onClick);
       window.removeEventListener("lab:act", onAct);
+      window.removeEventListener("lab:focus", onFocus);
+      // Leave the opening armed: a remount (React's dev double-mount included) plays it from the start.
+      for (const type of ["wheel", "keydown", "pointerdown", "touchstart"] as const) window.removeEventListener(type, skipIntro);
+      window.removeEventListener("lab:intro-skip", skipIntro);
       if (activeEl) activeEl.style.cursor = "";
       window.removeEventListener("lab:preferences", wake);
       document.removeEventListener("visibilitychange", wake);
