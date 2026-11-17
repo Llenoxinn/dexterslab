@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { BeakerIcon, BoltIcon, FlaskIcon, TubesIcon } from "@/components/icons";
 import { StackIcon } from "@/components/stack-icons";
 import { techStack } from "@/lib/content";
@@ -146,16 +147,17 @@ export function MethodSection() {
                 <span className="skill-group-mark" aria-hidden="true" />
               </summary>
               <ul className="skill-list">
-                {group.skills.map((skill) => (
-                  <li key={skill.name} className="skill-row">
+                {group.skills.map((skill, i) => (
+                  // --i and --j stagger the rows and their tools as the group opens (see .skill-group[open]).
+                  <li key={skill.name} className="skill-row" style={{ "--i": i } as CSSProperties}>
                     <div className="skill-row-head">
                       <span className="skill-name">{skill.name}</span>
                     </div>
                     <ul className="skill-tags" aria-label={`${skill.name} tools`}>
-                      {skill.tags.map((tag) => {
+                      {skill.tags.map((tag, j) => {
                         const iconId = resolveSkillIconId(tag);
                         return (
-                          <li key={tag} className={iconId ? "spec-chip spec-chip--icon" : undefined}>
+                          <li key={tag} className={iconId ? "spec-chip spec-chip--icon" : undefined} style={{ "--j": j } as CSSProperties}>
                             {iconId && <StackIcon id={iconId} />}
                             <span>{tag}</span>
                           </li>

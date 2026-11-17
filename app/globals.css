@@ -11555,3 +11555,96 @@ html.menu-open {
 [data-lab-theme="phosphor"] .sheet {
   background-blend-mode: screen;
 }
+
+/* ── Core skills: opening a group ──────────────────────────────────────
+   The one-line gist folds away (the list says the same thing in full), a blue rule draws across the
+   top, the plus spins into a minus, and the skills arrive row by row with their tools just behind.
+   Closing is quicker and simpler: the system answering, not a show. */
+.about-skills-heading {
+  font-family: var(--font-heading);
+  letter-spacing: -0.01em;
+}
+.skill-group {
+  position: relative;
+}
+.skill-group::before {
+  content: "";
+  position: absolute;
+  inset: -1px 0 auto;
+  height: 2px;
+  background: var(--color-ink);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 200ms var(--ease-out);
+}
+.skill-group[open]::before {
+  transform: scaleX(1);
+  transition-duration: 560ms;
+}
+.skill-group-mark {
+  transition: rotate 320ms var(--ease-out);
+}
+.skill-group[open] .skill-group-mark {
+  rotate: 180deg;
+}
+.skill-group-gist {
+  overflow: hidden;
+  transition: opacity 200ms var(--ease-out), filter 200ms var(--ease-out), block-size 260ms var(--ease-out);
+}
+.skill-group[open] .skill-group-gist {
+  opacity: 0;
+  filter: blur(3px);
+  block-size: 0;
+}
+.skill-group .skill-list {
+  opacity: 0;
+  transition: opacity 140ms ease-out;
+}
+.skill-group[open] .skill-list {
+  opacity: 1;
+  transition-duration: 0ms;
+}
+@supports (interpolate-size: allow-keywords) {
+  .skill-group::details-content {
+    transition: block-size 220ms var(--ease-out), content-visibility 220ms allow-discrete;
+  }
+  .skill-group[open]::details-content {
+    transition-duration: 460ms;
+  }
+}
+@keyframes skill-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(3px);
+  }
+}
+@keyframes skill-chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .skill-group[open] .skill-row {
+    animation: skill-row-in 420ms var(--ease-out) both;
+    animation-delay: calc(90ms + var(--i, 0) * 70ms);
+  }
+  .skill-group[open] .skill-tags li {
+    animation: skill-chip-in 320ms var(--ease-out) both;
+    animation-delay: calc(170ms + var(--i, 0) * 70ms + var(--j, 0) * 28ms);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skill-group::before,
+  .skill-group-mark,
+  .skill-group-gist {
+    transition: none;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .skill-group:not([open]) .skill-group-summary:hover .skill-group-mark {
+    rotate: 90deg;
+  }
+}
+
