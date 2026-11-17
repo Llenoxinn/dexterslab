@@ -77,7 +77,7 @@ function tower(p: Painter, w: number, d: number, h: number, r: () => number, det
   if (crown < 0.35) p.ball(w * 0.3, C.teal, { at: [0, top, 0], bucket: "gloss" });
   else if (crown < 0.7) {
     p.cyl(0.14, 0.2, 7, C.ice, { at: [0, top + 3.5, 0] }, 6);
-    p.ball(0.42, C.red, { at: [0, top + 7.1, 0], bucket: "glow" }, 8);
+    p.ball(0.42, C.red, { at: [0, top + 7.1, 0], bucket: "glow", halo: 2.2 }, 8);
   } else p.cyl(w * 0.22, w * 0.3, 3, C.steel, { at: [w * 0.12, top + 1.5, 0], bucket: "gloss" });
   if (!detail) {
     // Far towers keep only a strip of lit windows, so the depth of the hall still reads through the haze.
@@ -99,7 +99,7 @@ function tower(p: Painter, w: number, d: number, h: number, r: () => number, det
   for (let row = 0; row < 3; row += 1) {
     for (let col = 0; col < 8; col += 1) {
       if (r() < 0.22) continue;
-      p.box(0.3, 0.3, 0.16, lamps[Math.floor(r() * lamps.length)], { at: [(col - 3.5) * w * 0.09, h * 0.46 - row * 0.75, f + 0.08], bucket: r() < 0.45 ? "blink" : "glow", phase: r() });
+      p.box(0.3, 0.3, 0.16, lamps[Math.floor(r() * lamps.length)], { at: [(col - 3.5) * w * 0.09, h * 0.46 - row * 0.75, f + 0.08], bucket: r() < 0.45 ? "blink" : "glow", phase: r(), halo: 0.75 });
     }
   }
   for (let i = 0; i < 6; i += 1) p.box(w * 0.56, 0.16, 0.2, C.navy, { at: [0, h * 0.14 + i * 0.42, f + 0.04], ramp: 0 });
@@ -182,7 +182,7 @@ function cables(p: Painter) {
 function spotlight(p: Painter, x: number, z: number, radius = 7, color = 0x2c2410, height = 26) {
   p.cyl(0.08, 0.08, 44 - height, C.navy, { at: [x, (44 + height) / 2, z], ramp: 0 }, 5);
   p.cyl(0.5, 1.5, 1.6, C.navy, { at: [x, height + 0.8, z], bucket: "gloss" }, 14);
-  p.cyl(1.3, 1.3, 0.1, 0xfff0c0, { at: [x, height + 0.05, z], bucket: "glow" }, 14);
+  p.cyl(1.3, 1.3, 0.1, 0xfff0c0, { at: [x, height + 0.05, z], bucket: "glow", halo: 4, haloColor: 0xffd890 }, 14);
   p.cyl(1.1, radius, height, color, { at: [x, height / 2, z], bucket: "beam" }, 24, true);
   p.add(new THREE.ConeGeometry(radius * 1.05, 0.02, 28, 1, true), color, { at: [x, 0.04, z], bucket: "beam" });
 }
@@ -198,7 +198,7 @@ function christmas(p: Painter) {
     p.add(new THREE.ConeGeometry(radius, 2.7, 18), C.green, { at: [0, 2.6 + i * 1.55, 0], ramp: 0.55 });
   }
   const top = 2.6 + (tiers - 1) * 1.55 + 1.6;
-  p.add(starGeometry(1.05, 0.46, 0.34, 0xffc94a, 0xfffbe6), C.warm, { at: [0, top + 0.75, 0], bucket: "glow", keep: true });
+  p.add(starGeometry(1.05, 0.46, 0.34, 0xffc94a, 0xfffbe6), C.warm, { at: [0, top + 0.75, 0], bucket: "glow", keep: true, halo: 3.4, haloColor: 0xffc860 });
   p.cyl(0.08, 0.12, 0.6, C.amber, { at: [0, top + 0.05, 0], bucket: "gloss" }, 8);
   for (let i = 0; i < 70; i += 1) {
     const t = i / 70;
@@ -288,7 +288,7 @@ function breakerWall(p: Painter) {
     const tilt = thrown ? 0 : -0.75;
     p.box(0.3, 4.4, 0.6, C.ice, { at: [x, 4.9 + Math.cos(tilt) * 2.2, 1.7 - Math.sin(tilt) * 2.2], rot: [tilt, 0, 0], bucket: "gloss" });
     p.cyl(0.28, 0.28, 1.5, thrown ? C.red : C.wood, { at: [x, 4.9 + Math.cos(tilt) * 4.6, 1.7 - Math.sin(tilt) * 4.6], rot: [0, 0, HALF_PI], bucket: "gloss" }, 10);
-    p.ball(0.55, thrown ? lamps[i] : 0x24406e, { at: [x, 12, 1.1], bucket: thrown ? "glow" : "gloss" }, 10);
+    p.ball(0.55, thrown ? lamps[i] : 0x24406e, { at: [x, 12, 1.1], bucket: thrown ? "glow" : "gloss", halo: thrown ? 2.4 : 0 }, 10);
     p.cyl(0.3, 0.3, 32, C.steel, { at: [x, 28, 0.2], bucket: "gloss", ramp: 0.1 }, 8);
   }
   p.pop();
@@ -328,7 +328,7 @@ function platformBase(p: Painter) {
   p.cyl(0.5, 0.5, 14, C.navy, { at: [0, 37, -92], ramp: 0 }, 8);
   p.cyl(2.2, 3.6, 3, C.teal, { at: [0, 28.5, -92], bucket: "gloss" }, 20);
   p.cyl(3.6, 2.6, 1.2, C.steel, { at: [0, 26.4, -92], bucket: "gloss" }, 20);
-  p.cyl(2.4, 2.4, 0.12, 0xc8f4ee, { at: [0, 25.75, -92], bucket: "glow" }, 20);
+  p.cyl(2.4, 2.4, 0.12, 0xc8f4ee, { at: [0, 25.75, -92], bucket: "glow", halo: 6, haloColor: 0x7fe0e8 }, 20);
   p.cyl(2.2, 9.4, 24.6, 0x0e262c, { at: [0, 13.4, -92], bucket: "beam" }, 28, true);
 }
 
@@ -371,7 +371,7 @@ function projectMachines(p: Painter) {
   p.box(1.5, 3.4, 0.2, C.pink, { at: [0.6, 2.3, 1.62], ramp: 0.5 });
   p.box(1.7, 0.16, 0.26, C.ice, { at: [0.6, 4.08, 1.62], ramp: 0 });
   p.ring(0.42, 0.1, C.cream, { at: [-0.9, 4.2, 1.64] }, 14);
-  p.ball(0.3, 0xc8f4ee, { at: [-0.9, 4.2, 1.6], bucket: "glow" }, 10);
+  p.ball(0.3, 0xc8f4ee, { at: [-0.9, 4.2, 1.6], bucket: "glow", halo: 1.1 }, 10);
   p.soft(2.6, 0.7, 0.3, C.warm, { at: [0, 5.95, 1.3], bucket: "glow" }, 0.12);
   p.box(0.6, 1.9, 0.04, C.cream, { at: [-0.9, 1.9, 1.66], ramp: 0 });
   for (let i = 0; i < 3; i += 1) p.box(0.42, 0.42, 0.02, C.deep, { at: [-0.9, 2.5 - i * 0.55, 1.69], ramp: 0 });
@@ -406,7 +406,7 @@ function projector(p: Painter) {
   p.box(1.3, 0.06, 1.3, 0xfff6d8, { at: [0, 3.33, 9.6], bucket: "glow" });
   p.cyl(0.08, 0.08, 2.4, C.ice, { at: [0.8, 4.4, 10.3] }, 6);
   p.soft(1, 0.7, 1.3, C.ice, { at: [0.3, 5.6, 9.7], bucket: "gloss" }, 0.15);
-  p.cyl(0.36, 0.36, 0.3, 0xfff6d8, { at: [0.3, 5.6, 9], rot: [HALF_PI, 0, 0], bucket: "glow" }, 12);
+  p.cyl(0.36, 0.36, 0.3, 0xfff6d8, { at: [0.3, 5.6, 9], rot: [HALF_PI, 0, 0], bucket: "glow", halo: 2.2 }, 12);
   p.cyl(0.4, 4.8, 8.3, 0x2a2719, { at: [0.15, 6, 4.85], rot: [HALF_PI + 0.05, 0, 0], bucket: "beam" }, 20, true);
   for (let i = 0; i < 4; i += 1) p.box(0.9, 0.08, 0.9, i % 2 ? C.cream : C.ice, { at: [-0.8, 2.36 + i * 0.09, 10.2], rot: [0, i * 0.2, 0], ramp: 0 });
   p.pop();
@@ -439,14 +439,14 @@ function exitWall(p: Painter) {
   p.cyl(0.5, 0.5, 0.3, C.red, { at: [0, 11, -229.8], rot: [HALF_PI, 0, 0], bucket: "gloss" }, 16);
   // The readout above the door.
   p.soft(34, 8, 0.6, 0x163a6a, { at: [0, 31, -231.6], bucket: "glow" }, 0.4);
-  for (let i = 0; i < 26; i += 1) p.box(0.6, 0.8 + Math.abs(Math.sin(i * 0.9) * Math.cos(i * 0.37)) * 5, 0.2, i % 5 === 0 ? C.warm : 0x9fe6e0, { at: [-15.6 + i * 1.25, 31, -231.2], bucket: "blink", phase: i / 26 });
+  for (let i = 0; i < 26; i += 1) p.box(0.6, 0.8 + Math.abs(Math.sin(i * 0.9) * Math.cos(i * 0.37)) * 5, 0.2, i % 5 === 0 ? C.warm : 0x9fe6e0, { at: [-15.6 + i * 1.25, 31, -231.2], bucket: "blink", phase: i / 26, halo: 0 });
   // Tesla towers either side.
   for (const x of [-19, 19]) {
     p.cyl(1.4, 2.4, 10, C.steel, { at: [x, 5, -222], bucket: "gloss" }, 14);
     p.cyl(0.7, 0.9, 10, C.cream, { at: [x, 15, -222], bucket: "gloss", ramp: 0.2 }, 14);
     for (let i = 0; i < 9; i += 1) p.ring(1.05, 0.12, C.amber, { at: [x, 10.6 + i * 1.05, -222], rot: [HALF_PI, 0, 0], bucket: "gloss" }, 18);
     p.ring(2.4, 0.7, C.steel, { at: [x, 21, -222], rot: [HALF_PI, 0, 0], bucket: "gloss" }, 24);
-    p.ball(1.1, 0xc8f4ee, { at: [x, 22.4, -222], bucket: "glow" }, 14);
+    p.ball(1.1, 0xc8f4ee, { at: [x, 22.4, -222], bucket: "glow", halo: 4.5, haloColor: 0x8fe8ff }, 14);
   }
   // The outbox: the trunk tube comes down to a desk with one canister ready to go.
   p.cyl(0.9, 0.9, 30, C.ice, { at: [15, 19, -226], bucket: "glass", ramp: 0 }, 14, true);
@@ -545,7 +545,18 @@ export function createBigLab(): BigLab {
   }
   const dustGeometry = new THREE.BufferGeometry();
   dustGeometry.setAttribute("position", new THREE.BufferAttribute(motes, 3));
-  const dustMaterial = new THREE.PointsMaterial({ color: 0xfff0c8, size: 0.14, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending });
+  // Each mote is a soft round speck, not the hard square a bare point draws.
+  const speck = document.createElement("canvas");
+  speck.width = speck.height = 32;
+  const sctx = speck.getContext("2d")!;
+  const fall = sctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  fall.addColorStop(0, "rgb(255 255 255 / 1)");
+  fall.addColorStop(0.35, "rgb(255 255 255 / 0.45)");
+  fall.addColorStop(1, "rgb(255 255 255 / 0)");
+  sctx.fillStyle = fall;
+  sctx.fillRect(0, 0, 32, 32);
+  const speckMap = new THREE.CanvasTexture(speck);
+  const dustMaterial = new THREE.PointsMaterial({ color: 0xfff0c8, map: speckMap, size: 0.22, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending });
   const dust = new THREE.Points(dustGeometry, dustMaterial);
   group.add(dust);
 
@@ -569,6 +580,7 @@ export function createBigLab(): BigLab {
         const mesh = object as THREE.Mesh;
         if (mesh.geometry) mesh.geometry.dispose();
         const material = mesh.material;
+      speckMap.dispose();
         if (Array.isArray(material)) material.forEach((m) => owned.add(m));
         else if (material) owned.add(material);
       });

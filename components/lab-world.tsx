@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { createBigLab } from "@/lib/world/big-lab";
+import { haloScale } from "@/lib/world/paint";
 import type { Rig } from "@/lib/world/rigs";
 import { SHOTS, shotPose, windowProgress, type Pose, type ShotId } from "@/lib/world/shots";
 import { createGovernor } from "@/lib/render-quality";
@@ -145,6 +146,7 @@ export function LabWorld() {
       return true;
     };
 
+    const bufferSize = new THREE.Vector2();
     const tiers = [Math.min(devicePixelRatio || 1, 1.5), 1, 0.75].filter((ratio, i, all) => all.indexOf(ratio) === i);
     const governor = createGovernor(tiers.length);
     let tier = -1;
@@ -158,6 +160,7 @@ export function LabWorld() {
       // Tall screens get a wider lens so the stations are not cropped to a sliver.
       camera.fov = camera.aspect < 1 ? 64 : 46;
       camera.updateProjectionMatrix();
+      haloScale.value = renderer.getDrawingBufferSize(bufferSize).y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
     };
     const useTier = (next: number) => {
       if (next === tier) return;

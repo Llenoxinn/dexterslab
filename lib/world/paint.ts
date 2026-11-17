@@ -29,13 +29,29 @@ export type Place = {
   keep?: boolean;
   /** Where in its cycle a `blink` lamp starts (0-1); random when left out. */
   phase?: number;
+  /**
+   * Radius of the soft light this shape throws into the haze, in metres. Blinking lamps get one sized
+   * to the lamp unless this is 0; anything else only when asked.
+   */
+  halo?: number;
+  /** Colour of the halo, when it should differ from the shape (a parol's warm core behind coloured paper). */
+  haloColor?: number;
 };
+
+/** Pixels per metre at one metre from the camera, for sizing halo sprites; set by the renderer on resize. */
+export const haloScale = { value: 800 };
+/** 0 = every lamp in the hall dark, 1 = full power. The opening sequence ramps it. */
+export const power = { value: 1 };
+
+type Halo = { x: number; y: number; z: number; color: number; radius: number; phase: number };
 
 const SHADOW = new THREE.Color(0x0a1246);
 const BUCKETS: Bucket[] = ["matte", "gloss", "glow", "blink", "beam", "glass"];
 
 export class Painter {
   private parts: Record<Bucket, THREE.BufferGeometry[]> = { matte: [], gloss: [], glow: [], blink: [], beam: [], glass: [] };
+  private halos: Halo[] = [];
+  private v = new THREE.Vector3();
   private stack: THREE.Matrix4[] = [new THREE.Matrix4()];
   private m = new THREE.Matrix4();
   private q = new THREE.Quaternion();
@@ -62,8 +78,8 @@ export class Painter {
     const geometry = source.index ? source.toNonIndexed() : source;
     if (geometry !== source) source.dispose();
     geometry.deleteAttribute("uv");
+    const phase = bucket === "blink" ? place.phase ?? Math.random() : -1;
     if (bucket === "blink") {
-      const phase = place.phase ?? Math.random();
       geometry.setAttribute("aBlink", new THREE.BufferAttribute(new Float32Array(geometry.getAttribute("position").count).fill(phase), 1));
     }
     this.e.set(...(place.rot ?? [0, 0, 0]));
@@ -72,6 +88,19 @@ export class Painter {
       this.q.setFromEuler(this.e),
       new THREE.Vector3(...(place.scale ?? [1, 1, 1])),
     );
+    let radius = place.halo ?? -1;
+    if (radius < 0 && bucket === "blink") {
+      geometry.computeBoundingSphere();
+      const scale = place.scale ? Math.max(...place.scale) : 1;
+      radius = Math.min(1.4, Math.max(0.3, geometry.boundingSphere!.radius * scale * 2.6));
+    }
+    if (radius > 0) {
+      // The halo sits where the shape's centre lands in the world.
+      geometry.computeBoundingBox();
+      geometry.boundingBox!.getCenter(this.v).applyMatrix4(this.m).applyMatrix4(this.stack[this.stack.length - 1]);
+      const s = this.stack[this.stack.length - 1].getMaxScaleOnAxis();
+      this.halos.push({ x: this.v.x, y: this.v.y, z: this.v.z, color: place.haloColor ?? color, radius: radius * s, phase });
+    }
     if (place.keep && geometry.getAttribute("color")) {
       geometry.applyMatrix4(this.m.premultiply(this.stack[this.stack.length - 1]));
       this.parts[bucket].push(geometry);
@@ -149,9 +178,20 @@ export class Painter {
     this.add(new THREE.TubeGeometry(path, v.length * 6, radius, 5, closed), color, { ramp: 0, ...place });
   }
 
+  /** Light with no shape of its own: the glow inside a parol, the pool under a bulb. */
+  light(at: [number, number, number], radius: number, color: number, phase = -1) {
+    this.v.set(...at).applyMatrix4(this.stack[this.stack.length - 1]);
+    const s = this.stack[this.stack.length - 1].getMaxScaleOnAxis();
+    this.halos.push({ x: this.v.x, y: this.v.y, z: this.v.z, color, radius: radius * s, phase });
+  }
+
   /** Merge each bucket into one mesh. Returns the meshes that exist; the caller owns disposal. */
   build(materials: Record<Bucket, THREE.Material>) {
     const group = new THREE.Group();
+    if (this.halos.length) {
+      group.add(haloPoints(this.halos));
+      this.halos = [];
+    }
     for (const bucket of BUCKETS) {
       const list = this.parts[bucket];
       if (!list.length) continue;
@@ -273,3 +313,84 @@ export function createMaterials(): Record<Bucket, THREE.Material> {
     }),
   };
 }
+let haloMaterial: THREE.ShaderMaterial | null = null;
+
+/**
+ * Halos: one camera-facing sprite per lamp, a tight hot core in a wide soft bloom, added onto the
+ * frame. Drawn as one Points mesh, so a hall full of glowing bulbs costs a single draw call instead of
+ * a bloom pass over the whole screen. Blinking lamps blink their halo on the same beat (same maths as
+ * `blinking()`), and everything fades into the haze with distance like the room's fog.
+ */
+function haloPoints(halos: Halo[]) {
+  const n = halos.length;
+  const position = new Float32Array(n * 3);
+  const color = new Float32Array(n * 3);
+  const size = new Float32Array(n);
+  const blink = new Float32Array(n);
+  const c = new THREE.Color();
+  halos.forEach((h, i) => {
+    position.set([h.x, h.y, h.z], i * 3);
+    c.set(h.color);
+    color.set([c.r, c.g, c.b], i * 3);
+    size[i] = h.radius;
+    blink[i] = h.phase;
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(position, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(color, 3));
+  geometry.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
+  geometry.setAttribute("aBlink", new THREE.BufferAttribute(blink, 1));
+  haloMaterial ??= new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+    uniforms: { uTime: clock, uScale: haloScale, uPower: power },
+    vertexShader: /* glsl */ `
+      attribute vec3 color;
+      attribute float aSize;
+      attribute float aBlink;
+      uniform float uTime;
+      uniform float uScale;
+      uniform float uPower;
+      varying vec3 vColor;
+      varying float vCore;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        float dist = length(mv.xyz);
+        // Pull the sprite toward the camera by its radius so the lamp's own body cannot hide the hot core.
+        mv.xyz *= max(0.0, dist - aSize * 0.6) / max(dist, 1e-3);
+        float on = 1.0;
+        if (aBlink >= 0.0) {
+          float bk = fract(uTime * (0.22 + fract(aBlink * 7.31) * 0.85) + aBlink);
+          on = mix(0.1, 1.0, smoothstep(0.0, 0.05, bk) * (1.0 - smoothstep(0.58, 0.64, bk)));
+        } else {
+          // Steady lamps still breathe a little, the way a filament does.
+          on = 0.9 + 0.1 * sin(uTime * (1.3 + fract(position.x * 0.37) * 1.7) + position.z);
+        }
+        float haze = exp(-pow(dist * 0.0072, 2.0) * 0.8);
+        vColor = color * on * haze * uPower;
+        vCore = on;
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = clamp(2.0 * aSize * uScale / max(0.5, -mv.z), 0.0, 900.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      varying vec3 vColor;
+      varying float vCore;
+      void main() {
+        float d = length(gl_PointCoord - 0.5) * 2.0;
+        if (d > 1.0) discard;
+        float bloom = exp(-d * d * 4.5) * (1.0 - d);
+        float core = exp(-d * d * 60.0) * vCore;
+        // The bloom carries the lamp's colour; the core burns toward white.
+        vec3 col = vColor * bloom * 0.55 + mix(vColor, vec3(1.0), 0.6) * core * 0.9;
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  });
+  const points = new THREE.Points(geometry, haloMaterial);
+  points.name = "halo";
+  points.renderOrder = 4;
+  points.frustumCulled = false;
+  return points;
+}
+

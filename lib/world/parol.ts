@@ -94,6 +94,11 @@ export function parol(p: Painter, at: V3, size: number, colors: ParolColors, tur
   const depth = size * 0.3;
   p.push(at, turn);
   p.add(starGeometry(size, inner, depth, paper, core), paper, { bucket: "glow", keep: true });
+  // The bulb inside: a hot white heart, then the paper's own colour bleeding out into the haze.
+  // Dimmed before it is added, so light paper keeps its colour instead of burning out to white.
+  const lit = new THREE.Color(paper).lerp(new THREE.Color(0xffe2a8), 0.3).multiplyScalar(0.62).getHex();
+  p.light([0, 0, depth * 0.6], size * 0.45, lit);
+  p.light([0, 0, depth * 0.2], size * 2.6, lit);
   const outline = starOutline(size, inner);
   // The bamboo frame along the outline, front and back, and the sticks that hold the two faces apart.
   p.rods(outline.map(([x, y]) => [x, y, size * 0.012]), size * 0.022, bamboo, { bucket: "matte" }, true);
