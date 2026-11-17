@@ -5413,18 +5413,7 @@ html[data-lab-theme="phosphor"] body { background: #101232; }
 /* ── Achievements: the result is the headline, and each win raises its flag ── */
 .finding-item-meta {
   display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 14px;
   align-items: start;
-}
-.finding-flag {
-  grid-row: span 2;
-  width: 24px;
-  height: 32px;
-  fill: var(--color-ink);
-}
-.finding-flag-cloth {
-  fill: var(--color-neon);
 }
 .finding-item-rank {
   display: grid;
@@ -5444,26 +5433,6 @@ html[data-lab-theme="phosphor"] body { background: #101232; }
   letter-spacing: 0;
   color: rgb(10 10 93 / 0.72);
 }
-.finding-item-meta .finding-item-date {
-  grid-column: 2;
-}
-/* Where scroll timelines exist, the flag runs up the pole as its row scrolls in. */
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .finding-flag-cloth {
-      animation: flag-raise linear both;
-      animation-timeline: view();
-      animation-range: entry 30% cover 40%;
-    }
-  }
-}
-@keyframes flag-raise {
-  from { transform: translateY(9px); }
-  to { transform: none; }
-}
-[data-lab-theme="phosphor"] .finding-item-rank { color: rgb(238 240 255); }
-[data-lab-theme="phosphor"] .finding-item-rank-sub { color: rgb(238 240 255 / 0.72); }
-[data-lab-theme="phosphor"] .finding-flag { fill: rgb(238 240 255); }
 
 /* ---------- The big lab behind the page ---------- */
 
