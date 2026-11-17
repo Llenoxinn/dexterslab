@@ -293,6 +293,42 @@ function projectorRig(root: THREE.Group, materials: Materials): Rig {
   return rig;
 }
 
+/**
+ * One paper pennant hung between two points on the cord: a triangle that narrows to its tip, cupped a
+ * little as cloth and paper are, and papered on both faces so it reads from behind as well.
+ */
+function pennant(a: V3, b: V3, drop: number, cup: number, twist: number) {
+  const cols = 4;
+  const rows = 5;
+  const point = (s: number, t: number): V3 => {
+    // s runs across (0 at a, 1 at b), t runs down (0 on the cord, 1 at the tip).
+    const u = 0.5 + (s - 0.5) * (1 - t * 0.97);
+    const across = 2 * u - 1;
+    return [
+      a[0] + (b[0] - a[0]) * u,
+      a[1] + (b[1] - a[1]) * u - drop * t,
+      a[2] + cup * Math.sin(Math.PI * t * 0.85) * (1 - across * across * 0.6) + twist * t * across,
+    ];
+  };
+  const front: number[] = [];
+  const back: number[] = [];
+  const quad = (p00: V3, p10: V3, p01: V3, p11: V3) => {
+    front.push(...p00, ...p01, ...p10, ...p10, ...p01, ...p11);
+    // The back face sits a paper's thickness behind, wound the other way so it faces out.
+    const off = (p: V3): V3 => [p[0], p[1], p[2] - 0.014];
+    back.push(...off(p00), ...off(p10), ...off(p01), ...off(p10), ...off(p11), ...off(p01));
+  };
+  for (let r = 0; r < rows; r += 1) {
+    for (let c = 0; c < cols; c += 1) {
+      quad(point(c / cols, r / rows), point((c + 1) / cols, r / rows), point(c / cols, (r + 1) / rows), point((c + 1) / cols, (r + 1) / rows));
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute([...front, ...back], 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 /** Banderitas: five lines of bunting. Tug them and they swing, then settle back to a breeze. */
 function banderitasRig(root: THREE.Group, materials: Materials): Rig {
   const colors = [C.red, C.warm, C.dos, C.cream, 0x9fe6e0, C.pink];
@@ -303,14 +339,20 @@ function banderitasRig(root: THREE.Group, materials: Materials): Rig {
     const at = (u: number): V3 => [-30 + u * 60, -Math.sin(u * Math.PI) * sag, 0];
     const group = part(materials, (p) => {
       const points: V3[] = [];
-      for (let i = 0; i <= 16; i += 1) points.push(at(i / 16));
-      p.tube(points, 0.05, C.cream, { ramp: 0 }, 40);
+      for (let i = 0; i <= 24; i += 1) points.push(at(i / 24));
+      // Jute twine, not a cream rod.
+      p.tube(points, 0.06, 0xc9a46a, { ramp: 0 }, 60);
+      const span = 0.72 / 60;
       for (let i = 1; i < 20; i += 1) {
-        const [x, y] = at(i / 20);
+        const u = i / 20;
         const color = colors[(i + line * 2) % colors.length];
-        // A paper pennant: a flat triangle folded over the cord, so it has a hem at the top.
-        p.box(1.5, 0.12, 0.08, color, { at: [x, y - 0.06, 0], ramp: 0 });
-        p.add(new THREE.ConeGeometry(0.78, 1.6, 3), color, { at: [x, y - 0.92, 0], rot: [Math.PI, ((i * 7) % 5) * 0.08, ((i * 3) % 5 - 2) * 0.04], scale: [1, 1, 0.08], ramp: 0.35 });
+        // Both top corners sit on the cord itself, so every pennant follows the sag instead of floating under it.
+        const left = at(u - span);
+        const right = at(u + span);
+        const seed = (i * 7 + line * 3) % 5;
+        p.add(pennant(left, right, 1.5 + (seed % 2) * 0.12, 0.1 + seed * 0.03, (seed - 2) * 0.05), color, { ramp: 0.32 });
+        // The hem: the paper folded over the twine, glued down along its length.
+        p.tube([left, at(u), right], 0.085, color, { ramp: 0 }, 6);
       }
     });
     group.position.set(0, high, z);
