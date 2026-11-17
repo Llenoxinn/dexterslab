@@ -11838,3 +11838,19 @@ html.menu-open {
   }
 }
 
+/* Duotone section glyphs: the fill is a tint of the line colour. */
+.nav-icon-fill {
+  opacity: 0.32;
+}
+.lab-rail-stop .nav-icon {
+  width: 20px;
+  height: 20px;
+}
+.lab-rail-stop[aria-current="location"] .nav-icon-fill {
+  opacity: 0.4;
+}
+/* The tube runs port centre to port centre; its caps sit hidden under the end ports. */
+.lab-rail .lab-rail-tube {
+  top: 38px;
+  bottom: 38px;
+}
